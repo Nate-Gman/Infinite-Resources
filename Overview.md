@@ -1,11 +1,16 @@
 # RADIANT — Technical Overview
 
-Authoritative feature index for [`Radiant.py`](Radiant.py) (~5,800 lines, single file).
+Authoritative feature index for [`Radiant.py`](Radiant.py) (~9,650 lines, single file).
 Each entry names the **SECTION marker** (grep the text to jump), what it does, and the key
 functions/classes. Conventions: PascalCase classes, snake_case functions, UPPER_SNAKE
 constants, all physics in **SI units (CODATA 2018 / PDG 2024)**.
 
-Run `python3 Radiant.py --selftest` (84 checks) to validate every subsystem.
+**Primary objective: maximum matter creation, as fast as possible, as efficiently as possible.**
+Every stage is measured against its theoretical‑max throughput; the bottleneck is identified
+and auto‑tuned. The system is fully autonomous — self‑building, self‑seeding, self‑replicating,
+self‑repeating from void to galaxy.
+
+Run `python3 Radiant.py --selftest` (217 checks) to validate every subsystem.
 
 ---
 
@@ -22,15 +27,16 @@ Run `python3 Radiant.py --selftest` (84 checks) to validate every subsystem.
 | **6 — SELF‑REPLICATING SWARM** | carrying capacity + logistic growth | `matter_capacity, logistic_step` |
 | **7 — THE EMHL ENGINE** | stateful digital twin stepping in real SI time | `EMHLState, EternalMatterHarvesterLattice` |
 | **8 — FORMATTERS** | human‑readable time/mass/energy | `_fmt_time, _fmt_mass, _fmt_energy` |
-| **9 — HONESTY LAYER** | conservation + Second‑Law audit (refuses magic) | `honesty_audit` |
+| **9 — HONESTY LAYER** | conservation + Second‑Law audit (refuses magic) | `honesty_audit, extended_honesty_audit` |
 | **10 — QED REALITY CHECK** (`--qed`) | why the vacuum can't be mined | `qed_reality_check` |
 | **11 — FEASIBILITY REPORT** (`--feasibility`) | to‑scale engineering pass/fail | `feasibility_report` |
-| **12 — SELF‑TEST** (`--selftest`) | 84 physics/geometry/audit unit checks | `selftest` |
+| **12 — SELF‑TEST** (`--selftest`) | 217 physics/geometry/audit/nuclear/probe/closed‑loop unit checks | `selftest` |
 | **13 — PARAMETER SWEEP** (`--sweep`) | build‑time → reach‑time scan | `sweep` |
 | **13b — HURDLE 2: galactic expansion** | von‑Neumann colonization wavefront | `galactic_expansion` |
 | **13c — HURDLE 3: eternal computation** | Dyson reversible‑compute bound | `eternal_computation` |
 | **13d — HURDLES LEDGER** (`--hurdles`) | every wall → mitigation → maximized | `engineering_hurdles_report` |
 | **16 — REAL PARTICLE/NUCLEAR/CHEM DATA** | SEMF, measured BE, periodic table, NIST/Pauling | `PARTICLES, PERIODIC_TABLE, IONIZATION_ENERGY_EV, ELECTRONEGATIVITY, nuclear_binding_energy_MeV, gamow_fusion_probability, coulomb_barrier_MeV, EXPERIMENTAL_BE_MEV` |
+| **31d4 — NARROW‑RESONANCE REACTION RATES** | Hoyle‑state triple‑alpha + measured S‑factor C12(α,γ)O16 (deBoer et al. 2017) | `nonresonant_thermonuclear_rate_cm3_s, narrow_resonance_rate_cm3_s, triple_alpha_rate_fraction, carbon_alpha_capture_rate_fraction` |
 | **17 — ANNIHILATION & POSITRONIUM** | fate of a harvested positron | `annihilation_energy_release, annihilation_cross_section, positronium_note` |
 | **18 — AMBIENT FEEDSTOCK** (`--feedstock`) | CMB / cosmic‑ray / solar‑wind flux, to scale | `feedstock_flux_report, feedstock_report` |
 | **19 — HARVESTING / SEPARATION / TRAP** | Penning/Brillouin/mirror/lifetime physics | `cyclotron_frequency, brillouin_density_limit, magnetic_mirror_loss_cone, trap_annihilation_lifetime` |
@@ -43,15 +49,26 @@ Run `python3 Radiant.py --selftest` (84 checks) to validate every subsystem.
 | **26 — MATTER‑CREATION ENGINE** (`--create`) | every energy→mass channel + E=mc² ceiling; galaxy target | `CREATION_CHANNELS, creation_rate_kg_s, mass_energy_ceiling_kg_s, galaxy_scale_target, matter_creation_report` |
 | **28 — BARYOGENESIS ENGINE** (`--baryogenesis`) | Sakharov + sphalerons + engineered CP (flagged) | `sakharov_conditions, sphalerons_active, net_baryon_rate_kg_s, baryogenesis_report` |
 | **29 — EFFICIENCY & PROFIT** (`--profit`) | fusion self‑power, EROI, profit outscaling | `fusion_energy_per_kg_H, self_power, eroi, net_external_power, profit_curve, efficiency_report` |
+| **29b — PIPELINE BALANCER** (`--efficiency`) | achieved vs theoretical‑max throughput per stage; bottleneck ID + auto‑tune | `PipelineBalancer, pipeline_efficiency_report` |
 | **30 — MATTER MAINTENANCE vs RADIATION** | proton decay; dynamic‑equilibrium replenishment | `matter_decay_rate, maintenance_equilibrium` |
 | **14 — VISUALIZATION** | matplotlib figures | `visualize, visualize_physics, visualize_galactic, visualize_creation, visualize_profit, visualize_trap` |
 | **31 — MECHANICAL GEOMETRY & LATTICE** | solid meshes: cell, lattice, replicator, hero cell | `Assembly, _g_cylinder/_g_tube/_g_torus/_g_box/_g_cone/_g_helix/_cyl_between, build_field_cell_solid, build_harvester_lattice_solid, build_replicator_solid, build_hero_cell_solid, void_capture` |
+| **31b — SOLID GEOMETRY FOR EVERY PLANT STAGE** | 12 EMHLPlant stages as detailed solid mesh hardware | `build_*_solid` (one per stage) |
+| **31c — ORBITAL STATIONS & NET‑CASTING** | area‑of‑effect harvesting platforms | `OrbitalStation, net_casting_area_effect` |
+| **31d — SELF‑REPLICATING ORBITAL SWARM** | nanotech assembly + logistic growth + station failure | `SelfReplicatingOrbitalSwarm, ElementalStateRiser, SwarmIntelligence` |
+| **31d2 — CONSTRUCTION PHASE MANAGER** | autonomous element auto‑selection (H→Fe→Au/U by phase) | `ConstructionPhaseManager` |
+| **31d2b — PROBE PROPULSION & TRANSIT** | Tsiolkovsky rocket equation, ISM transit survival | `tsiolkovsky_mass_ratio, probe_propulsion_budget, probe_transit_physics, BootstrappingSequence` |
+| **31d2c — STELLAR TYPES** | real per‑type luminosity, lifetime, Kroupa‑IMF demographics | `StellarType, STELLAR_TYPES, sample_stellar_type` |
+| **31d3 — SYSTEM COLONIZER** | one colonized star system: swarm + riser + bootstrap + probes | `SystemColonizer, GalacticSeeding, autonomous_run_report` |
+| **31e — AUTOMATED ELEMENT TARGETING** | machine auto‑adjusts parameters to produce target Z | `auto_target_element` |
 | **32 — CUSTOM CHEMISTRY OUTPUT** (`--output`) | pick a stable element/molecule + synthesis proof | `OUTPUT_ELEMENTS, OUTPUT_MOLECULES, element_synthesis_proof, molecule_synthesis_proof, chemistry_output_report` |
-| **27 / 27b — INTERACTIVE 3D VIEWERS** | pygame software renderer (like Main.py/GMRv1.17) | `RadiantViewer, SystemViewer, run_viewer` |
+| **9b — TECHNOLOGY READINESS LEVEL AUDIT** (`--trl`) | NASA 9‑level engineering maturity per subsystem | `TRL_AUDIT, trl_report` |
+| **27 / 27b — INTERACTIVE 3D VIEWERS** | pygame software renderer + live time‑lapse (T key) | `RadiantViewer, SystemViewer, run_viewer, _timelapse_reset, _timelapse_frame, _render_timelapse_paused_overlay` |
 | **15 — MAIN** | CLI dispatch; default = 3D viewer | `main, _print_header, _print_viewer_banner` |
 
 *(Section numbers reflect the file's build order; a few are out of numeric sequence — grep the
-marker text to jump.)*
+marker text to jump. The 31x subsections were added during the Reality‑Tightening Pass and the
+autonomous closed‑loop implementation.)*
 
 ---
 
@@ -95,6 +112,9 @@ Each is stated, derived, and **verified in code** (wired into `--selftest`):
 - **`SystemViewer`** — the main viewer. Modes: `machine` (default), `chemistry` (secondary),
   plus the `hero` cell showcase (X). Renders **solid, flat‑shaded, depth‑sorted, backface‑culled
   polygons** (`_render_solid`) — the same software‑renderer approach as `Main.py` / `GmansRunV1.17.py`.
+  **Live time‑lapse mode** (T key): a pausable, loopable cinematic playback of the full arc
+  (seed craft → void → replicate → galaxy), reusing the same `_timelapse_frame` body as the
+  headless `--timelapse` exporter. L toggles loop; SPACE pauses; ESC exits to normal viewer.
 - **Mechanical geometry (SECTION 31):** `Assembly` accumulates solid meshes; `build_field_cell_solid`
   is a detailed Penning trap (chamber + electrodes + solenoid coil + cavity); `build_hero_cell_solid`
   is the ultra‑detail showcase (9‑turn helix, correction rings, beam ports, flange bolts, to scale);
@@ -106,21 +126,51 @@ Each is stated, derived, and **verified in code** (wired into `--selftest`):
 
 ## Figures produced
 
-`radiant_system_*.png` / `radiant_view_*.png` (3D frames) · `radiant_emhl.png` (twin) ·
-`radiant_physics.png` (physics/chemistry) · `radiant_galactic.png` (expansion) ·
-`radiant_trap.png` (particle sim) · `radiant_creation.png` (matter creation) ·
-`radiant_profit.png` (efficiency/EROI).
+`radiant_system_*.png` / `radiant_view_*.png` (3D frames) · `radiant_timelapse_*.png` (cinematic
+frames) · `radiant_emhl.png` (twin) · `radiant_physics.png` (physics/chemistry) ·
+`radiant_galactic.png` (expansion) · `radiant_trap.png` (particle sim) ·
+`radiant_creation.png` (matter creation) · `radiant_profit.png` (efficiency/EROI).
 
 ---
 
-## Honest‑physics stance (SECTION 9)
+## Honest‑physics stance (SECTIONS 9 / 9b)
 
-The twin refuses to report impossibilities. `honesty_audit()` enforces: no over‑unity, reservoir
-& baryon conservation, `dS_total ≥ 0`, and that the vacuum yields ≈0 net pairs. Hard limits are
-treated as **engineering hurdles** and maximized to the physical ceiling; the only
-flagged‑speculative element is the **CP‑violation source** for engineered baryogenesis (the
-surrounding mechanism — electroweak sphalerons — is textbook). Structured matter still radiates
-away, so "eternal" means **replenished**, not static.
+The twin refuses to report impossibilities. `honesty_audit()` (6 original checks) plus
+`extended_honesty_audit()` (21 additional checks covering swarm, riser, intelligence, galactic,
+probe, and closed‑loop conservation) enforce: no over‑unity, reservoir & baryon conservation,
+`dS_total ≥ 0`, vacuum yields ≈0 net pairs, swarm bounded by carrying capacity, galactic
+causality (≤c), Tsiolkovsky probe mass honesty, closed‑loop invariant (seeds only after
+saturation), and bootstrap gates growth. Hard limits are treated as **engineering hurdles** and
+maximized to the physical ceiling; the only flagged‑speculative element is the **CP‑violation
+source** for engineered baryogenesis (the surrounding mechanism — electroweak sphalerons — is
+textbook). Structured matter still radiates away, so "eternal" means **replenished**, not static.
 
-For the narrative vision this realizes, see [ProjectGoal.md](ProjectGoal.md); for usage, see
-[README.md](README.md).
+The **TRL audit** (`--trl`, SECTION 9b) complements the physics audit by grading engineering
+maturity on the NASA 9‑level scale: most subsystems are TRL 6–9 (flight‑proven or lab‑demonstrated);
+the weakest links (CP‑violation baryogenesis TRL 0, von Neumann self‑replication TRL 1, fusion
+rocket TRL 3) are named explicitly.
+
+## The autonomous closed loop (SECTIONS 31d–31d3)
+
+The system models a true **closed loop**: seed probe → bootstrap → swarm growth → saturation →
+seed launch → new system → repeat. Key classes:
+
+- **`SelfReplicatingOrbitalSwarm`** — logistic growth with power‑constrained replication rate,
+  station failure (~1.5%/yr), and carrying capacity.
+- **`ElementalStateRiser`** — temperature‑dependent nucleosynthesis with Gamow‑gated rates;
+  triple‑alpha uses the Hoyle‑state narrow‑resonance rate (not Coulomb tunnelling).
+- **`SwarmIntelligence`** — adaptive parameter optimization with physical bounds
+  (arm_len_m ≤ 1e5 m, fusion_temp_K ≤ 1e10 K) to prevent overflow.
+- **`ConstructionPhaseManager`** — autonomously selects target element based on swarm state.
+- **`BootstrappingSequence`** — 10‑phase deployment timeline (probe arrival → first replication).
+- **`StellarType`** — real stellar classes with Kroupa‑IMF demographics (~76% M dwarfs).
+- **`SystemColonizer`** — one colonized star system with its own swarm, riser, intelligence,
+  bootstrap, and probe‑launch bookkeeping.
+- **`GalacticSeeding`** — orchestrates multi‑system expansion; `n_full_physics` systems get
+  full physics, the rest are statistically aggregated.
+- **`PipelineBalancer`** — measures every stage's achieved rate vs theoretical‑max, identifies
+  the bottleneck, and auto‑adjusts parameters. `total_matter_kg_per_s` is THE key metric.
+
+For the full project status and roadmap, see [narrative.md](narrative.md);
+for the narrative vision this realizes, see [ProjectGoal.md](ProjectGoal.md);
+for usage, see [README.md](README.md).
