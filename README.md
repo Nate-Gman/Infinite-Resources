@@ -18,7 +18,7 @@ self‑repeats the entire matter‑creation cycle from void to galaxy.
 > **engineering hurdle** and pushed to the ceiling real physics allows — and flagged clearly
 > where it crosses into frontier science.
 
-- **One file:** [`Radiant.py`](Radiant.py) — ~9,650 lines, 217‑check self‑test.
+- **One file:** [`Radiant.py`](Radiant.py) — ~13,000 lines, 400‑check self‑test.
 - **Dependencies:** `numpy`, `matplotlib`, `pygame` (scipy optional; pygame only for the 3D viewer).
 
 ---
@@ -28,7 +28,7 @@ self‑repeats the entire matter‑creation cycle from void to galaxy.
 ```bash
 python3 -m pip install numpy matplotlib pygame
 python3 Radiant.py            # opens the interactive 3D MACHINE viewer (default)
-python3 Radiant.py --selftest # 217 physics/geometry unit checks + conservation audit
+python3 Radiant.py --selftest # 400 physics/geometry/powerplant unit checks + conservation audit
 python3 Radiant.py --run      # autonomous closed loop: seed -> galaxy (8 systems, ~2 sec)
 python3 Radiant.py --efficiency  # pipeline throughput: achieved vs theoretical-max per stage
 python3 Radiant.py --trl      # Technology Readiness Level audit (NASA 9-level scale)
@@ -62,11 +62,15 @@ The default view is **THE MACHINE** — real, solid, flat‑shaded hardware to s
 | **T** | LIVE TIME‑LAPSE: seed craft → void → replicate → galaxy (cinematic, pausable, loopable) |
 | **L** | toggle LOOP mode for the live time‑lapse (default ON — seamless cycle repeat) |
 | **SPACE** | pause/resume the live time‑lapse (or pause the normal viewer) |
-| **[** and **]** | pick the **output element** (spewed as a cloud) + its synthesis proof |
+| **[** and **]** | pick the **output element** (spewed as a cloud) + its synthesis proof, or cycle fuels in POWERPLANT view |
 | **I** | ABOUT / VALIDITY panel (argues the science from known physics) |
 | **P** | cycle the on‑screen **math proof** (verified live) |
 | **1–9, 0 / TAB / click** | in CHEMISTRY view, fly the camera **into** a stage's real mechanism |
-| **R** | reset view · **ESC** | exit mode / quit |
+| **W** | POWERPLANT view: typed fuel → continuous power + GOLD (3D hardware, live telemetry) |
+| **F** | TYPE A FUEL: live typed‑fuel entry for the powerplant (resolves any alias) |
+| **A** | MAXIMIZE GOLD (Au): toggle the gold‑maximized blanket in the POWERPLANT tab |
+| **R** | reset view |
+| **ESC** | exit mode / quit |
 
 The window opens at your desktop resolution (up to 1920×1080). Every panel — telemetry,
 info/about, math proof, total‑system scale ladder — updates live from the real physics engine.
@@ -74,7 +78,7 @@ info/about, math proof, total‑system scale ladder — updates live from the re
 Headless equivalents:
 
 ```bash
-python3 Radiant.py --render-frames 8   # save annotated MACHINE/HERO/CHEMISTRY frames (PNG)
+python3 Radiant.py --render-frames 8   # save annotated MACHINE/HERO/CHEMISTRY/POWERPLANT frames (PNG)
 python3 Radiant.py --view-cell         # zoom to the live particle separation cell
 python3 Radiant.py --render-cell 6     # headless frames of the particle cell
 ```
@@ -106,6 +110,192 @@ The full matter chain, each link grounded and each hard wall maximized:
 8. **Expand** — colonization wavefront at **0.1c** (Tsiolkovsky‑costed probe propulsion, ISM
    transit survival probability) to the **ΛCDM reachable horizon** → **~51 galaxies of
    matter** total.
+9. **THE RADIANT POWERPLANT** (Section 33) — a continuously‑operating fusion powerplant that
+   burns a **typed fuel** (D‑T, boron, seawater, hydrogen — anything the operator types),
+   exports electricity to a grid, and precipitates **stable Au‑197** out of a mercury blanket
+   via the real Hg‑198(n,2n)Hg‑197 → electron capture → Au‑197 nuclear route (Sherr,
+   Bainbridge & Anderson, Phys. Rev. 1941). Every failure mode is an **engineering hurdle**:
+   unknown fuel → substitute (H8), unrunnable fuel → substitute (H9), aneutronic fuel → D‑T
+   neutron pilot (H10), tritium breeding → gold duty as neutron multiplier (H11), natural
+   mercury → Be/Pb multiplier layer (H11b), unusable feedstock → forced enrichment (H11c),
+   activated bullion → shielded decay + assay hold (H12), market saturation → fleet ceiling
+   (H13). The invariant: **gold is the
+   product**, for any typed input. Proofs P17–P22 verify the physics live.
+
+---
+
+## PROOF: mercury → gold, at mass scale
+
+**Full derivation and citations: [About.md](About.md).** The condensed proof:
+
+### It is nuclear, not chemical — and that distinction is the whole point
+
+**Chemistry cannot make gold.** Chemistry is the physics of *electrons*; the identity of an
+element is set by **Z**, the proton count. Chemistry never changes Z, so it can never change one
+element into another. That is precisely why alchemy failed for eighteen centuries — the
+alchemists were using the wrong force.
+
+The nuclear force changes Z. Mercury is Z = 80, gold is Z = 79, and the gap is one proton:
+
+```
+D + T  →  n (14.06 MeV)                                    [Q = 17.589 MeV, AME2020]
+¹⁹⁸Hg + n  →  ¹⁹⁷Hg + 2n          threshold 8.5286 MeV, σ = 2.1 b   [ENDF/B-VIII.0 MT=16]
+¹⁹⁷Hg  --(electron capture, t½ = 64.14 h, 100 %)-->  ¹⁹⁷Au         [ENSDF A=197]
+```
+
+**¹⁹⁷Au is the only stable isotope of gold.** The product is indistinguishable from mined gold,
+because it *is* gold. Chemistry then does what chemistry is good at — retort distillation
+separates Au from Hg (357 °C vs 2,970 °C boiling points), the mercury is recycled to the
+blanket, and the bullion is assayed and cast. That back end is **TRL 9, ordinary industry.**
+
+### Threshold vs Q-value — the distinction the ledger depends on
+
+Two numbers describe ¹⁹⁸Hg(n,2n), and using the wrong one silently corrupts the energy books:
+
+```
+|Q|   = 8.4854 MeV     energy ABSORBED (converted to nuclear mass)  → the HEAT LEDGER
+E_th  = 8.5286 MeV     minimum neutron KE for the reaction to GO    → the GATE
+```
+
+They differ by the **recoil** the products must carry to conserve momentum — energy that is
+kinetic, thermalizes in the blanket, and is still collected. Charging it to the heat budget
+bills the plant for energy it never lost.
+
+The threshold is **derived** from |Q| (`E_th = |Q|·(mₙ+M)/M`), not stored separately, because
+two literals describing one reaction will eventually disagree — as these had, by 0.017 MeV.
+Ten self-test checks guard the relationship. *(Full account: [About.md §11b](About.md).)*
+
+### The books balance exactly
+
+```
+nucleons:  198 + 1  =  197 + 2   →   199 = 199        ✓
+charge:         80  =       80                        ✓
+lepton:    e⁻ (+1)  →  νₑ (+1)                        ✓
+mass:  m(¹⁹⁷Au) = 3.2713e−25 kg  <  m(¹⁹⁸Hg) = 3.2879e−25 kg
+```
+
+**1 kg of gold requires 1.005 kg of mercury in.** This is a refinery, not a matter source — no
+mass is created, nucleons are rearranged. *(Proof P21.)*
+
+### Why the yield is tonnes, not grams
+
+Mercury barely slows a fast neutron: ξ = 2/(A + ⅔) = **0.010067** per elastic collision, so
+
+```
+k = ln(14.06 / 8.5286) / ξ = 49.7 collisions above threshold
+```
+
+The neutron gets **~50 independent chances** to make gold before it degrades below the gate.
+
+### Gold *pays its own neutron bill*
+
+(n,2n) is **one neutron in, two out** — a multiplier. Per source neutron:
+
+```
+produced = 1 + x + m        required = TBR + parasitic = 1.05 + 0.15 = 1.20
+self-sufficient  ⟺  x ≥ 0.20 − m
+```
+
+**The plant must make gold in order to breed its own tritium.** Gold is not a parasite on the
+neutron budget; it is the precondition for closing it. *(Proof P18.)*
+
+And it cannot run away: after one (n,2n) the daughters share 14.06 − 8.4854 = 5.57 MeV, i.e.
+**~2.79 MeV each — far below the 8.5286 MeV threshold.** One neutron makes at most one gold atom.
+*(Proof P19.)*
+
+### The scale, in six lines of arithmetic
+
+```
+net 1,000 MWe / (1 − 0.12 recirc) / 0.42 Brayton  =  2,705.6 MWth
+Q_thermal = 17.589 + 5.023 − 4.243 + 1.0          =  19.369 MeV  = 3.1013e−12 J
+fusion rate = 2.7056e9 / 3.1013e−12               =  8.7184e20 /s
+gold atoms  = 8.7184e20 × 1.0 × 0.500             =  4.3592e20 /s
+mass        = 4.3592e20 × 3.271262e−25            =  1.42602e−4 kg/s
+annual @ 85 % availability                        =  3,825.1 kg/yr
+```
+
+| One 1 GWe unit produces, continuously | |
+|---|---|
+| **Gold** | **10.47 kg/day · 3.83 tonnes/yr · 307 Good Delivery bars** |
+| Value | $557.4 M/yr at $4,532.80/ozt |
+| **And electricity** | **690,492 homes, or 10.56 cities of 50,000** |
+| Mercury consumed | 3,844 kg/yr |
+| Energy cost of the gold | 484.9 MWh/kg → **6.7× margin, profitable but not free** |
+
+### Scaled to the world as it is today
+
+```
+3.6 TW world electricity = 3,600 units → 13,771 t gold/yr → 4.17× world mine production
+```
+
+**If every watt the world generates came from this plant, it would also mint 4.17× the entire
+world gold mining industry every year** — 6.24 % of all gold ever mined, annually.
+
+### Maximized — and the wall that stops you
+
+3.83 t/yr is a conservative setpoint, not a limit. Same reactor, same site, same grid:
+
+| Configuration | x | Gold t/yr | vs base | Fuel |
+|---|---|---|---|---|
+| baseline | 0.5000 | 3.825 | 1.000× | 1.000× |
+| run the blanket at its cross-section ceiling | 0.5478 | 4.281 | 1.119× | 1.021× |
+| + enrich to 100 % Hg-198 | 0.6087 | 4.890 | 1.279× | 1.050× |
+| **+ thicken the blanket, add a reflector** | **0.6977** | **5.843** | **1.528×** | 1.095× |
+| *asymptote (unbuildable)* | *0.7241* | *6.143* | *1.607×* | *1.109×* |
+
+**5.84 t/yr — 470 bullion bars, $851.6 M/yr — for 1.095× the fuel, with electricity unchanged
+at 1,000 MWe.** At a fixed thermal rating, gold ∝ x / Q_thermal(x); the grid does not pay for
+the extra gold, the fuel bill does (deuterium is seawater, tritium is bred on site).
+
+**The wall:** `x ≤ σ(n,2n)/σ_nonelastic = 2.1/2.9 = 0.7241`. Of the nonelastic budget, 0.8 b
+goes to (n,γ), (n,p) and (n,α) and returns something that is not gold — **27.6 % of neutrons are
+physically unavailable.** No lever moves it. *(Proof P23; the self-test sweeps every enrichment
+× leakage combination to confirm nothing exceeds it.)*
+
+**The catch:** more gold per unit means *fewer* units before H13 bites — the fleet ceiling
+tightens from ~862 to ~565 units (1.53× fewer). Physical maximization and fleet-scale economics
+point in opposite directions: maximize the blanket for a few units; at thousands, the
+electricity is the product and the conservative duty is the better business.
+
+World scale at the maximized duty: 3,600 units → **21,036 t/yr = 6.37× world mine production.**
+
+```bash
+python3 Radiant.py --maximize-gold     # the full ladder, with costs
+```
+
+### It has been done
+
+> **Sherr, Bainbridge & Anderson (1941), *Phys. Rev.* 60, 473** — fast neutrons on mercury,
+> gold chemically recovered. The reaction is not a proposal; what it lacked was a cheap,
+> continuous neutron source. A D-T reactor is one, at 8.7 × 10²⁰ neutrons/second.
+
+### ⚠ And what is NOT proven
+
+| | TRL | |
+|---|---|---|
+| Liquid-Hg loop · gold refining/assay | **9** | SNS runs one since 2006; ordinary industry |
+| Hg-198 enrichment | **7** | Industrial for Hg-196/202 today |
+| ¹⁹⁸Hg(n,2n) transmutation | **4** | Measured & demonstrated 1941; never industrialised |
+| **D-T fusion power island (net electric)** | **4** | **⚠ THE WEAKEST LINK** |
+| Tritium breeding blanket | **3** | None has ever operated in a power reactor |
+
+**No device has ever produced net electrical power from fusion.** NIF reached scientific
+ignition in 2022 — that is not a plant putting megawatts on a grid. **Every gold figure above is
+conditional on a D-T power plant existing.** The transmutation chain is the mature half of this
+design; the reactor is the open problem. Nothing is over-unity — but it is not shovel-ready.
+
+### Check every claim yourself
+
+```bash
+python3 Radiant.py --powerplant   # full derivation + radiant_powerplant.png
+python3 Radiant.py --proofs       # P17–P22 verify the gold chain live
+python3 Radiant.py --selftest     # 374 checks
+python3 Radiant.py --trl          # the maturity audit above, unfiltered
+python3 Radiant.py --maximize-gold # push the blanket to its cross-section ceiling
+python3 Radiant.py --fleet        # scaled to world electricity + the gold market
+python3 Radiant.py                # press W for the live POWERPLANT tab
+```
+
 
 ### The autonomous closed loop (void → galaxy)
 
@@ -160,7 +350,7 @@ a **dynamic equilibrium** — the machine must keep harvesting (it out‑paces d
 | Command | Does |
 |---|---|
 | `--report` | full twin run + audit + all reports + `radiant_emhl.png`, `radiant_physics.png` |
-| `--selftest` | 217 physics/geometry/audit unit checks + extended honesty audit |
+| `--selftest` | 400 physics/geometry/powerplant/audit unit checks + extended honesty audit |
 | `--info` | explain every part + the math/chemistry + a **validity** argument |
 | `--proofs` | print & verify the math proofs (P1–P12) |
 | `--chemistry` | radiation → atoms → elements → solids (with real energies) |
@@ -175,6 +365,15 @@ a **dynamic equilibrium** — the machine must keep harvesting (it out‑paces d
 | `--baryogenesis` | break the net‑baryon barrier (Sakharov + sphalerons + CP) |
 | `--profit` | efficiency & EROI: less power in, profit outscales → `radiant_profit.png` |
 | `--rprocess` | build elements beyond iron (neutron‑capture cost) |
+| `--powerplant [FUEL]` | THE RADIANT POWERPLANT: type a fuel → continuous power + GOLD, rated vs real cities & gold market → `radiant_powerplant.png` |
+| `--fuel FUEL` | alias for `--powerplant FUEL` (e.g. `--fuel boron`, `--fuel seawater`) |
+| `--fuels` | list every fusion fuel the powerplant accepts (keys, aliases, Q, neutron energy, difficulty) |
+| `--maximize-gold` | push the blanket to the cross-section ceiling; the full lever ladder with costs |
+| `--fleet` | scale the powerplant to the world today: grid coverage, gold output vs world mine supply, fleet ceiling |
+| `--mwe MW` | powerplant net electrical output in MW (default 1000) |
+| `--enrichment F` | Hg‑198 enrichment 0–1 (default 0.90; 0.0997 = natural mercury → triggers H11b) |
+| `--gold-price USD/oz` | override the gold spot price |
+| `--years Y` | years of continuous powerplant operation to simulate (default 1) |
 | `--hurdles` | every physical wall → mitigation → **maximized** function |
 | `--galactic` | von‑Neumann galactic/cosmic expansion → `radiant_galactic.png` |
 | `--physics` | the physics/chemistry figure (`radiant_physics.png`) |
@@ -187,7 +386,7 @@ a **dynamic equilibrium** — the machine must keep harvesting (it out‑paces d
 
 Every run is checked by `honesty_audit()` (6 original checks) plus `extended_honesty_audit()`
 (21 additional checks covering swarm, riser, intelligence, galactic, probe, and closed‑loop
-conservation) and the 217‑check `--selftest` suite:
+conservation) and the 400‑check `--selftest` suite (covering powerplant physics, fuel catalog, neutron economy, transmutation blanket, viewer rendering, and conservation):
 
 - **No over‑unity:** created rest‑mass energy ≤ energy drawn (E=mc²).
 - **Reservoir respected:** energy drawn ≤ the free‑energy budget.
@@ -221,7 +420,8 @@ engineered baryogenesis; the mechanism around it (electroweak sphalerons) is tex
 - `scipy` is optional and not required.
 - Headless machines: use `--render-frames`, `--report --no-show`, and the text reports.
 
-See **[Overview.md](Overview.md)** for the section‑by‑section technical index,
+See **[About.md](About.md)** for the full, cited proof that this makes gold at mass scale,
+**[Overview.md](Overview.md)** for the section‑by‑section technical index (including Section 33: the powerplant),
 **[narrative.md](narrative.md)** for the full project status and roadmap, and
 **[ProjectGoal.md](ProjectGoal.md)** for the original vision this twin realizes.
 

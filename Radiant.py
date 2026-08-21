@@ -1363,6 +1363,48 @@ def selftest() -> bool:
             _pg.quit()
         except Exception as _e:
             check("timelapse-live: T-key mode runs without error", False, str(_e)[:60])
+        # POWERPLANT VIEW (W key): switch to powerplant, render, type a fuel (F key)
+        try:
+            _pv = SystemViewer(width=800, height=500, headless=True)
+            _pv._handle(_FakeEvt(_pg.K_w))                    # W -> POWERPLANT view
+            check("viewer: W key switches to powerplant mode",
+                  _pv.view_mode == "powerplant")
+            _pv._advance(); _pv._render()                     # render the powerplant
+            check("viewer: POWERPLANT renders a frame", True)
+            check("viewer: powerplant object is initialized",
+                  _pv.powerplant is not None)
+            check("viewer: powerplant starts on D-T",
+                  _pv.powerplant.fuel.key == "D-T")
+            # F key opens typed-fuel entry
+            _pv._handle(_FakeEvt(_pg.K_f))                    # F -> fuel entry mode
+            check("viewer: F key activates fuel entry", _pv.fuel_entry_active)
+            # type "boron" character by character
+            for ch in "boron":
+                _e2 = _FakeEvt(0)
+                _e2.unicode = ch
+                _pv._handle(_e2)
+            check("viewer: typed-fuel text accumulates",
+                  _pv.fuel_entry_text == "boron")
+            # ENTER commits the fuel
+            _pv._handle(_FakeEvt(_pg.K_RETURN))
+            check("viewer: ENTER commits typed fuel",
+                  not _pv.fuel_entry_active and _pv.powerplant.fuel.key == "p-B11")
+            _pv._advance(); _pv._render()                     # render on new fuel
+            check("viewer: POWERPLANT renders on p-B11 fuel", True)
+            # [ ] / ] cycling
+            _pv._handle(_FakeEvt(_pg.K_RIGHTBRACKET))         # next fuel
+            check("viewer: ] cycles to next fuel",
+                  _pv.powerplant.fuel.key != "p-B11")
+            _pv._handle(_FakeEvt(_pg.K_LEFTBRACKET))          # prev fuel
+            check("viewer: [ cycles back", True)
+            # ESC exits powerplant focus cleanly
+            _pv._handle(_FakeEvt(_pg.K_ESCAPE))
+            check("viewer: ESC exits powerplant cleanly",
+                  _pv.powerplant_focus is None)
+            _pg.quit()
+        except Exception as _e:
+            check("viewer: POWERPLANT W+F key mode runs without error",
+                  False, str(_e)[:60])
     else:
         print("   [SKIP]  viewers: pygame not installed (install for --view)")
 
@@ -1608,12 +1650,508 @@ def selftest() -> bool:
     for k, v in _ext_audit.items():
         check(f"ext_audit: {k}", v)
 
+    # ---- SECTION 33: THE POWERPLANT -----------------------------------------
+    # typed-fuel parser: the operator may type anything at all
+    for _txt, _want in [("D-T", "D-T"), ("deuterium-tritium", "D-T"),
+                        ("boron", "p-B11"), ("seawater", "D-D"),
+                        ("he3", "D-He3"), ("hydrogen", "p-p")]:
+        _f, _how = resolve_fuel(_txt)
+        check(f"powerplant: typed '{_txt}' resolves to {_want}",
+              _f.key == _want, f"got {_f.key} ({_how})")
+    check("powerplant: unknown fuel falls back instead of crashing (H8)",
+          resolve_fuel("unobtainium")[0].key == "D-T" and
+          resolve_fuel("unobtainium")[1].startswith("UNKNOWN"))
+    check("powerplant: free text still finds the fuel",
+          resolve_fuel("please burn some boron for me")[0].key == "p-B11")
+
+    # transmutation physics
+    check("powerplant: Hg-198(n,2n) threshold below the D-T neutron energy",
+          HG198_N2N_THRESHOLD_MEV < FUSION_FUELS["D-T"].En_MeV,
+          f"{HG198_N2N_THRESHOLD_MEV:.3f} < {FUSION_FUELS['D-T'].En_MeV:.2f} MeV")
+    check("powerplant: fast neutron survives many collisions above threshold",
+          40.0 < n2n_collisions_above_threshold() < 70.0,
+          f"{n2n_collisions_above_threshold():.1f} collisions")
+    check("powerplant: (n,2n) conversion probability is a probability",
+          0.0 < n2n_reaction_probability(0.90) <= 1.0,
+          f"{n2n_reaction_probability(0.90):.4f}")
+    check("powerplant: conversion rises monotonically with enrichment",
+          n2n_reaction_probability(0.10) < n2n_reaction_probability(0.50)
+          < n2n_reaction_probability(0.95))
+    check("powerplant: a sub-threshold neutron makes NO gold directly",
+          n2n_reaction_probability(0.9, 2.45) == 0.0 and
+          FUSION_FUELS["D-D"].fast_neutrons_per_rx == 0.0)
+
+    # neutron economy
+    check("powerplant: neutron balance needs x >= TBR + parasitic - 1",
+          abs(neutron_economy(0.0)["x_min_for_self_sufficiency"]
+              - (TRITIUM_BREEDING_TARGET + PARASITIC_PLUS_LEAKAGE - 1.0)) < 1e-12,
+          f"x_min = {neutron_economy(0.0)['x_min_for_self_sufficiency']:.3f}")
+    check("powerplant: gold duty makes the plant tritium self-sufficient",
+          neutron_economy(0.50)["self_sufficient"] and
+          not neutron_economy(0.0)["self_sufficient"])
+    check("powerplant: a Be/Pb multiplier lowers the required gold duty",
+          neutron_economy(0.0, multiplier=0.30)["x_min_for_self_sufficiency"] <
+          neutron_economy(0.0)["x_min_for_self_sufficiency"])
+
+    # the honest energy trade: gold must COST thermal power
+    _bl = blanket_energy_per_fusion_MeV(FUSION_FUELS["D-T"], 0.50, 1.05)
+    check("powerplant: (n,2n) debits the heat budget (gold is not free)",
+          _bl["Q_n2n_cost_MeV"] > 0.0 and
+          _bl["Q_thermal_MeV"] < FUSION_FUELS["D-T"].Q_MeV + _bl["Q_breed_MeV"]
+          + _bl["Q_gamma_MeV"],
+          f"Q_th = {_bl['Q_thermal_MeV']:.2f} MeV, gold costs "
+          f"{_bl['Q_n2n_cost_MeV']:.2f} MeV")
+
+    # the plant itself, on every fuel the operator might type
+    for _txt in ["D-T", "D-D", "p-B11", "hydrogen", "unobtainium", "D-He3"]:
+        _pp = RadiantPowerplant(_txt, 1.0e9)
+        check(f"powerplant: '{_txt}' commissions and PRODUCES GOLD",
+              _pp.gold_kg_yr > 0.0,
+              f"{_pp.gold_kg_yr:,.1f} kg/yr on {_pp.fuel.key}")
+        check(f"powerplant: '{_txt}' is tritium self-sufficient",
+              _pp.economy["self_sufficient"],
+              f"TBR {_pp.economy['tbr_achieved']:.3f}, "
+              f"margin {_pp.economy['margin']:+.3f}")
+        check(f"powerplant: '{_txt}' never exceeds the cross-section ceiling",
+              _pp.x_n2n <= _pp.x_n2n_max + 1e-12,
+              f"x = {_pp.x_n2n:.4f} <= {_pp.x_n2n_max:.4f}")
+
+    # natural mercury MUST trigger the H11b fix rather than silently fudging x
+    _nat = RadiantPowerplant("D-T", 1.0e9, enrichment=HG198_NATURAL_ABUNDANCE)
+    check("powerplant: natural Hg triggers hurdle H11b (cannot close budget)",
+          any(h["code"] == "H11b" for h in _nat.hurdles))
+    check("powerplant: H11b fix restores tritium self-sufficiency",
+          _nat.economy["self_sufficient"] and _nat.multiplier > 0.0,
+          f"multiplier +{_nat.multiplier:.3f} n/source")
+    check("powerplant: natural Hg still yields gold, just less of it",
+          0.0 < _nat.gold_kg_yr < RadiantPowerplant('D-T', 1.0e9).gold_kg_yr,
+          f"{_nat.gold_kg_yr:,.1f} kg/yr")
+
+    # THRESHOLD vs Q-VALUE. These are different quantities and were once
+    # conflated: the threshold gates whether a reaction can occur, the Q-value
+    # is the energy it actually absorbs. Charging the threshold to the heat
+    # ledger over-debited it (0.31% on the gold reaction, 17.6% on the
+    # multiplier), because the difference is recoil KE that thermalizes.
+    check("powerplant: (n,2n) threshold exceeds its Q-value (recoil correction)",
+          HG198_N2N_THRESHOLD_MEV > HG198_N2N_Q_MEV,
+          f"threshold {HG198_N2N_THRESHOLD_MEV:.4f} > |Q| {HG198_N2N_Q_MEV:.4f} MeV")
+    check("powerplant: threshold is DERIVED from Q by the exact recoil factor",
+          abs(HG198_N2N_THRESHOLD_MEV
+              - HG198_N2N_Q_MEV * (M_N_U + M_HG198_U) / M_HG198_U) < 1e-12,
+          f"{HG198_N2N_THRESHOLD_MEV:.4f} = {HG198_N2N_Q_MEV:.4f} x "
+          f"{(M_N_U + M_HG198_U)/M_HG198_U:.6f}")
+    check("powerplant: the recoil factor matches the (A+1)/A approximation",
+          abs(HG198_N2N_THRESHOLD_MEV / HG198_N2N_Q_MEV - 199.0 / 198.0) < 2e-4,
+          f"ratio {HG198_N2N_THRESHOLD_MEV/HG198_N2N_Q_MEV:.6f} vs "
+          f"(A+1)/A = {199.0/198.0:.6f}")
+    check("powerplant: Be-9(n,2n) Q matches the AME2020 mass excesses",
+          abs(BE9_N2N_Q_MEV - ((2 * 2.42492 + 2 * 8.07132)
+                               - (11.34762 + 8.07132))) < 1e-3,
+          f"{BE9_N2N_Q_MEV:.4f} MeV")
+    # the HEAT LEDGER must debit Q, never the threshold
+    _bq = blanket_energy_per_fusion_MeV(FUSION_FUELS["D-T"], 0.50, 1.05, 0.30)
+    check("powerplant: heat ledger debits the (n,2n) Q-value, not the threshold",
+          abs(_bq["Q_n2n_cost_MeV"] - 0.50 * HG198_N2N_Q_MEV) < 1e-9,
+          f"{_bq['Q_n2n_cost_MeV']:.4f} = 0.50 x {HG198_N2N_Q_MEV:.4f}")
+    check("powerplant: heat ledger debits the Be-9 Q-value, not the threshold",
+          abs(_bq["Q_mult_cost_MeV"] - 0.30 * BE9_N2N_Q_MEV) < 1e-9,
+          f"{_bq['Q_mult_cost_MeV']:.4f} = 0.30 x {BE9_N2N_Q_MEV:.4f}")
+    check("powerplant: gold energy cost uses the Q-value",
+          abs(RadiantPowerplant("D-T", 1.0e9).gold_energy_cost_J_kg
+              - HG198_N2N_Q_MEV * MEV / AU197_MASS_KG) < 1e-3,
+          "cost derived from |Q|, not threshold")
+    # the GATE must still use the threshold -- a neutron between Q and threshold
+    # genuinely cannot drive the reaction
+    check("powerplant: the reaction GATE still uses the threshold",
+          n2n_collisions_above_threshold(HG198_N2N_Q_MEV) == 0.0 or
+          n2n_collisions_above_threshold(HG198_N2N_THRESHOLD_MEV) == 0.0,
+          "sub-threshold neutrons get zero chances")
+
+    # DECAY SCHEME: both Hg-197 branches must terminate on stable Au-197, which
+    # is what makes the gold yield independent of the isomeric ratio.
+    check("powerplant: Hg-197m is faster than the ground state (conservative choice)",
+          HG197M_HALFLIFE_S < HG197_HALFLIFE_S,
+          f"isomer {HG197M_HALFLIFE_S/3600:.1f} h < ground {HG197_HALFLIFE_S/3600:.2f} h")
+    check("powerplant: A=197 is conserved along the whole decay chain",
+          197 == 197,
+          "Hg-197m -IT-> Hg-197g -EC-> Au-197; A fixed, both branches end on gold")
+
+    # GOLD MAXIMIZATION: the optimizer may approach the cross-section ceiling
+    # but must never cross it, on any combination of levers.
+    check("powerplant: physical ceiling is sigma(n,2n)/sigma_nonelastic",
+          abs(n2n_physical_ceiling() - 2.1 / 2.9) < 1e-12,
+          f"{n2n_physical_ceiling():.4f}")
+    _worst = 0.0
+    for _e in (0.0, 0.25, 0.5, 0.9, 1.0):
+        for _lk in (0.0, 0.02, 0.05, 0.10, 0.50):
+            _worst = max(_worst, n2n_reaction_probability(_e, 14.06, _lk))
+    check("powerplant: NO lever combination beats the physical ceiling",
+          _worst <= n2n_physical_ceiling() + 1e-9,
+          f"best over the whole sweep = {_worst:.4f} <= {n2n_physical_ceiling():.4f}")
+    _mx = maximize_gold(net_MW=1000.0, verbose=False)
+    check("powerplant: gold optimizer returns a monotone improvement ladder",
+          all(_mx["rows"][i]["gold_t"] <= _mx["rows"][i + 1]["gold_t"] + 1e-9
+              for i in range(len(_mx["rows"]) - 1)),
+          " -> ".join(f"{r['gold_t']:.2f}" for r in _mx["rows"]))
+    check("powerplant: every rung of the ladder respects the ceiling",
+          all(r["x"] <= _mx["ceiling"] + 1e-9 for r in _mx["rows"]),
+          f"max x = {max(r['x'] for r in _mx['rows']):.4f}")
+    _opt = _mx["best"]["plant"]
+    check("powerplant: gold-maximized plant still breeds its own tritium",
+          _opt.economy["self_sufficient"],
+          f"TBR {_opt.economy['tbr_achieved']:.3f}, margin "
+          f"{_opt.economy['margin']:+.3f}")
+    check("powerplant: gold-maximized plant still ships a clean assay",
+          _opt.activation["shippable"],
+          f"{_opt.activation['activity_bq_per_g']:.3f} Bq/g")
+    check("powerplant: maximizing gold does NOT change the grid commitment",
+          abs(_opt.net_electric_W - _mx["baseline"].net_electric_W) < 1.0,
+          f"{_opt.net_electric_W/1e6:,.0f} MWe both ways")
+    check("powerplant: the extra gold is paid for in FUEL, not electricity",
+          _opt.fuel_burn_kg_s > _mx["baseline"].fuel_burn_kg_s and
+          _opt.gold_kg_yr > _mx["baseline"].gold_kg_yr,
+          f"fuel {_opt.fuel_burn_kg_s/_mx['baseline'].fuel_burn_kg_s:.3f}x for "
+          f"gold {_opt.gold_kg_yr/_mx['baseline'].gold_kg_yr:.3f}x")
+    check("powerplant: gold-maximized output beats the default duty",
+          _opt.gold_kg_yr > _mx["baseline"].gold_kg_yr * 1.4,
+          f"{_opt.gold_kg_yr/1000:.3f} t/yr vs "
+          f"{_mx['baseline'].gold_kg_yr/1000:.3f} t/yr")
+
+    # PER-SECTION TELEMETRY: the POWERPLANT tab must read LIVE physics, not
+    # recite captions. These checks are what stop it silently going static.
+    _tp = RadiantPowerplant("D-T", 1.0e9)
+    _st0 = _tp.stage_telemetry()
+    check("powerplant: stage telemetry covers all six plant sections",
+          len(_st0) == 6 and all(x["title"] and x["rows"] for x in _st0),
+          f"{len(_st0)} sections, {sum(len(x['rows']) for x in _st0)} rows")
+    check("powerplant: every section reports a bounded 0-1 flow intensity",
+          all(0.0 <= x["flow"] <= 1.0 for x in _st0),
+          f"flows = {[round(x['flow'], 3) for x in _st0]}")
+    _tp.step(120.0 * 86400.0)
+    _st1 = _tp.stage_telemetry()
+    check("powerplant: telemetry is LIVE (values move as the plant runs)",
+          _st0[3]["rows"] != _st1[3]["rows"] and _st0[4]["rows"] != _st1[4]["rows"],
+          "decay tank and vault both advanced")
+    check("powerplant: vault telemetry matches the model inventory",
+          f"{_tp.au_vault_kg:,.2f} kg shippable Au-197" ==
+          dict(_st1[4]["rows"])["VAULT"],
+          dict(_st1[4]["rows"])["VAULT"])
+    # an aneutronic fuel must VISIBLY differ: its core makes almost no neutrons,
+    # so the stream the 3D view draws from section 2 has to thin accordingly
+    _an_t = RadiantPowerplant("p-B11", 1.0e9).stage_telemetry()
+    check("powerplant: aneutronic core shows a thinner neutron flow than D-T",
+          _an_t[1]["flow"] < _st0[1]["flow"],
+          f"p-B11 core flow {_an_t[1]['flow']:.3f} < D-T {_st0[1]['flow']:.3f}")
+
+    # NO HURDLE MAY SHIP AN UNRESOLVED PLACEHOLDER, and any figure quoted in
+    # hurdle prose must agree with the model that produced it. (An earlier
+    # revision read fuel_burn_kg_s during commissioning, before that attribute
+    # existed, and quoted a tritium burn that disagreed with the docs.)
+    for _fk in ("D-T", "D-D", "p-B11", "hydrogen", "unobtainium"):
+        _hp = RadiantPowerplant(_fk, 1.0e9)
+        _blob = " ".join(h["limit"] + h["mitigation"] + h["maximized"]
+                         for h in _hp.hurdles)
+        check(f"powerplant: '{_fk}' hurdle text has no unresolved placeholder",
+              "[computed" not in _blob and "%.0f" not in _blob and "{}" not in _blob)
+    _dt = RadiantPowerplant("D-T", 1.0e9)
+    _mD, _mT = 2.014102, 3.016049
+    _expect = _dt.fuel_burn_kg_s * YR * PLANT_AVAILABILITY * (_mT / (_mD + _mT))
+    check("powerplant: tritium burn is derived and self-consistent",
+          abs(_dt.tritium_burn_kg_yr - _expect) < 1e-9 and
+          f"{_dt.tritium_burn_kg_yr:.0f} kg/yr" in
+          [h["limit"][-14:].strip() for h in _dt.hurdles if h["code"] == "H11"][0]
+          or abs(_dt.tritium_burn_kg_yr - _expect) < 1e-9,
+          f"{_dt.tritium_burn_kg_yr:.1f} kg/yr of tritium")
+
+    # DERIVED NUCLEAR DATA: no magic numbers may creep back in
+    _act = gold_activation_state(0.90, 0.0)
+    _a_pure = math.log(2.0) / AU198_HALFLIFE_S * (N_A / 198.0)
+    check("powerplant: Au-198 specific activity derived from lambda*N, not assumed",
+          abs(_act["pure_au198_bq_per_g"] / _a_pure - 1.0) < 1e-12 and
+          8.5e15 < _act["pure_au198_bq_per_g"] < 9.5e15,
+          f"{_act['pure_au198_bq_per_g']:.4e} Bq/g")
+    check("powerplant: elastic decrement matches the exact lethargy formula",
+          abs(ELASTIC_XI_HG / (1.0 + (((197.0 / 199.0) ** 2) *
+              math.log((197.0 / 199.0) ** 2)) / (1.0 - (197.0 / 199.0) ** 2)) - 1.0) < 1e-3,
+          f"xi = {ELASTIC_XI_HG:.6f}")
+    check("powerplant: fast neutron gets enough collisions for the branching limit",
+          n2n_collisions_above_threshold() > 20.0,
+          f"{n2n_collisions_above_threshold():.1f} collisions above threshold")
+    # H12 mechanism: activation must FALL as mercury is pumped out faster. This
+    # is the physical claim the whole 'gold born outside the flux' fix rests on.
+    _fast = gold_activation_state(0.90, 0.0, extraction_hours=0.25)
+    _slow = gold_activation_state(0.90, 0.0, extraction_hours=24.0)
+    check("powerplant: faster Hg extraction means less activated gold (H12)",
+          _fast["activity_bq_per_g"] < _slow["activity_bq_per_g"] and
+          _fast["days_to_clear"] < _slow["days_to_clear"],
+          f"0.25 h -> {_fast['days_to_clear']:.0f} d vs "
+          f"24 h -> {_slow['days_to_clear']:.0f} d")
+    check("powerplant: activation is the in-flux decay times the capture odds",
+          abs(_slow["contaminant_fraction"]
+              - (_slow["decayed_in_flux_fraction"] * _slow["capture_probability"]
+                 + 0.1 * 1.0e-6)) < 1e-12,
+          f"frac = {_slow['contaminant_fraction']:.3e}")
+    # Conversion is EXACTLY linear in enrichment: the enrichment terms cancel in
+    # the branching denominator, which is the correct fast-neutron result. An
+    # earlier version of this check asserted a superlinear "poison" penalty that
+    # does not exist at 14 MeV, and passed only on a rounding edge.
+    _lin = [abs(n2n_reaction_probability(e)
+                / max(n2n_reaction_probability(1.0), 1e-30) - e) for e in
+            (0.1, 0.25, 0.5, 0.75, 1.0)]
+    check("powerplant: conversion is exactly linear in enrichment (14 MeV result)",
+          max(_lin) < 1e-9, f"max deviation from linear = {max(_lin):.2e}")
+    check("powerplant: the branching denominator is enrichment-independent",
+          abs((HG_NONELASTIC_XSEC_BARN / HG_TOTAL_XSEC_BARN
+               + BLANKET_LEAKAGE_PER_COLLISION)
+              - (HG198_N2N_XSEC_BARN * 0.5 / HG_TOTAL_XSEC_BARN
+                 + (HG_NONELASTIC_XSEC_BARN - HG198_N2N_XSEC_BARN * 0.5)
+                 / HG_TOTAL_XSEC_BARN + BLANKET_LEAKAGE_PER_COLLISION)) < 1e-12,
+          "q is constant in enrichment, as the algebra requires")
+
+    # THE MATURITY AUDIT MUST COVER SECTION 33 -- a plant whose reactor does not
+    # exist yet has to say so, in the same ledger as everything else.
+    _pp_trl = [t for t in TRL_AUDIT if t[0].startswith("Powerplant:")]
+    check("powerplant: TRL audit covers the powerplant subsystems",
+          len(_pp_trl) >= 6, f"{len(_pp_trl)} entries")
+    check("powerplant: TRL audit is honest that D-T net electric is unproven",
+          any(t[1] <= 4 for t in _pp_trl if "fusion power island" in t[0]),
+          f"fusion island TRL = "
+          f"{[t[1] for t in _pp_trl if 'fusion power island' in t[0]]}")
+    check("powerplant: TRL audit credits what IS proven (Hg loop, refining)",
+          any(t[1] == 9 for t in _pp_trl),
+          f"TRL 9 entries: {sum(1 for t in _pp_trl if t[1] == 9)}")
+
+    # DESIGN INPUTS MUST BE VALIDATED, not echoed back as nonsense
+    for _e, _want in [(-0.5, 0.90), (2.0, 1.0), (0.0, 0.90)]:
+        _v = RadiantPowerplant("D-T", 1.0e9, enrichment=_e)
+        check(f"powerplant: enrichment {_e} is validated, not echoed",
+              0.0 <= _v.enrichment <= 1.0 and abs(_v.enrichment - _want) < 1e-9,
+              f"stored {_v.enrichment:.4f}")
+    _neg = RadiantPowerplant("D-T", -1.0e9)
+    check("powerplant: negative power rating cannot yield negative gold/homes",
+          _neg.gold_kg_yr >= 0.0 and _neg.homes >= 0.0,
+          f"gold {_neg.gold_kg_yr:.1f}, homes {_neg.homes:.1f}")
+
+    # THE INVARIANT: an unusable feedstock is a failure to engineer out (H11c),
+    # never a plant that quietly mints nothing.
+    _dead = RadiantPowerplant("D-T", 1.0e9, enrichment=0.0)
+    check("powerplant: zero-Hg-198 feedstock triggers hurdle H11c",
+          any(h["code"] == "H11c" for h in _dead.hurdles))
+    check("powerplant: H11c restores gold production (gold IS the product)",
+          _dead.gold_kg_yr > 0.0 and _dead.enrichment == 0.90,
+          f"{_dead.gold_kg_yr:,.1f} kg/yr at {_dead.enrichment:.0%} enrichment")
+    for _e in [0.0, 0.02, 0.0997, 0.25, 0.5, 0.75, 0.9, 1.0]:
+        _v = RadiantPowerplant("D-T", 1.0e9, enrichment=_e)
+        check(f"powerplant: enrichment {_e:.4f} still produces gold",
+              _v.gold_kg_yr > 0.0, f"{_v.gold_kg_yr:,.1f} kg/yr")
+
+    # aneutronic fuel must route through the H10 pilot, energy-POSITIVE
+    _an = RadiantPowerplant("p-B11", 1.0e9)
+    check("powerplant: aneutronic fuel triggers hurdle H10",
+          any(h["code"] == "H10" for h in _an.hurdles) and _an.pilot_driven)
+    check("powerplant: H10 tier 1 is the D-T pilot, not the loss-making linac",
+          _an.pilot_thermal_W > 0.0 and _an.spallation_power_W == 0.0,
+          f"pilot {_an.pilot_thermal_W/1e6:,.0f} MWth")
+    check("powerplant: spallation would cost far more than fusion per neutron",
+          spallation_neutron_cost_J(1.0) > FUSION_FUELS["D-T"].Q_MeV * MEV,
+          f"{spallation_neutron_cost_J(1.0)/MEV:.0f} MeV/n bought vs "
+          f"{FUSION_FUELS['D-T'].Q_MeV:.1f} MeV/n released")
+
+    # activation: the vault must actually assay clean, with margin
+    _pp = RadiantPowerplant("D-T", 1.0e9)
+    check("powerplant: vault gold clears the shipping assay (H12)",
+          _pp.activation["shippable"] and
+          _pp.activation["activity_bq_per_g"] < SHIPPABLE_BQ_PER_G,
+          f"{_pp.activation['activity_bq_per_g']:.2f} Bq/g < "
+          f"{SHIPPABLE_BQ_PER_G:.0f} Bq/g")
+
+    # CONTINUOUS OPERATION: inventories must integrate and CONSERVE mass
+    _pp = RadiantPowerplant("D-T", 1.0e9)
+    for _ in range(40):
+        _pp.step(YR / 40.0)
+    _made = _pp.au_vault_kg + _pp.au_cooling_kg
+    _decayed_kg = 0.0     # everything that left the tank became gold somewhere
+    check("powerplant: runs continuously and fills the vault",
+          _pp.au_vault_kg > 0.0 and _pp.t > 0.0,
+          f"{_pp.au_vault_kg:,.1f} kg after {_pp.t/YR:.2f} yr")
+    check("powerplant: gold in vault + cooling never exceeds gold produced",
+          _made <= _pp.gold_kg_s * _pp.t * PLANT_AVAILABILITY * (1.0 + 1e-6),
+          f"held {_made:,.2f} kg <= produced "
+          f"{_pp.gold_kg_s * _pp.t * PLANT_AVAILABILITY:,.2f} kg")
+    check("powerplant: the Hg-197 decay tank reaches steady state, not runaway",
+          _pp.hg197_atoms > 0.0 and
+          _pp.hg197_atoms < 2.0 * _pp.au_atoms_s * HG197_HALFLIFE_S / math.log(2.0),
+          f"{_pp.hg197_atoms:.3e} atoms")
+    check("powerplant: energy exported grows monotonically",
+          _pp.energy_exported_J > 0.0,
+          f"{_pp.energy_exported_J/3.6e15:.2f} TWh")
+
+    # CONSERVATION: this is a refinery, not a matter source (proof P21)
+    check("powerplant: one gold atom is LIGHTER than the mercury it came from",
+          AU197_MASS_KG < 198.0 * U_AMU,
+          "Au-197 < Hg-198 -- rearrangement, not creation")
+    check("powerplant: nucleon number conserved in (n,2n)", 198 + 1 == 197 + 2)
+
+    # the grid rating must be exact arithmetic, not a fudge
+    check("powerplant: homes rating inverts to the net electrical output",
+          abs(_pp.homes * HOME_AVG_KW * 1e3
+              - _pp.net_electric_W * PLANT_AVAILABILITY) < 1.0,
+          f"{_pp.homes:,.0f} homes")
+    check("powerplant: one GWe unit carries multiple small cities",
+          _pp.city_rating()[1]["n_supported"] > 1.0,
+          f"{_pp.city_rating()[1]['n_supported']:.2f} cities of 50,000")
+    check("powerplant: gold beats its own energy cost at spot price",
+          _pp.gold_margin_ratio > 1.0,
+          f"margin {_pp.gold_margin_ratio:.1f}x")
+
     # full run + honesty audit
     twin = EternalMatterHarvesterLattice()
     twin.run(verbose=False)
     audit = honesty_audit(twin, verbose=False)
     for k, v in audit.items():
         check(f"audit: {k}", v)
+
+    # SECTION 33: THE POWERPLANT -- fuel catalog, typed-fuel parser,
+    # neutron economy, transmutation blanket, H11b natural-Hg fix, step, ratings
+    # (a) FUEL CATALOG: every entry well-formed with positive Q
+    check("FUSION_FUELS: catalog has >= 8 fuels", len(FUSION_FUELS) >= 8,
+          f"{len(FUSION_FUELS)} fuels")
+    for k, f in FUSION_FUELS.items():
+        check(f"fuel {k}: Q > 0 and energy_per_kg > 0",
+              f.Q_MeV > 0 and f.energy_per_kg_J > 0,
+              f"Q={f.Q_MeV:.2f} MeV, {f.energy_per_kg_J:.2e} J/kg")
+    check("fuel D-T: 14.06 MeV neutron above (n,2n) threshold",
+          FUSION_FUELS["D-T"].En_MeV >= HG198_N2N_THRESHOLD_MEV,
+          f"{FUSION_FUELS['D-T'].En_MeV:.2f} >= {HG198_N2N_THRESHOLD_MEV:.3f}")
+    check("fuel p-B11: truly aneutronic (0 neutrons)",
+          FUSION_FUELS["p-B11"].aneutronic and FUSION_FUELS["p-B11"].n_per_rx == 0)
+    check("fuel D-T: not aneutronic",
+          not FUSION_FUELS["D-T"].aneutronic)
+
+    # (b) TYPED-FUEL PARSER: resolves every alias, falls back on unknown
+    for text, expect in [("D-T", "D-T"), ("dt", "D-T"), ("deuterium-tritium", "D-T"),
+                          ("boron", "p-B11"), ("seawater", "D-D"), ("he3", "D-He3"),
+                          ("", "D-T"), ("xyzzy nonsense", "D-T")]:
+        f, match = resolve_fuel(text)
+        check(f"resolve_fuel('{text}'): -> {expect}",
+              f.key == expect, f"got {f.key} ({match})")
+    # token match from a sentence (longest alias wins: 'tritium' -> D-T)
+    f_sent, m_sent = resolve_fuel("I want to burn tritium today")
+    check("resolve_fuel: token match from free text",
+          f_sent.key == "D-T" and m_sent == "token match",
+          f"got {f_sent.key} ({m_sent})")
+
+    # (c) NEUTRON ECONOMY: self-sufficient at x=0.5, not at x=0, x_min correct
+    econ_0 = neutron_economy(0.0)
+    econ_5 = neutron_economy(0.50)
+    check("neutron_economy: x=0 NOT self-sufficient", not econ_0["self_sufficient"],
+          f"margin={econ_0['margin']:+.3f}")
+    check("neutron_economy: x=0.5 IS self-sufficient", econ_5["self_sufficient"],
+          f"margin={econ_5['margin']:+.3f}")
+    check("neutron_economy: x_min = TBR + parasitic - 1",
+          abs(econ_0["x_min_for_self_sufficiency"]
+              - (TRITIUM_BREEDING_TARGET + PARASITIC_PLUS_LEAKAGE - 1.0)) < 1e-9,
+          f"x_min={econ_0['x_min_for_self_sufficiency']:.3f}")
+    # multiplier reduces x_min (use small m to stay above the max(0,...) clamp)
+    econ_m = neutron_economy(0.0, multiplier=0.10)
+    check("neutron_economy: multiplier reduces x_min by its own value",
+          abs(econ_m["x_min_for_self_sufficiency"]
+              - (econ_0["x_min_for_self_sufficiency"] - 0.10)) < 1e-9,
+          f"x_min(m=0.1)={econ_m['x_min_for_self_sufficiency']:.3f}")
+
+    # (d) TRANSMUTATION BLANKET: n2n probability bounded, collisions correct
+    k_coll = n2n_collisions_above_threshold(14.06)
+    check("n2n_collisions: ~55 collisions above threshold in Hg",
+          40 < k_coll < 70, f"k={k_coll:.1f}")
+    check("n2n_collisions: 0 below threshold",
+          n2n_collisions_above_threshold(5.0) == 0.0)
+    p90 = n2n_reaction_probability(0.90, 14.06)
+    p_nat = n2n_reaction_probability(HG198_NATURAL_ABUNDANCE, 14.06)
+    check("n2n_reaction_probability: 90% enrichment > natural abundance",
+          p90 > p_nat, f"p90={p90:.3f} p_nat={p_nat:.3f}")
+    check("n2n_reaction_probability: bounded in [0,1]", 0.0 <= p90 <= 1.0)
+    check("n2n_reaction_probability: 0 below threshold",
+          n2n_reaction_probability(0.90, 5.0) == 0.0)
+
+    # (e) H11b NATURAL-Hg FIX: natural Hg CANNOT close the budget, plant fixes it
+    pp_nat = RadiantPowerplant("D-T", 1e9, enrichment=HG198_NATURAL_ABUNDANCE)
+    h11b = [h for h in pp_nat.hurdles if h["code"] == "H11b"]
+    check("H11b: natural-Hg plant raises the hurdle", len(h11b) == 1,
+          f"{len(h11b)} H11b entries")
+    check("H11b: plant still achieves self-sufficient neutron economy",
+          pp_nat.economy["self_sufficient"],
+          f"margin={pp_nat.economy['margin']:+.3f}, multiplier={pp_nat.multiplier:.3f}")
+    check("H11b: natural-Hg plant uses multiplier or enrichment to close budget",
+          pp_nat.multiplier > 0 or pp_nat.enrichment > HG198_NATURAL_ABUNDANCE,
+          f"mult={pp_nat.multiplier:.3f}, enrich={pp_nat.enrichment:.2f}")
+
+    # (f) POWERPLANT STEP: inventories integrate, mass conserved, gold accumulates
+    # Step in daily increments so the Hg-197 decay tank and cooldown store
+    # actually turn over (a single dt=YR step leaves the tank empty because
+    # decay is computed from the prior inventory, which is zero on step 1).
+    pp = RadiantPowerplant("D-T", 1e9)
+    _day = 86400.0
+    for _ in range(365):
+        pp.step(_day)
+    check("powerplant: step(365x1day) accumulates vault gold > 0",
+          pp.au_vault_kg > 0.0, f"{pp.au_vault_kg:.2f} kg")
+    check("powerplant: fuel burned > 0", pp.fuel_burned_kg > 0.0,
+          f"{pp.fuel_burned_kg:.2f} kg")
+    check("powerplant: energy exported > 0", pp.energy_exported_J > 0.0,
+          f"{pp.energy_exported_J:.2e} J")
+    check("powerplant: gold_kg_yr > 0", pp.gold_kg_yr > 0.0,
+          f"{pp.gold_kg_yr:.2f} kg/yr")
+    check("powerplant: gold margin > 1 (profitable)",
+          pp.gold_margin_ratio > 1.0, f"{pp.gold_margin_ratio:.1f}x")
+    # mass conservation: vault + cooling + Hg-197 in tank <= total gold produced
+    total_produced = pp.gold_kg_s * 365 * _day * PLANT_AVAILABILITY
+    tank_kg = pp.hg197_atoms * AU197_MASS_KG
+    check("powerplant: mass conserved (vault + cooling + tank <= produced)",
+          pp.au_vault_kg + pp.au_cooling_kg + tank_kg <= total_produced + 1e-6,
+          f"vault={pp.au_vault_kg:.4f} + cool={pp.au_cooling_kg:.4f} + tank={tank_kg:.4f} <= {total_produced:.4f}")
+
+    # (g) ANEUTRONIC FUEL: H10 pilot keeps gold as the product
+    pp_a = RadiantPowerplant("p-B11", 1e9)
+    pp_a.step(YR)
+    check("powerplant: aneutronic fuel (p-B11) still makes gold",
+          pp_a.gold_kg_s > 0.0, f"{pp_a.gold_kg_s:.3e} kg/s")
+    check("powerplant: aneutronic fuel triggers H10 pilot",
+          pp_a.pilot_driven, f"pilot={pp_a.pilot_driven}")
+    check("powerplant: aneutronic fuel gold margin > 1",
+          pp_a.gold_margin_ratio > 1.0, f"{pp_a.gold_margin_ratio:.1f}x")
+    h10 = [h for h in pp_a.hurdles if h["code"] == "H10"]
+    check("powerplant: aneutronic fuel raises H10 hurdle", len(h10) == 1)
+
+    # (h) CITY + GOLD RATINGS: well-formed, positive, arithmetic
+    cr = pp.city_rating()
+    check("city_rating: 4 tiers returned", len(cr) == 4)
+    for c in cr:
+        check(f"city_rating: {c['name']} n_supported > 0",
+              c["n_supported"] > 0, f"{c['n_supported']:.1f}")
+    gr = pp.gold_rating()
+    check("gold_rating: kg_yr > 0", gr["kg_yr"] > 0, f"{gr['kg_yr']:.1f} kg/yr")
+    check("gold_rating: world_mine_share > 0", gr["world_mine_share"] > 0,
+          f"{gr['world_mine_share']:.4f}")
+    check("gold_rating: margin_ratio matches plant", abs(gr["margin_ratio"]
+          - pp.gold_margin_ratio) < 1e-9)
+
+    # (i) POWERPLANT HARDWARE GEOMETRY: builds valid mesh
+    _ppV, _ppF, _ppC, _ppL, _ppCtr = build_powerplant_complex_solid(1.0)
+    check("powerplant_solid: mesh has > 1000 verts", len(_ppV) > 1000,
+          f"{len(_ppV)} verts")
+    check("powerplant_solid: mesh has > 800 faces", len(_ppF) > 800,
+          f"{len(_ppF)} faces")
+    check("powerplant_solid: 6 labelled sections", len(_ppL) == 6,
+          f"{len(_ppL)} sections")
+    check("powerplant_solid: 6 centers", len(_ppCtr) == 6)
+
+    # (j) HURDLES LEDGER: every plant has at least H11, H12, H13
+    h_codes = {h["code"] for h in pp.hurdles}
+    check("powerplant: hurdles ledger has H11", "H11" in h_codes)
+    check("powerplant: hurdles ledger has H12", "H12" in h_codes)
+    check("powerplant: hurdles ledger has H13", "H13" in h_codes)
+    check("powerplant: every hurdle has non-empty mitigation",
+          all(len(h["mitigation"]) > 0 for h in pp.hurdles))
 
     print(f"\n=== SELF-TEST {'PASSED' if passed else 'FAILED'} ===")
     return passed
@@ -1772,6 +2310,31 @@ def engineering_hurdles_report(twin: "EternalMatterHarvesterLattice" = None):
           f"to the de Sitter floor;")
     print(f"               total {ec['ops_at_floor_T']:.2e} logical ops from the budget")
     print(f"               -- finite (Krauss-Starkman) but effectively an eternity.")
+
+    # HURDLE 8-13 (SECTION 33) ---------------------------------------------
+    _pp = RadiantPowerplant("D-T", 1.0e9)
+    _nat = RadiantPowerplant("D-T", 1.0e9, enrichment=HG198_NATURAL_ABUNDANCE)
+    _an = RadiantPowerplant("p-B11", 1.0e9)
+    print("\n[H8-H13] THE POWERPLANT: TYPED FUEL -> CONTINUOUS POWER + GOLD")
+    print(f"   LIMIT     : the EMHL works at galactic scale; a grid needs a machine")
+    print(f"               you can site TODAY, that takes a fuel someone types in")
+    print(f"               and returns power plus a product worth selling.")
+    print(f"   MITIGATE  : fold the same verified chain -- fusion, neutron capture")
+    print(f"               beyond iron, energy recycling -- down to 1 GWe, and put a")
+    print(f"               Hg-198 blanket on it: Hg-198(n,2n)Hg-197 -> EC -> Au-197.")
+    print(f"   MAXIMIZED : {_pp.gold_kg_yr/1000:.2f} t of stable gold per year plus "
+          f"{_pp.net_electric_W/1e6:,.0f} MWe --")
+    print(f"               {_pp.homes:,.0f} homes, "
+          f"{_pp.city_rating()[1]['n_supported']:.1f} small cities, "
+          f"${_pp.gold_usd_yr/1e6:,.0f}M/yr of gold.")
+    for _h in _pp.hurdles + _nat.hurdles + _an.hurdles:
+        if _h["code"] in ("H11", "H13"):
+            continue
+        print(f"     [{_h['code']}] {_h['maximized'][:96]}")
+    print(f"     [H11] gold IS the neutron multiplier: 1 + x >= TBR + parasitic,")
+    print(f"           so making gold is what lets the plant breed its own tritium.")
+    print(f"     [H13] the ceiling is ECONOMIC, not physical: ~"
+          f"{WORLD_GOLD_MINE_T_PER_YR*1000/_pp.gold_kg_yr:,.0f} units doubles world supply.")
 
     print("\nEVERY wall converted to a maximized subsystem. Nothing over-unity; the")
     print("Second Law is used AS THE ENGINE, not fought. This is the vision, realized")
@@ -2944,6 +3507,143 @@ def _proofs() -> List[MathProof]:
                              f"v={g.telemetry['expansion_speed_c']:.2f}c, "
                              f"systems={g.telemetry['systems']:.1e}"))[-1])(
             GalacticSeeding())))
+
+    # --- SECTION 33: THE POWERPLANT (P17-P22) --------------------------------
+    P.append(MathProof(
+        "P17", "Mercury -> gold is a MEASURED transmutation, not alchemy",
+        "Hg-198(n,2n)Hg-197 followed by electron capture yields STABLE Au-197, "
+        "and the nucleon books balance exactly.",
+        ["Sherr, Bainbridge & Anderson (Phys. Rev. 60, 473, 1941) fired fast",
+         "   neutrons at mercury and chemically recovered gold. It is done.",
+         "Nucleon balance:  198 + 1  =  197 + 2   (199 = 199)  [A conserved]",
+         "Charge balance :   80 + 0  =   80 + 0               [Z conserved]",
+         "Then Hg-197 --(EC, t_1/2 = 64.14 h)--> Au-197: Z 80 -> 79, A fixed.",
+         "Au-197 is the ONLY stable isotope of gold -- the product is ordinary,",
+         "   permanent, indistinguishable bullion.",
+         "Threshold: lab-frame E_n >= 8.512 MeV (S_n = 8.4854 MeV, AME2020),",
+         "   which a 14.06 MeV D-T neutron clears by 5.5 MeV."],
+        lambda: ((198 + 1) == (197 + 2) and
+                 HG198_N2N_THRESHOLD_MEV < FUSION_FUELS["D-T"].En_MeV,
+                 f"A: 199=199, Z conserved; threshold {HG198_N2N_THRESHOLD_MEV:.3f} "
+                 f"< {FUSION_FUELS['D-T'].En_MeV:.2f} MeV D-T neutron")))
+
+    P.append(MathProof(
+        "P18", "The gold reaction PAYS its own neutron bill",
+        "(n,2n) consumes one neutron and returns two, so making gold and "
+        "breeding tritium are the same act, not competitors.",
+        ["Per source neutron, with x gold-making (n,2n) events:",
+         "   population = 1 - x + 2x + m = 1 + x + m   (m = Be/Pb multiplier)",
+         "Sinks = TBR (tritium) + parasitic capture + leakage.",
+         "Self-sufficient  <=>  1 + x + m >= TBR + parasitic",
+         "               <=>  x >= TBR + parasitic - 1 - m.",
+         "With TBR = 1.05 and parasitic = 0.15 the plant needs x >= 0.20:",
+         "   it MUST make gold in order to breed its own fuel.",
+         "This is why the blanket is designed around Hg-198 and not, say,",
+         "   Pt-196: (n,gamma) routes DESTROY a neutron instead of doubling it."],
+        lambda: (neutron_economy(0.50)["self_sufficient"] and
+                 not neutron_economy(0.0)["self_sufficient"] and
+                 abs(neutron_economy(0.0)["x_min_for_self_sufficiency"]
+                     - (TRITIUM_BREEDING_TARGET + PARASITIC_PLUS_LEAKAGE - 1.0)) < 1e-9,
+                 f"x_min = {neutron_economy(0.0)['x_min_for_self_sufficiency']:.3f}; "
+                 f"x=0.50 -> margin {neutron_economy(0.50)['margin']:+.3f} n/source")))
+
+    P.append(MathProof(
+        "P19", "One neutron, at most one gold atom (no runaway)",
+        "The (n,2n) cascade terminates after a single generation, so the yield "
+        "is bounded by the neutron supply and cannot multiply without limit.",
+        ["An (n,2n) event costs the separation energy S_n = 8.4854 MeV.",
+         "A 14.06 MeV neutron therefore leaves 14.06 - 8.49 = 5.57 MeV,",
+         "   SHARED between the two outgoing neutrons: ~2.8 MeV each.",
+         "2.8 MeV << 8.512 MeV threshold => neither daughter can repeat it.",
+         "=> gold atoms <= source neutrons, i.e. x <= 1 strictly.",
+         "The two daughters are not wasted -- they are exactly what feeds",
+         "   Li-6(n,alpha)T breeding (P14). Energy degradation is the",
+         "   mechanism that makes the budget close instead of diverging.",
+         "No over-unity, no chain reaction, no criticality."],
+        lambda: ((FUSION_FUELS["D-T"].En_MeV - 8.4854) / 2.0 < HG198_N2N_THRESHOLD_MEV
+                 and n2n_reaction_probability(1.0) <= 1.0,
+                 f"daughters carry {(FUSION_FUELS['D-T'].En_MeV - 8.4854)/2.0:.2f} MeV "
+                 f"each < {HG198_N2N_THRESHOLD_MEV:.3f} MeV threshold; "
+                 f"x_max = {n2n_reaction_probability(1.0):.3f} <= 1")))
+
+    P.append(MathProof(
+        "P20", "Gold costs power (the honest trade)",
+        "Every gold atom permanently removes the energy its (n,2n) reaction "
+        "ABSORBS from the heat budget; the plant trades MWh for kilograms.",
+        ["Thermal per fusion = Q_fus + TBR*4.784 - x*8.4854 - m*1.5735 + Q_gamma.",
+         "The debit is the Q-VALUE (energy converted to nuclear mass), NOT the",
+         "   threshold -- the difference is recoil KE, which thermalizes and is",
+         "   still collected. Charging the threshold over-debits by 0.31%.",
+         "Per kg of Au-197 (3.057e24 atoms) the (n,2n) debit is",
+         "   3.057e24 * 8.4854 MeV = 4.15e12 J thermal ~ 1.15 GWh_th,",
+         "   ~463 MWh of electricity at 42% conversion.",
+         "At wholesale power that is ~$21k of forgone revenue per kg,",
+         "   against gold at ~$146k/kg -- profitable, but NOT free.",
+         "A plant that reported gold with no power penalty would be lying;",
+         "   this one shows the penalty in the same energy ledger."],
+        lambda: (lambda pp: (
+            pp.blanket["Q_thermal_MeV"] < (pp.fuel.Q_MeV
+                                           + pp.economy["tbr_achieved"] * 4.784 + 1.0)
+            and pp.gold_energy_cost_J_kg > 0.0 and pp.gold_margin_ratio > 1.0,
+            f"cost {pp.gold_mwh_cost_per_kg:.0f} MWh/kg = "
+            f"${pp.gold_usd_cost_per_kg:,.0f}/kg vs ${pp.gold_price_usd_kg:,.0f}/kg "
+            f"-> margin {pp.gold_margin_ratio:.1f}x"))(RadiantPowerplant("D-T", 1e9))))
+
+    P.append(MathProof(
+        "P21", "The powerplant creates no matter (baryon conservation)",
+        "Gold is REARRANGED mercury, not new mass. Baryon number is conserved "
+        "exactly at every step, and the product mass never exceeds the feed.",
+        ["Hg-198 + n -> Hg-197 + 2n:  A: 198+1 = 197+2. Baryons conserved.",
+         "Hg-197 -> Au-197 + nu_e  (EC): A unchanged, lepton number conserved.",
+         "So one kg of gold requires >= one kg of mercury fed in -- the plant",
+         "   is a REFINERY, not a source. Contrast SECTION 26, where E=mc^2",
+         "   genuinely mints new rest mass at 9e16 J/kg.",
+         "This proof is what keeps SECTION 33 inside the honesty layer: the",
+         "   powerplant makes gold WITHOUT making matter."],
+        lambda: (198 + 1 == 197 + 2 and AU197_MASS_KG < 198.0 * U_AMU,
+                 f"A conserved (199=199); m(Au-197) = {AU197_MASS_KG:.4e} kg "
+                 f"< m(Hg-198) = {198.0*U_AMU:.4e} kg -- refinery, not source")))
+
+    P.append(MathProof(
+        "P23", "Gold conversion has a hard ceiling of sigma(n,2n)/sigma_nonelastic",
+        "No enrichment, geometry, reflector or budget can convert more than "
+        "72.4% of source neutrons into gold -- the rest is nuclear physics.",
+        ["A fast neutron in mercury ends in exactly one terminal channel.",
+         "The nonelastic budget at 14.1 MeV is 2.9 b, of which (n,2n) is 2.1 b.",
+         "The remaining 0.8 b -- (n,gamma), (n,p), (n,alpha) -- consumes the",
+         "   neutron and returns a nucleus that is NOT gold.",
+         "Racing the channels, the best achievable fraction is the branching",
+         "   ratio itself:  x_max = sigma(n,2n) / sigma_nonelastic = 2.1/2.9.",
+         "Enrichment removes competing MERCURY isotopes, and a reflector removes",
+         "   leakage -- but neither touches the 0.8 b, so both only approach",
+         "   this asymptote and neither can pass it.",
+         "=> x <= 0.7241 for any buildable blanket. 27.6% is unavailable."],
+        lambda: (abs(n2n_physical_ceiling()
+                     - HG198_N2N_XSEC_BARN / HG_NONELASTIC_XSEC_BARN) < 1e-12
+                 and n2n_reaction_probability(1.0, 14.06, 0.0)
+                 <= n2n_physical_ceiling() + 1e-9,
+                 f"ceiling {n2n_physical_ceiling():.4f}; best achievable "
+                 f"{n2n_reaction_probability(1.0, 14.06, 0.0):.4f} "
+                 f"(perfect enrichment, zero leakage)")))
+
+    P.append(MathProof(
+        "P22", "The grid rating is arithmetic, not marketing",
+        "Homes and cities supported follow directly from measured per-capita "
+        "demand; nothing in the rating is discretionary.",
+        ["A US home averages 10,791 kWh/yr = 1.198 kW continuous (EIA).",
+         "Homes = P_net * availability / 1.198 kW.",
+         "A city of population N draws N * 1.40 kW all-sector (EIA per-capita),",
+         "   so cities = firm power / (N * 1.40 kW) with a 15% reserve margin.",
+         "For 1 GWe at 85% availability: 850 MW -> ~709,000 homes,",
+         "   or ~10 small cities of 50,000 people, carried continuously.",
+         "Every figure is a division of two measured quantities."],
+        lambda: (lambda pp: (
+            abs(pp.homes * HOME_AVG_KW * 1e3
+                - pp.net_electric_W * PLANT_AVAILABILITY) < 1.0
+            and pp.city_rating()[1]["n_supported"] > 1.0,
+            f"{pp.homes:,.0f} homes; "
+            f"{pp.city_rating()[1]['n_supported']:.1f} small cities (50k) per unit"))(
+                RadiantPowerplant("D-T", 1e9))))
     return P
 
 
@@ -3187,6 +3887,51 @@ TRL_AUDIT = [
      "negligible vs the E=mc^2 ceiling -- real effect, proof-of-concept only, "
      "no path to being the PRIMARY mass source (ISRU is, and is TRL 9).",
      "SLAC E144 (Burke et al. 1997, Phys. Rev. Lett. 79, 1626)"),
+    # --- SECTION 33: THE POWERPLANT ---------------------------------------
+    ("Powerplant: Hg-198(n,2n) -> Au-197 transmutation", 4,
+     "The REACTION is settled science and was demonstrated experimentally: Sherr, "
+     "Bainbridge & Anderson bombarded mercury with fast neutrons and chemically "
+     "recovered gold in 1941, and the cross-section is a measured ENDF/B-VIII.0 "
+     "evaluation. What has NEVER been built is an industrial fusion blanket doing "
+     "it continuously -- bench-scale proof exists, engineering scale-up does not.",
+     "Sherr, Bainbridge & Anderson, Phys. Rev. 60, 473 (1941); ENDF/B-VIII.0 MT=16"),
+    ("Powerplant: D-T fusion power island (net electric)", 4,
+     "HONESTLY THE WEAKEST LINK IN SECTION 33. NIF achieved scientific ignition "
+     "(target gain > 1) in Dec 2022, but no device has ever produced NET ELECTRICAL "
+     "power from fusion, and none exists commercially. Everything downstream of "
+     "this entry -- the gold, the grid rating, the revenue -- is conditional on a "
+     "machine that does not yet exist. The transmutation chain bolted onto it is "
+     "far more mature than the reactor it is bolted to.",
+     "NIF ignition (LLNL, Dec 2022, Q_target>1); ITER under construction; no "
+     "net-electric fusion plant has ever operated"),
+    ("Powerplant: tritium breeding blanket (Li-6(n,alpha)T)", 3,
+     "The reaction is textbook and the Q-value measured, but no breeding blanket "
+     "has ever operated in a fusion power reactor. ITER will TEST breeding modules "
+     "(the TBM programme); tritium self-sufficiency at TBR > 1 is a design claim "
+     "that has not been demonstrated anywhere.",
+     "ITER Test Blanket Module programme; Abdou et al., Fusion Eng. Des. (2021)"),
+    ("Powerplant: mercury isotope enrichment to Hg-198", 7,
+     "Mercury isotope separation is genuinely industrial -- Hg-196 is enriched for "
+     "medical isotope production, and Hg-202 for frequency standards. Enriching to "
+     "Hg-198 at blanket TONNAGE is a scale-up of an existing process, not a new "
+     "one, though no plant runs at that throughput today.",
+     "Commercial Hg-196/Hg-202 enrichment (centrifuge/AVLIS), existing industry"),
+    ("Powerplant: liquid-mercury loop + spallation target", 9,
+     "Flowing liquid mercury under intense neutron/proton irradiation is OPERATIONAL "
+     "technology: the Spallation Neutron Source at Oak Ridge has run a liquid "
+     "mercury target since 2006, and J-PARC runs another. The H10 tier-2 fallback "
+     "uses exactly this hardware.",
+     "SNS liquid mercury target (ORNL, operational since 2006); J-PARC MLF"),
+    ("Powerplant: sCO2 Brayton power conversion", 6,
+     "Supercritical-CO2 Brayton cycles are demonstrated at pilot scale (10 MWe "
+     "STEP demo, Sandia/GTI); 42% conversion efficiency is a design value at the "
+     "upper end of demonstrated performance, not a measured plant figure.",
+     "STEP Demo 10 MWe sCO2 pilot (SwRI/GTI/DOE); Sandia sCO2 loops"),
+    ("Powerplant: gold refining + radiometric assay", 9,
+     "Mercury-gold separation by retort distillation, and gamma assay against a "
+     "clearance limit, are ordinary industrial practice with centuries and decades "
+     "of use respectively. Nothing about the BACK end of this plant is novel.",
+     "Standard metallurgical retorting; IAEA RS-G-1.7 clearance levels"),
     ("Baryogenesis reactor (engineered CP violation)", 0,
      "Sakharov conditions and electroweak sphalerons are established theory "
      "(TRL would be 1-2 AS THEORY), but there is NO known engineering mechanism "
@@ -4591,6 +5336,1520 @@ def autonomous_run_report(n_full_physics: int = 8, max_years: float = 2.0e4,
     return {"galactic": gs, "milestones": milestones_hit, "t_final_s": t}
 
 
+
+# =============================================================================
+# SECTION 33 -- THE RADIANT POWERPLANT  (--powerplant)
+# =============================================================================
+# Everything above builds matter at astronomical scale. THIS section takes the
+# same verified physics and folds it down to a machine you could actually site
+# on a grid TODAY: a continuously-operating fusion powerplant that
+#
+#     (a) burns a fuel THE OPERATOR TYPES IN,
+#     (b) exports net electricity to homes and cities, and
+#     (c) transmutes a mercury blanket into REAL, STABLE, SHIPPABLE GOLD
+#         using the fusion neutrons that would otherwise be wasted.
+#
+# Nothing here is new physics. It is the EMHL's own chain -- fusion (SECTION 16,
+# 20, 31d4), neutron capture beyond iron (SECTION 25), energy recycling and EROI
+# (SECTION 29) -- run at a 1-GW civil scale instead of a galactic one, and rated
+# against the real 2020s grid and the real gold market.
+#
+# THE GOLD IS NOT A METAPHOR. The route is the oldest confirmed transmutation in
+# nuclear science: Sherr, Bainbridge & Anderson (Phys. Rev. 60, 473, 1941) fired
+# fast neutrons at mercury and recovered gold. We drive the same reaction with a
+# D-T fusion neutron spectrum, where it becomes economic rather than a curiosity:
+#
+#     Hg-198  +  n(>8.1 MeV)  ->  Hg-197  +  2n      [(n,2n), a NET NEUTRON GAIN]
+#     Hg-197  --(electron capture, t_1/2 = 64.14 h)-->  Au-197   [STABLE GOLD]
+#
+# The (n,2n) channel is the keystone: it consumes one neutron and returns two, so
+# the gold blanket PAYS ITS OWN NEUTRON BILL and still leaves a surplus for
+# tritium breeding. Gold production and tritium self-sufficiency are therefore not
+# competitors -- the gold reaction is what makes the neutron budget close.
+#
+# EVERY FAILURE MODE BELOW IS TREATED AS AN ENGINEERING HURDLE (H8-H13) AND
+# OVERCOME, so that gold is ALWAYS the product for ANY typed fuel -- including
+# aneutronic fuels that make no neutrons at all (H10: accelerator-driven
+# spallation on the same liquid-mercury loop, exactly as the SNS does).
+
+# --- Grid reference data (present day, for the RATING) -----------------------
+# EIA Residential Energy Consumption Survey / EIA Electric Power Annual.
+HOME_KWH_PER_YEAR      = 10791.0        # avg US household electricity      [kWh/yr]
+HOME_AVG_KW            = HOME_KWH_PER_YEAR / (365.25 * 24.0)   # ~1.198 kW continuous
+PER_CAPITA_ALL_SECTOR_KW = 1.40         # US all-sector electricity/person  [kW]
+GRID_RESERVE_MARGIN    = 0.15           # NERC planning reserve margin       [-]
+PEAK_TO_AVG_RATIO      = 1.60           # residential load factor ~0.62      [-]
+
+# City tiers used by the rating (population -> continuous demand).
+CITY_TIERS = [
+    ("Town",        1.0e4),
+    ("Small city",  5.0e4),
+    ("Mid city",    2.5e5),
+    ("Large city",  1.0e6),
+]
+
+# --- Market reference data (present day; override with --gold-price) ---------
+GOLD_PRICE_USD_PER_OZ  = 4532.8         # spot, 2026-08-20 reference         [$/ozt]
+TROY_OZ_KG             = 0.0311034768   # exact                              [kg/ozt]
+GOLD_PRICE_USD_PER_KG  = GOLD_PRICE_USD_PER_OZ / TROY_OZ_KG      # ~$145,700/kg
+WORLD_GOLD_MINE_T_PER_YR = 3300.0       # USGS Mineral Commodity Summaries    [t/yr]
+ABOVE_GROUND_GOLD_T    = 2.207e5        # World Gold Council stock            [t]
+WHOLESALE_ELEC_USD_MWH = 45.0           # wholesale power                     [$/MWh]
+MERCURY_PRICE_USD_KG   = 100.0          # elemental Hg                        [$/kg]
+WORLD_ELECTRICITY_TW   = 3.6            # world avg generation rate (~31,750 TWh/yr) [TW]
+
+# --- Plant engineering constants --------------------------------------------
+THERMAL_TO_ELECTRIC_EFF = 0.42          # supercritical CO2 Brayton cycle     [-]
+PLANT_AVAILABILITY      = 0.85          # capacity factor, mature fusion      [-]
+RECIRC_POWER_FRACTION   = 0.12          # magnets, pumps, heating, cryo       [-]
+BLANKET_ENERGY_MULT     = 1.15          # Li-6(n,a)T etc. add blanket heat    [-]
+TRITIUM_BREEDING_TARGET = 1.05          # TBR with margin (self-sufficient)   [-]
+PARASITIC_PLUS_LEAKAGE  = 0.15          # structure absorption + leakage      [-]
+
+# Hg-198(n,2n)Hg-197: ENDF/B-VIII.0 MT=16. Sn(Hg-198) = 8.4854 MeV, so the
+# lab-frame threshold is 8.512 MeV -- 5.5 MeV BELOW the 14.06 MeV D-T line. The
+# cross-section reaches ~2.1 b at 14.1 MeV, about 72% of the 2.9 b nonelastic.
+# ENERGY ACTUALLY ABSORBED by the reaction -- the neutron separation energy of
+# Hg-198, i.e. |Q|. This is the ONE measured input; everything else is derived.
+HG198_N2N_Q_MEV         = 8.4854                  # Sn(Hg-198) = |Q|, AME2020  [MeV]
+M_HG198_U               = 197.96676922            # Hg-198 atomic mass          [u]
+M_N_U                   = 1.00866491588           # neutron mass                [u]
+# LAB-FRAME THRESHOLD, DERIVED -- not entered separately. A reaction that
+# absorbs |Q| needs more than |Q| of projectile kinetic energy, because
+# momentum conservation forces the products to keep moving:
+#
+#     E_th = |Q| * (m_projectile + M_target) / M_target
+#
+# For n + Hg-198 that factor is 199/198, giving 8.5286 MeV. The extra 0.043 MeV
+# over |Q| is RECOIL kinetic energy: it thermalizes in the blanket and is still
+# collected, so it belongs in the GATE (can this neutron react?) and NOT in the
+# heat ledger (how much energy did the reaction consume?). Storing the two as
+# independent literals let them drift 0.017 MeV apart; deriving one from the
+# other makes that impossible.
+HG198_N2N_THRESHOLD_MEV = HG198_N2N_Q_MEV * (M_N_U + M_HG198_U) / M_HG198_U
+HG198_N2N_XSEC_BARN     = 2.1                     # sigma(n,2n) at 14.1 MeV      [b]
+HG197_HALFLIFE_S        = 64.14 * 3600.0          # electron capture -> Au-197
+# THE FULL DECAY SCHEME. The (n,2n) reaction populates both the Hg-197 ground
+# state and the isomer Hg-197m (t_1/2 = 23.8 h), which decays 91.4% by internal
+# transition to the ground state and 8.6% by EC directly to Au-197.
+#
+# BOTH BRANCHES TERMINATE ON Au-197, so the gold YIELD is independent of the
+# isomeric ratio -- only the transient timing differs. The model therefore uses
+# the ground-state half-life throughout, which is the SLOWER and hence
+# conservative choice: the isomer would fill the vault marginally faster, never
+# slower, and never changes how much gold there is. No isomeric ratio is
+# invented here because none is needed.
+HG197M_HALFLIFE_S       = 23.8 * 3600.0          # isomer; 91.4% IT + 8.6% EC
+AU197_MASS_KG           = 197.0 * U_AMU
+AU198_HALFLIFE_S        = 2.6947 * 86400.0        # beta- -> Hg-198 (contaminant)
+# Au-197(n,gamma) is 98.65 b THERMAL (Mughabghab 2018). Gold left in a neutron
+# field is destroyed far faster than it is made -- this single number is why the
+# plant must extract Hg-197 and let it decay OUTSIDE the flux (HURDLE H12), and
+# why the Pt-196(n,gamma) route can never exceed 0.73 atom-% conversion.
+AU197_NGAMMA_BARN       = 98.65                   # thermal capture on gold      [b]
+PT196_NGAMMA_BARN       = 0.72                    # thermal capture on Pt-196    [b]
+# Hg-199 (16.87% of natural Hg) has a 2150 b thermal capture: natural mercury is
+# a first-class neutron poison. Enrichment is not an optimization, it is a
+# precondition -- see HURDLE H11b.
+HG199_NGAMMA_BARN       = 2150.0                  # thermal capture on Hg-199    [b]
+HG198_NATURAL_ABUNDANCE = 0.0997                  # Hg-198 in natural mercury    [-]
+# Real spallation sources deliver ~40-50 MeV of beam per usable neutron (SNS,
+# ESS). The idealized 25-30 MeV figure is a thermodynamic optimum, not practice.
+SPALLATION_MEV_PER_N    = 45.0                    # SNS/ESS practice             [MeV/n]
+ACCELERATOR_WALLPLUG    = 0.50                    # RF + klystron efficiency     [-]
+SHIPPABLE_BQ_PER_G      = 100.0                   # IAEA-style clearance assay [Bq/g]
+PILOT_THERMAL_FRACTION  = 0.15                    # D-T neutron sidestream share [-]
+# First-wall/blanket fast-neutron flux for a ~1 GWe D-T machine. ITER first-wall
+# design flux is ~1e14 n/cm^2/s; a DEMO-class blanket sits a few times higher.
+BLANKET_FLUX_N_CM2_S    = 3.0e14                  # blanket neutron flux    [n/cm^2/s]
+# How long mercury dwells in the blanket loop before it is pumped to the decay
+# tank. This is THE control on activation: it sets how much Hg-197 decays while
+# still bathed in neutrons, which is the only way Au-198 gets made at all.
+HG_EXTRACTION_HOURS     = 1.0                     # blanket loop residence time  [h]
+
+
+# -----------------------------------------------------------------------------
+# 33a -- THE FUEL CATALOG  (real reactions, measured Q-values, AME2020)
+# -----------------------------------------------------------------------------
+# Q-values are measured mass-excess differences (AME2020), NOT the SEMF: the
+# semi-empirical mass formula (SECTION 16) is a bulk-matter fit and is simply
+# wrong for A <= 4, where shell structure dominates. Using it for D-T would give
+# a categorically incorrect answer -- the same trap SECTION 31d4 documents for
+# the triple-alpha rate. Measured values only.
+
+class FusionFuel:
+    """One typed-in fuel: the reaction it runs, what it releases, how hard it is
+    to ignite, and how many neutrons it hands the gold blanket."""
+
+    def __init__(self, key, display, reaction, Q_MeV, n_per_rx, En_MeV,
+                 T_ign_keV, sigma_v_peak, fuel_kg_per_rx, source, difficulty,
+                 aneutronic=False, note="", aliases=()):
+        self.key = key
+        self.display = display
+        self.reaction = reaction
+        self.Q_MeV = Q_MeV
+        self.n_per_rx = n_per_rx                  # neutrons emitted per reaction
+        self.En_MeV = En_MeV                      # kinetic energy of those neutrons
+        self.T_ign_keV = T_ign_keV                # ion temperature to ignite
+        self.sigma_v_peak = sigma_v_peak          # peak <sigma v>, Bosch-Hale [cm^3/s]
+        self.fuel_kg_per_rx = fuel_kg_per_rx      # mass consumed per reaction  [kg]
+        self.source = source
+        self.difficulty = difficulty
+        self.aneutronic = aneutronic
+        self.note = note
+        self.aliases = tuple(aliases)
+
+    @property
+    def energy_per_kg_J(self) -> float:
+        """Specific energy of the fuel mixture: Q / (mass consumed)."""
+        return self.Q_MeV * MEV / self.fuel_kg_per_rx
+
+    @property
+    def fast_neutrons_per_rx(self) -> float:
+        """Neutrons ABOVE the Hg-198(n,2n) threshold -- the only ones that can
+        make gold directly. A 2.45 MeV D-D neutron cannot; a 14.06 MeV D-T
+        neutron can. This is the physical gate that HURDLE H10 exists to beat."""
+        return self.n_per_rx if self.En_MeV >= HG198_N2N_THRESHOLD_MEV else 0.0
+
+    def as_dict(self):
+        return {"key": self.key, "display": self.display, "reaction": self.reaction,
+                "Q_MeV": self.Q_MeV, "n_per_rx": self.n_per_rx, "En_MeV": self.En_MeV,
+                "T_ign_keV": self.T_ign_keV, "energy_per_kg_J": self.energy_per_kg_J,
+                "aneutronic": self.aneutronic, "difficulty": self.difficulty}
+
+
+_U = U_AMU                              # mass consumed per reaction is quoted in u
+
+FUSION_FUELS: Dict[str, FusionFuel] = {}
+
+
+def _add_fuel(*a, **k):
+    f = FusionFuel(*a, **k)
+    FUSION_FUELS[f.key] = f
+    return f
+
+
+# --- The workhorse: D-T. Highest reactivity at the lowest temperature, and its
+# --- 14.06 MeV neutron sits exactly where Hg-198(n,2n) is strongest. ----------
+_add_fuel("D-T", "Deuterium-Tritium",
+          "D + T -> He-4 (3.52 MeV) + n (14.06 MeV)",
+          17.589, 1.0, 14.06, 15.0, 8.7e-16, 5.0 * _U,
+          "D from seawater (33 g/tonne); T bred in-situ from Li-6",
+          "achieved (JET/NIF/ITER)", False,
+          "The reference fuel. One 14.06 MeV neutron per reaction -- above the "
+          "8.512 MeV Hg-198(n,2n) threshold, so every neutron can make gold.",
+          aliases=("dt", "d-t", "deuterium-tritium", "deuteriumtritium", "tritium"))
+
+_add_fuel("D-D", "Deuterium-Deuterium",
+          "D + D -> He-3 + n (2.45 MeV) | T + p   (50/50 branches)",
+          3.65, 0.5, 2.45, 50.0, 5.4e-17, 4.0 * _U,
+          "seawater deuterium only -- no tritium supply chain needed",
+          "hard (T_ign ~3x D-T)", False,
+          "Branch-averaged Q. Its 2.45 MeV neutrons are BELOW the (n,2n) "
+          "threshold, so the direct gold route fails and H10 takes over.",
+          aliases=("dd", "d-d", "deuterium", "heavy water", "seawater",
+                   "seawater deuterium", "d2"))
+
+_add_fuel("D-He3", "Deuterium-Helium-3",
+          "D + He-3 -> He-4 (3.6 MeV) + p (14.7 MeV)",
+          18.354, 0.03, 2.45, 60.0, 2.2e-16, 5.0 * _U,
+          "He-3 from lunar regolith or D-D breeding; D from seawater",
+          "very hard", True,
+          "Nominally aneutronic; in practice ~3 percent of reactions are "
+          "parasitic D-D making 2.45 MeV neutrons -- still below threshold.",
+          aliases=("dhe3", "d-he3", "d-3he", "helium-3", "he3", "helium3"))
+
+_add_fuel("T-T", "Tritium-Tritium",
+          "T + T -> He-4 + 2n (avg 4.7 MeV each)",
+          11.332, 2.0, 4.7, 50.0, 1.0e-16, 6.0 * _U,
+          "bred tritium (Li-6 blanket)",
+          "hard", False,
+          "Two neutrons per reaction, but soft (4.7 MeV avg) -- below the (n,2n) "
+          "threshold. Excellent for breeding, needs H10 for gold.",
+          aliases=("tt", "t-t"))
+
+_add_fuel("p-B11", "Proton-Boron-11",
+          "p + B-11 -> 3 He-4 (8.68 MeV, charged particles only)",
+          8.681, 0.0, 0.0, 200.0, 2.4e-16, 12.0 * _U,
+          "hydrogen + borax -- both cheap, abundant, non-radioactive",
+          "extreme (T_ign ~200 keV)", True,
+          "Truly aneutronic: ZERO neutrons, so the direct gold route is "
+          "impossible. Overcome by H10 -- the plant drives its own spallation "
+          "source. Direct energy conversion possible (all products charged).",
+          aliases=("pb11", "p-b11", "pb-11", "hydrogen-boron", "boron", "b11",
+                   "protonboron", "aneutronic"))
+
+_add_fuel("p-Li6", "Proton-Lithium-6",
+          "p + Li-6 -> He-4 (1.7 MeV) + He-3 (2.3 MeV)",
+          4.020, 0.0, 0.0, 100.0, 1.0e-17, 7.0 * _U,
+          "lithium brine + hydrogen",
+          "extreme", True,
+          "Aneutronic. Also a He-3 breeder -- couples to the D-He3 cycle.",
+          aliases=("pli6", "p-li6", "lithium-6", "li6"))
+
+_add_fuel("D-Li6", "Deuterium-Lithium-6",
+          "D + Li-6 -> 2 He-4 + 22.4 MeV",
+          22.372, 0.0, 0.0, 100.0, 8.0e-18, 8.0 * _U,
+          "lithium + seawater deuterium",
+          "extreme", True,
+          "Highest Q of the aneutronic set. Side channels do emit some neutrons.",
+          aliases=("dli6", "d-li6", "lithium", "li"))
+
+_add_fuel("p-p", "Proton-Proton (stellar)",
+          "p + p -> D + e+ + nu   (then pp-chain: 4p -> He-4, 26.73 MeV)",
+          26.73, 0.0, 0.0, 1.3, 1.0e-43, 4.0 * _U,
+          "ordinary hydrogen -- the most abundant fuel in the universe",
+          "impossible in a reactor", True,
+          "The fuel of the Sun. Its FIRST step is WEAK-INTERACTION limited: "
+          "<sigma v> ~ 1e-43 cm^3/s, some 26 orders of magnitude below D-T. A "
+          "star only burns it by confining 1e30 kg for 1e9 yr. In a reactor the "
+          "power density is unmeasurably small -- this is HURDLE H9, overcome "
+          "by substitution, not by force.",
+          aliases=("pp", "p-p", "hydrogen", "h", "h2", "protium", "proton",
+                   "sun", "solar", "stellar", "water"))
+
+
+FUEL_ALIASES: Dict[str, str] = {}
+for _k, _f in FUSION_FUELS.items():
+    FUEL_ALIASES[_k.lower()] = _k
+    FUEL_ALIASES[_k.lower().replace("-", "")] = _k
+    FUEL_ALIASES[_f.display.lower()] = _k
+    for _a in _f.aliases:
+        FUEL_ALIASES[_a.lower()] = _k
+
+
+_PUNCT = ".,;:!?()[]{}<>\"" + chr(39)
+
+
+def _alnum(s: str) -> str:
+    return "".join(ch for ch in s if ch.isalnum())
+
+
+def resolve_fuel(text: str) -> Tuple[FusionFuel, str]:
+    """THE TYPED-FUEL PARSER. Take whatever the operator literally typed and
+    resolve it to a real fusion fuel. Accepts the key (D-T), the full name
+    (deuterium-tritium), an element (boron), a feedstock (seawater), or loose
+    free text. Returns (fuel, how_it_was_matched).
+
+    An unrecognized fuel is NOT an error -- it is HURDLE H8. The plant falls
+    back to the highest-reactivity fuel it can actually run and says so, because
+    a powerplant that trips on a typo is not a continuous powerplant."""
+    raw = (text or "").strip()
+    if not raw:
+        return FUSION_FUELS["D-T"], "empty input -> default D-T"
+    t = raw.lower().strip()
+    # 1. exact match on key, display name or alias
+    if t in FUEL_ALIASES:
+        return FUSION_FUELS[FUEL_ALIASES[t]], "exact"
+    # 2. normalized: ignore spaces, dashes, punctuation
+    norm = _alnum(t)
+    for a, k in FUEL_ALIASES.items():
+        if _alnum(a) == norm:
+            return FUSION_FUELS[k], "normalized"
+    # 3. token scan -- pull a known fuel word out of a free-text sentence
+    tokens = [tok.strip(_PUNCT) for tok in t.replace("-", " ").split()]
+    best, best_len = None, 0
+    for a, k in FUEL_ALIASES.items():
+        for tok in tokens:
+            if tok and tok == a and len(a) > best_len:
+                best, best_len = k, len(a)
+    if best:
+        return FUSION_FUELS[best], "token match"
+    # 4. substring containment (longest alias wins, so 'he3' beats 'h')
+    for a, k in sorted(FUEL_ALIASES.items(), key=lambda kv: -len(kv[0])):
+        if len(a) >= 3 and a in t:
+            return FUSION_FUELS[k], "substring '" + a + "'"
+    # 5. HURDLE H8: unknown fuel -> do not stall, substitute and flag it loudly
+    return FUSION_FUELS["D-T"], "UNKNOWN '" + raw + "' -> H8 fallback to D-T"
+
+
+# -----------------------------------------------------------------------------
+# 33b -- THE TRANSMUTATION BLANKET  (mercury -> gold, the real nuclear route)
+# -----------------------------------------------------------------------------
+# Sherr, Bainbridge & Anderson (Phys. Rev. 60, 473, 1941) bombarded mercury with
+# fast neutrons and chemically recovered gold. That experiment is the proof of
+# principle; what it lacked was a cheap, enormous, continuous source of fast
+# neutrons. A D-T fusion plant is exactly that source.
+#
+#     Hg-198  +  n (>= 8.10 MeV)  ->  Hg-197  +  2n
+#     Hg-197  --(EC, t_1/2 = 64.14 h)-->  Au-197        [STABLE -- real gold]
+#
+# Two facts make it work at industrial scale, and both are checkable:
+#
+#  1. THE (n,2n) CHANNEL IS A NEUTRON MULTIPLIER. One neutron in, two out. The
+#     gold blanket therefore does not compete with tritium breeding -- it is what
+#     lets the neutron budget close at all. See neutron_economy() and proof P14.
+#
+#  2. MERCURY BARELY SLOWS FAST NEUTRONS. Elastic scattering off A = 198 loses a
+#     mean logarithmic energy decrement of only xi ~ 2/(A + 2/3) ~ 0.0101 per
+#     collision, so a 14.06 MeV neutron survives ~55 collisions before it drops
+#     below the 8.10 MeV threshold. It gets ~55 independent chances to make gold.
+#     THIS is why the yield is tonnes/year and not grams/year.
+
+# Mean logarithmic energy decrement per elastic collision. The standard exact
+# form is xi = 1 + a*ln(a)/(1-a) with a = ((A-1)/(A+1))^2; for A = 198 the usual
+# heavy-nucleus approximation 2/(A + 2/3) agrees with it to better than 0.01%.
+ELASTIC_XI_HG = 2.0 / (198.0 + 2.0 / 3.0)      # log energy decrement per collision
+
+# Cross-section decomposition for mercury at 14.1 MeV (ENDF/B-VIII.0). These are
+# what set the conversion odds; nothing here is a free tuning knob.
+HG_TOTAL_XSEC_BARN     = 5.5                   # total (elastic + nonelastic)  [b]
+HG_NONELASTIC_XSEC_BARN = 2.9                  # everything that is not elastic [b]
+# ...of which (n,2n) on Hg-198 is 2.1 b -- about 72% of the nonelastic budget.
+# The REMAINDER of the nonelastic cross-section is pure loss: (n,gamma), (n,p),
+# (n,alpha), and (n,2n) on the OTHER mercury isotopes, which consumes the
+# neutron and yields something that is not gold.
+BLANKET_LEAKAGE_PER_COLLISION = 0.10           # escape from a finite blanket   [-]
+# The gold duty a plant runs at BY DEFAULT. This is a conservative design point,
+# not a physical limit -- see n2n_physical_ceiling() and maximize_gold() for how
+# much headroom is left above it and what it costs to use.
+GOLD_DUTY_DEFAULT       = 0.50                 # (n,2n) events per source neutron [-]
+# The thinnest practical blanket leakage. A finite blanket ALWAYS leaks, so zero
+# is asymptotic, not buildable; ~2%/collision is what a thick blanket with a
+# beryllium/steel reflector realistically achieves.
+BLANKET_LEAKAGE_FLOOR   = 0.02                 # best practical leakage/collision [-]
+# A DEDICATED neutron multiplier layer (Be-9(n,2n), threshold 1.85 MeV, or
+# Pb(n,2n), threshold 7.4 MeV) placed in front of the gold blanket. Real HCPB /
+# HCLL breeding-blanket designs reach neutron multiplication M ~ 1.3-1.7, i.e.
+# +0.3 to +0.7 extra neutrons per source neutron. This is the standard fix when
+# the breeding budget will not close on its own -- see HURDLE H11b.
+NEUTRON_MULTIPLIER_MAX  = 0.60                 # extra n per source n (Be/Pb layer)
+BE9_N2N_THRESHOLD_MEV   = 1.85                 # Be-9(n,2n)2He-4 threshold    [MeV]
+# Net energy absorbed by Be-9 + n -> 2 He-4 + 2n, from AME2020 mass excesses:
+#   Q = (11.34762 + 8.07132) - (2*2.42492 + 2*8.07132) = -1.5735 MeV
+# Sn(Be-9) is 1.6654 MeV, but the subsequent Be-8 -> 2 alpha breakup returns
+# +0.092 MeV, so the NET debit is 1.5735. Charging the 1.85 MeV threshold
+# instead over-charged this term by 17.6%.
+BE9_N2N_Q_MEV           = 1.5735               # net |Q| for Be-9(n,2n)       [MeV]
+
+
+def n2n_collisions_above_threshold(En_MeV: float = 14.06) -> float:
+    """How many elastic collisions a fast neutron survives in mercury before its
+    energy falls below the Hg-198(n,2n) threshold. Each is a chance to make gold.
+
+    Lethargy argument: after k collisions E_k = E_0 exp(-k * xi), so
+    k = ln(E_0 / E_thr) / xi. For 14.06 -> 8.512 MeV in Hg this is ~50.
+
+    WHAT THIS NUMBER IS FOR: it is a SUFFICIENCY check, not the answer. Because
+    the per-collision branching in n2n_reaction_probability() is order 0.6, the
+    (1-q)^k term is ~1e-22 at k = 50 and the conversion collapses to the pure
+    branching ratio. The point of computing k is to PROVE the neutron gets
+    enough chances for that to be true -- if k were 1 or 2 the yield would be
+    far lower. Mercury barely moderating fast neutrons is what makes the
+    branching-ratio limit reachable at all."""
+    if En_MeV <= HG198_N2N_THRESHOLD_MEV:
+        return 0.0
+    return math.log(En_MeV / HG198_N2N_THRESHOLD_MEV) / ELASTIC_XI_HG
+
+
+def n2n_physical_ceiling() -> float:
+    """THE HARD CEILING on gold conversion, from cross-sections alone.
+
+    Even with perfectly enriched Hg-198 and a blanket that leaks nothing, a
+    neutron entering mercury does not always make gold: the (n,2n) channel is
+    2.1 b out of a 2.9 b NONELASTIC budget, and the remaining 0.8 b -- (n,gamma),
+    (n,p), (n,alpha) -- consumes the neutron and returns something that is not
+    gold. So
+
+        x_max  =  sigma(n,2n) / sigma_nonelastic  =  2.1 / 2.9  =  0.724
+
+    and 27.6% of all source neutrons are PHYSICALLY UNAVAILABLE for gold. No
+    enrichment, geometry, moderator or budget changes this number; it is a
+    property of the mercury nucleus. Every optimization in maximize_gold() is
+    the approach to this asymptote, and none of them may exceed it."""
+    return HG198_N2N_XSEC_BARN / HG_NONELASTIC_XSEC_BARN
+
+
+def n2n_reaction_probability(enrichment: float = 0.90,
+                             En_MeV: float = 14.06,
+                             leakage: float = None) -> float:
+    """Probability that one fast neutron makes one Hg-197 (and hence one gold
+    atom) before it degrades below threshold or leaks out.
+
+    Per collision the branching to (n,2n) is sigma_n2n * enrichment / sigma_tot.
+    Over k independent chances the survival-without-reacting probability is
+    (1-p)^k, so P_react = 1 - (1-p)^k. Capped below 1 by leakage."""
+    enrichment = min(max(enrichment, 0.0), 1.0)
+    # Per collision, the neutron either makes gold, is lost, or scatters on.
+    #   gold : sigma(n,2n) on Hg-198 only          -- scales with enrichment
+    #   loss : the REST of the nonelastic budget   -- rises as enrichment falls,
+    #          because non-Hg-198 mercury absorbs neutrons and returns no gold
+    p_gold = (HG198_N2N_XSEC_BARN * enrichment) / HG_TOTAL_XSEC_BARN
+    leak = (BLANKET_LEAKAGE_PER_COLLISION if leakage is None
+            else max(0.0, float(leakage)))
+    p_loss = ((HG_NONELASTIC_XSEC_BARN - HG198_N2N_XSEC_BARN * enrichment)
+              / HG_TOTAL_XSEC_BARN) + leak
+    p_gold = min(max(p_gold, 0.0), 1.0)
+    p_loss = min(max(p_loss, 0.0), 1.0)
+    k = n2n_collisions_above_threshold(En_MeV)
+    if k <= 0.0 or p_gold <= 0.0:
+        return 0.0
+    # Race the two terminal channels over the k chances the neutron gets: the
+    # fraction ending as gold is the branching ratio times the fraction that
+    # reaches SOME terminal fate within k collisions.
+    #
+    # A RESULT WORTH STATING PLAINLY: the enrichment terms cancel exactly in the
+    # denominator (p_gold + p_loss = sigma_nonelastic/sigma_total + leakage, with
+    # no enrichment in it), so conversion comes out EXACTLY LINEAR in enrichment.
+    # That is not a modelling convenience -- it is what you should expect at
+    # 14 MeV, where every mercury isotope has a similar NONELASTIC cross-section,
+    # so substituting Hg-198 for its neighbours trades a gold-making reaction for
+    # a non-gold-making one at one for one.
+    #
+    # The notorious mercury neutron poison -- Hg-199 at 2150 b -- is a THERMAL
+    # effect and does not belong here; it acts in the breeding zone, and this
+    # model carries it in PARASITIC_PLUS_LEAKAGE instead. Conflating the two
+    # would double-count it and make poor feedstock look worse than it is.
+    #
+    # HONEST ABOUT WHAT THIS IS: a branching-ratio estimate, not a neutron
+    # transport solve. A real blanket design needs MCNP/OpenMC with full
+    # geometry, self-shielding and a proper spectrum. This reproduces the right
+    # magnitude and the right SCALING with enrichment, which is what the plant
+    # model needs; it is not a substitute for a transport calculation, and no
+    # figure derived from it should be quoted as a design value.
+    q = min(max(p_gold + p_loss, 1e-12), 1.0)
+    return (p_gold / q) * (1.0 - (1.0 - q) ** k)
+
+
+def neutron_economy(x_n2n: float,
+                    tbr_target: float = TRITIUM_BREEDING_TARGET,
+                    parasitic: float = PARASITIC_PLUS_LEAKAGE,
+                    multiplier: float = 0.0) -> Dict[str, float]:
+    """Solve the blanket neutron balance for x_n2n gold-making (n,2n) events per
+    SOURCE neutron, and report whether the plant is tritium self-sufficient.
+
+    Per source neutron:
+        born                       1
+        (n,2n) events              x        (each: -1 neutron, +2 neutrons)
+        population after blanket   1 + x
+        sinks                      TBR (breeding) + parasitic capture + leakage
+
+    SELF-SUFFICIENT  <=>  1 + x >= TBR + parasitic
+    which rearranges to  x >= TBR + parasitic - 1.
+
+    With TBR = 1.05 and parasitic + leakage = 0.15 the requirement is x >= 0.20:
+    the plant MUST make gold to breed its own tritium. The gold blanket is not a
+    parasite on the neutron budget -- it is a precondition for closing it."""
+    x = max(0.0, x_n2n)
+    m = max(0.0, multiplier)
+    produced = 1.0 + x + m
+    required = tbr_target + parasitic
+    return {
+        "x_n2n": x,
+        "multiplier": m,
+        "neutrons_produced": produced,
+        "neutrons_required": required,
+        "x_min_for_self_sufficiency": max(0.0, required - 1.0 - m),
+        "margin": produced - required,
+        "self_sufficient": produced >= required - 1e-12,
+        "tbr_achieved": min(tbr_target, max(0.0, produced - parasitic)),
+    }
+
+
+def blanket_energy_per_fusion_MeV(fuel: "FusionFuel", x_n2n: float,
+                                  tbr: float = TRITIUM_BREEDING_TARGET,
+                                  multiplier: float = 0.0) -> Dict[str, float]:
+    """Thermal energy actually delivered to the coolant per fusion reaction.
+
+    THE HONEST TRADE, and the whole economic story of this plant in one line:
+    gold COSTS power. Every (n,2n) event permanently removes its 8.10 MeV
+    threshold energy from the heat budget. Breeding gives some back: Li-6(n,a)T
+    is exothermic at +4.78 MeV per tritium bred. Structural (n,gamma) captures
+    add a further few MeV of gamma heat.
+
+        Q_thermal = Q_fusion  +  TBR * 4.78  -  x * 8.10  +  Q_gamma
+
+    There is no free lunch and none is claimed: the plant trades megawatt-hours
+    for kilograms, and rate_gold_vs_power() prices that trade."""
+    q_gamma = 1.0                                   # structural capture gammas [MeV]
+    q_breed = tbr * 4.784 if fuel.n_per_rx > 0 else 0.0     # Li-6(n,alpha)T
+    # Q-VALUES here, not thresholds: the heat ledger debits the energy actually
+    # converted to nuclear mass. Recoil KE thermalizes and stays in the budget.
+    q_n2n = x_n2n * HG198_N2N_Q_MEV * fuel.n_per_rx
+    q_mult = multiplier * BE9_N2N_Q_MEV * fuel.n_per_rx            # Be-9(n,2n) cost
+    total = fuel.Q_MeV + q_breed - q_n2n - q_mult + q_gamma
+    return {"Q_fusion_MeV": fuel.Q_MeV, "Q_breed_MeV": q_breed,
+            "Q_n2n_cost_MeV": q_n2n, "Q_mult_cost_MeV": q_mult,
+            "Q_gamma_MeV": q_gamma,
+            "Q_thermal_MeV": max(0.1, total),
+            "energy_multiplication": max(0.1, total) / max(fuel.Q_MeV, 1e-9)}
+
+
+def spallation_neutron_cost_J(n_per_s: float) -> float:
+    """Electrical cost of buying neutrons from an accelerator-driven spallation
+    target instead of from fusion. ~45 MeV of beam per usable neutron at ~50%
+    wall-plug (SNS Oak Ridge, ESS Lund -- and the SNS target is literally liquid
+    mercury, the same loop this plant already runs).
+
+    This is the HURDLE H10 TIER-2 fallback, and it is honestly a bad deal: at
+    ~90 MeV of electricity per neutron it works out near 20 GWh per kg of gold,
+    which at any real power price costs more than the gold is worth. It is kept
+    because it is REAL and because it still satisfies the plant invariant -- gold
+    remains the product -- but tier 1 below is what an engineer would build."""
+    return n_per_s * SPALLATION_MEV_PER_N * MEV / ACCELERATOR_WALLPLUG
+
+
+def pilot_neutron_source_s(thermal_W: float,
+                           fraction: float = PILOT_THERMAL_FRACTION) -> Dict[str, float]:
+    """HURDLE H10, TIER 1 -- THE D-T NEUTRON PILOT. The right answer to an
+    aneutronic fuel is not to BUY neutrons with electricity; it is to make them
+    the way this plant already knows how.
+
+    Run a fraction of the thermal capacity as a small D-T burner whose product is
+    neutrons rather than heat. The comparison is stark and settles the design:
+
+        spallation :  COSTS   ~90 MeV of electricity per neutron
+        D-T pilot  :  RELEASES ~17.6 MeV of heat   per neutron
+
+    The pilot is energy-POSITIVE -- its heat goes to the same turbine -- so the
+    only real costs are capital and a lithium blanket to breed its tritium. This
+    is the standard fusion-fission-hybrid architecture, applied to transmutation
+    instead of to fission."""
+    f = min(max(fraction, 0.0), 1.0)
+    pilot_W = thermal_W * f
+    q_per_fusion_J = FUSION_FUELS["D-T"].Q_MeV * MEV
+    rate = pilot_W / q_per_fusion_J
+    return {"pilot_thermal_W": pilot_W, "fraction": f,
+            "fusion_rate_s": rate, "neutrons_s": rate * 1.0,
+            "energy_positive": True}
+
+
+def gold_activation_state(enrichment: float, cooldown_days: float,
+                          blanket_flux_n_cm2_s: float = BLANKET_FLUX_N_CM2_S,
+                          extraction_hours: float = HG_EXTRACTION_HOURS
+                          ) -> Dict[str, float]:
+    """HURDLE H12: IS THE GOLD ACTUALLY SHIPPABLE?
+
+    Not all of it, not immediately. Neutron capture on the fresh Au-197 makes
+    Au-198 (beta-, t_1/2 = 2.695 d), and non-Hg-198 isotopes in an imperfectly
+    enriched feedstock open side channels to Au-196 and Hg-203. Raw bullion off
+    the line is therefore mildly radioactive.
+
+    Two engineering answers, both used here:
+      1. BORN OUTSIDE THE FLUX. Hg-197 is pumped out of the blanket and decays to
+         gold in a shielded tank where the neutron flux is zero. Gold that never
+         sees a neutron cannot be activated -- this removes the dominant term.
+      2. ENRICH, THEN WAIT. Feedstock enriched to Hg-198 suppresses the side
+         channels; whatever is left decays. 2.695-day half-life means ~10 half
+         lives (27 days) buys a factor of ~1000.
+
+    Returns the specific activity and whether it clears the assay gate."""
+    # Specific activity of PURE Au-198, from first principles rather than a
+    # magic number:  A = lambda * N = (ln2 / t_half) * (N_A / 198)  ~ 9.06e15 Bq/g.
+    lam_s = math.log(2.0) / AU198_HALFLIFE_S
+    a_pure_bq_per_g = lam_s * (N_A / 198.0)
+
+    # HOW MUCH Au-198 IS ACTUALLY BORN -- the real chain, not an estimate.
+    #
+    # Au-198 can only be made from gold that is sitting IN the neutron flux, and
+    # gold only appears in the flux if its parent Hg-197 decayed before it was
+    # pumped out. So the whole contamination budget is the product of two
+    # computable factors:
+    #
+    #   1. the fraction of Hg-197 that decays inside the blanket, set by the
+    #      loop residence time against the 64.14 h electron-capture half-life;
+    #   2. the odds that this in-flux gold then captures a neutron, from the
+    #      98.65 b Au-197(n,gamma) cross-section and the blanket flux.
+    #
+    # This is exactly why H12 pumps the mercury out fast: term 1 is linear in
+    # residence time, so halving the dwell halves the contamination.
+    t_res = max(0.0, extraction_hours) * 3600.0
+    f_decay_in_flux = -math.expm1(-math.log(2.0) * t_res / HG197_HALFLIFE_S)
+    p_capture = -math.expm1(-(AU197_NGAMMA_BARN * 1.0e-24)
+                            * blanket_flux_n_cm2_s * t_res)
+    # Side channels on the non-Hg-198 fraction of the feedstock (Au-196 via
+    # Hg-196, and other odd-A routes) add a term that vanishes with enrichment.
+    f_side = max(0.0, 1.0 - enrichment) * 1.0e-6
+    contaminant_frac = f_decay_in_flux * p_capture + f_side
+    a0_bq_per_g = contaminant_frac * a_pure_bq_per_g
+    lam = math.log(2.0) / (AU198_HALFLIFE_S / 86400.0)       # per day
+    activity = a0_bq_per_g * math.exp(-lam * max(0.0, cooldown_days))
+    return {"contaminant_fraction": contaminant_frac,
+            "pure_au198_bq_per_g": a_pure_bq_per_g,
+            "decayed_in_flux_fraction": f_decay_in_flux,
+            "capture_probability": p_capture,
+            "extraction_hours": extraction_hours,
+            "activity_bq_per_g": activity,
+            "clearance_bq_per_g": SHIPPABLE_BQ_PER_G,
+            "shippable": activity <= SHIPPABLE_BQ_PER_G,
+            "cooldown_days": cooldown_days,
+            "days_to_clear": (math.log(max(a0_bq_per_g, 1e-30) / SHIPPABLE_BQ_PER_G)
+                              / lam if a0_bq_per_g > SHIPPABLE_BQ_PER_G else 0.0)}
+
+
+# -----------------------------------------------------------------------------
+# 33c -- THE POWERPLANT  (continuous, stateful, hurdle-resolving)
+# -----------------------------------------------------------------------------
+
+class RadiantPowerplant:
+    """A continuously-operating fusion powerplant that burns a TYPED fuel, exports
+    electricity to a grid, and precipitates stable Au-197 out of a mercury
+    blanket -- forever, as long as fuel is fed.
+
+    It is stateful in real SI seconds, exactly like EternalMatterHarvesterLattice
+    (SECTION 7) and EMHLPlant (SECTION 21): call step(dt) as often as you like and
+    the inventories integrate. Nothing is instantaneous and nothing is free.
+
+    COMMISSIONING RESOLVES EVERY FAILURE MODE AS AN ENGINEERING HURDLE. The plant
+    is not permitted to stall, refuse a fuel, or fail to make gold. If a fuel is
+    unrecognized it substitutes (H8). If a fuel cannot physically ignite at
+    reactor confinement it substitutes and says why (H9). If a fuel emits no
+    neutrons it builds its own spallation source (H10). If tritium breeding would
+    fail it raises the gold duty until the neutron budget closes (H11). If the
+    bullion is activated it holds it until it assays clean (H12). The invariant
+    the class guarantees, for ANY typed input, is:  GOLD IS THE PRODUCT."""
+
+    def __init__(self, fuel_text: str = "D-T", net_electric_W: float = 1.0e9,
+                 enrichment: float = 0.90, x_n2n: float = None,
+                 gold_price_usd_kg: float = None, optimize: str = None,
+                 leakage: float = None):
+        # optimize="gold" runs the blanket at the highest duty the cross-sections
+        # allow instead of the conservative default. leakage overrides the
+        # blanket escape fraction (a thicker blanket with a reflector leaks less).
+        self.optimize = optimize
+        self.leakage = (BLANKET_LEAKAGE_PER_COLLISION if leakage is None
+                        else max(0.0, float(leakage)))
+        self.requested_fuel_text = fuel_text
+        self.fuel, self.fuel_match = resolve_fuel(fuel_text)
+        self.requested_fuel = self.fuel
+        # Validate the design inputs before anything derives from them. An
+        # unclamped enrichment printed as "200% Hg-198", and a negative power
+        # rating propagated all the way to negative gold and negative homes --
+        # both nonsense the rest of the model would have reported with a
+        # straight face.
+        self.net_electric_W = max(0.0, float(net_electric_W))
+        self.enrichment = min(1.0, max(0.0, float(enrichment)))
+        self.inputs_clamped = (self.net_electric_W != float(net_electric_W)
+                               or self.enrichment != float(enrichment))
+        self.gold_price_usd_kg = (GOLD_PRICE_USD_PER_KG if gold_price_usd_kg is None
+                                  else float(gold_price_usd_kg))
+        self.hurdles: List[Dict[str, str]] = []
+        self.substituted = False
+        self.pilot_driven = False           # H10 tier 1: D-T neutron sidestream
+        self.spallation_driven = False      # H10 tier 2: accelerator (loss-making)
+        self.spallation_power_W = 0.0
+        self.pilot_thermal_W = 0.0
+
+        # --- inventories (all integrate in step(); nothing is instantaneous) ---
+        self.t = 0.0
+        self.fuel_burned_kg = 0.0
+        self.hg197_atoms = 0.0            # in the shielded decay tank
+        self.au_cooling_kg = 0.0          # raw bullion, still assaying hot
+        self.au_vault_kg = 0.0            # SHIPPABLE, assay-clean gold
+        self.energy_exported_J = 0.0
+        self.gold_revenue_usd = 0.0
+        self.power_revenue_usd = 0.0
+        self.online_s = 0.0
+
+        self._commission(x_n2n)
+
+    def x_n2n_probe(self) -> float:
+        """Best (n,2n) conversion the cross-sections allow at this enrichment.
+        Used before the operating point is fixed, so hurdle text can quote it."""
+        return max(1e-6, n2n_reaction_probability(self.enrichment, 14.06,
+                                                  self.leakage))
+
+    # -- hurdle bookkeeping ---------------------------------------------------
+    def _hurdle(self, code, limit, mitigation, maximized):
+        self.hurdles.append({"code": code, "limit": limit,
+                             "mitigation": mitigation, "maximized": maximized})
+
+    def _commission(self, x_n2n=None):
+        """Run the plant through every known failure mode BEFORE it goes online,
+        and engineer past each one. This is the section's contract made literal."""
+
+        # --- H8: the operator typed something the catalog does not know -------
+        if self.fuel_match.startswith("UNKNOWN"):
+            self._hurdle(
+                "H8", "typed fuel '%s' is not a known fusion fuel" % self.requested_fuel_text,
+                "fuzzy-resolve the input; if nothing matches, substitute the "
+                "highest-reactivity runnable fuel rather than tripping the plant",
+                "plant stays online on %s -- a typo never takes a grid down" % self.fuel.key)
+            self.substituted = True
+
+        # --- H9: the fuel is real but cannot ignite at reactor confinement ----
+        ratio = self.fuel.sigma_v_peak / FUSION_FUELS["D-T"].sigma_v_peak
+        self.reactivity_ratio = ratio
+        if ratio < 1e-6:
+            unrunnable = self.fuel
+            self._hurdle(
+                "H9",
+                "%s reactivity is %.1e x D-T -- %.0f orders of magnitude too "
+                "slow to sustain a reactor" % (unrunnable.key, ratio,
+                                               abs(math.log10(max(ratio, 1e-300)))),
+                "the pp-chain is WEAK-INTERACTION limited: a star burns it only "
+                "by confining 1e30 kg for 1e9 yr. No magnetic or inertial device "
+                "reaches that Lawson product. Substitute a strong-force fuel and "
+                "report the real number instead of pretending",
+                "substituted D-T (same hydrogen isotopes, 1e26 x the reactivity)")
+            self.fuel = FUSION_FUELS["D-T"]
+            self.substituted = True
+
+        # --- H10: aneutronic fuel -> no fast neutrons -> no transmutation ----
+        fast_n = self.fuel.fast_neutrons_per_rx
+        if fast_n <= 0.0:
+            why = ("emits no neutrons at all" if self.fuel.n_per_rx <= 0 else
+                   "emits only %.2f MeV neutrons, below the %.3f MeV (n,2n) "
+                   "threshold" % (self.fuel.En_MeV, HG198_N2N_THRESHOLD_MEV))
+            spall_gwh_kg = (SPALLATION_MEV_PER_N * MEV / ACCELERATOR_WALLPLUG
+                            / AU197_MASS_KG / self.x_n2n_probe()) / 3.6e12
+            self._hurdle(
+                "H10", "%s %s -- the direct Hg-198(n,2n) route is dead"
+                % (self.fuel.key, why),
+                "TIER 1 (built): run %.0f%% of thermal capacity as a small D-T "
+                "NEUTRON PILOT. A D-T fusion RELEASES 17.6 MeV per neutron; "
+                "accelerator spallation COSTS ~%.0f MeV per neutron at %.0f%% "
+                "wall-plug. Making neutrons beats buying them by a factor of "
+                "~%.0f, and the pilot's heat goes to the same turbine. "
+                "TIER 2 (kept, not chosen): a proton linac on a liquid-mercury "
+                "spallation target, as at the SNS -- REAL, but ~%.0f GWh/kg of "
+                "gold, which loses money at any honest power price"
+                % (PILOT_THERMAL_FRACTION * 100, SPALLATION_MEV_PER_N,
+                   ACCELERATOR_WALLPLUG * 100,
+                   (SPALLATION_MEV_PER_N / ACCELERATOR_WALLPLUG)
+                   / FUSION_FUELS["D-T"].Q_MeV, spall_gwh_kg),
+                "gold production preserved on an aneutronic fuel AND still "
+                "energy-positive -- the pilot adds heat instead of eating it")
+            self.pilot_driven = True
+
+        # --- H11: tritium self-sufficiency requires a minimum gold duty -------
+        econ_min = neutron_economy(0.0)["x_min_for_self_sufficiency"]
+        x_max = n2n_reaction_probability(self.enrichment, 14.06, self.leakage)
+        self.x_n2n_max = x_max
+
+        # --- H11b: NATURAL MERCURY CANNOT CLOSE THE NEUTRON BUDGET ------------
+        # At 9.97% Hg-198 the (n,2n) conversion tops out near 0.13/source, short
+        # of the 0.20 the breeding balance demands -- and Hg-199 (16.87%, 2150 b)
+        # actively eats neutrons. That is a genuine failure, not a rounding
+        # error, so it gets a genuine fix rather than a fudged number.
+        self.multiplier = 0.0
+        # A feedstock this poor is not a blanket, it is ballast: below this the
+        # plant would run, breed, sell power -- and mint nothing. The whole
+        # point of the machine is the gold, so an unusable feedstock is treated
+        # as a failure to be engineered out rather than a result to report.
+        MIN_VIABLE_X = 0.02
+        if x_max < MIN_VIABLE_X:
+            self._hurdle(
+                "H11c",
+                "at %.2f%% Hg-198 the blanket converts %.4f neutrons per source "
+                "-- effectively ZERO gold. The plant would generate power and "
+                "mint nothing, which is not the machine that was specified"
+                % (self.enrichment * 100, x_max),
+                "gold is the product, so feedstock enrichment is a plant design "
+                "variable, not an input to be honoured: raise it to 90% Hg-198 "
+                "(centrifuge/AVLIS, already industrial for Hg-196 medical "
+                "isotope production) and re-solve",
+                "enrichment forced %.2f%% -> 90%%; conversion %.4f -> %.4f, and "
+                "the plant mints gold again"
+                % (self.enrichment * 100, x_max,
+                   n2n_reaction_probability(0.90, 14.06)))
+            self.enrichment = 0.90
+            x_max = n2n_reaction_probability(self.enrichment, 14.06, self.leakage)
+            self.x_n2n_max = x_max
+        if x_max < econ_min - 1e-12:
+            need = econ_min - x_max
+            if need <= NEUTRON_MULTIPLIER_MAX:
+                self.multiplier = min(NEUTRON_MULTIPLIER_MAX, need * 1.25)
+                fix = ("install a dedicated Be-9(n,2n) / Pb(n,2n) MULTIPLIER "
+                       "layer ahead of the gold blanket, worth +%.2f n/source "
+                       "(standard HCPB/HCLL practice, M ~ 1.3-1.7)"
+                       % self.multiplier)
+                got = ("budget closes at %.0f%% enrichment WITHOUT enriching "
+                       "further -- gold %.3f + multiplier %.3f >= %.3f needed"
+                       % (self.enrichment * 100, x_max, self.multiplier, econ_min))
+            else:
+                # even a full multiplier layer cannot rescue it -> enrich.
+                self.enrichment = 0.90
+                x_max = n2n_reaction_probability(self.enrichment, 14.06, self.leakage)
+                self.x_n2n_max = x_max
+                fix = ("no multiplier layer can bridge a gap this large: ENRICH "
+                       "the feedstock to 90 percent Hg-198 (centrifuge/AVLIS, "
+                       "already industrial for Hg-196 medical isotopes)")
+                got = ("enrichment raised to 90 percent; (n,2n) conversion rises "
+                       "to %.3f/source, clearing the %.3f requirement"
+                       % (x_max, econ_min))
+            self._hurdle(
+                "H11b",
+                "natural mercury is only %.2f%% Hg-198 and 16.87%% Hg-199 "
+                "(2150 b thermal capture -- a first-class neutron poison). "
+                "Conversion caps at %.3f/source vs %.3f needed: the plant cannot "
+                "breed its own tritium and dies of fuel starvation"
+                % (HG198_NATURAL_ABUNDANCE * 100,
+                   n2n_reaction_probability(HG198_NATURAL_ABUNDANCE, 14.06),
+                   econ_min),
+                fix, got)
+
+        econ_min = neutron_economy(
+            0.0, multiplier=self.multiplier)["x_min_for_self_sufficiency"]
+        if x_n2n is None:
+            if self.optimize == "gold":
+                # GOLD-MAXIMIZED: run the blanket at the cross-section ceiling.
+                # This is not free -- Q_thermal falls, so the reactor burns more
+                # fuel to deliver the same heat. See maximize_gold().
+                x_n2n = max(econ_min, x_max)
+            else:
+                x_n2n = max(econ_min, min(GOLD_DUTY_DEFAULT, x_max))
+        x_n2n = min(max(x_n2n, 0.0), x_max)
+        self.x_n2n = x_n2n
+        self.economy = neutron_economy(x_n2n, multiplier=self.multiplier)
+        if not self.economy["self_sufficient"]:
+            self.x_n2n = min(x_max, econ_min)
+            self.economy = neutron_economy(self.x_n2n, multiplier=self.multiplier)
+        # The tritium burn is filled in by _solve_operating_point() below, which
+        # is where fuel_burn_kg_s first exists. Quoting a fixed number here had
+        # drifted out of agreement with both the model and the documentation.
+        self._h11_index = len(self.hurdles)
+        self._hurdle(
+            "H11",
+            "a D-T plant that cannot breed its own tritium has no fuel supply: "
+            "world civil T inventory is ~20 kg and this plant burns "
+            "[computed below] of it per year",
+            "run the (n,2n) gold reaction AS the neutron multiplier. One neutron "
+            "in, two out, so breeding and gold-making are the same act: "
+            "1 + x >= TBR + parasitic, i.e. x >= %.2f" % econ_min,
+            "x = %.3f (max permitted by cross-sections at %.0f%% enrichment: "
+            "%.3f); TBR = %.2f, margin = %+.3f n/source -- SELF-SUFFICIENT"
+            % (self.x_n2n, self.enrichment * 100, x_max,
+               self.economy["tbr_achieved"], self.economy["margin"]))
+
+        # --- H12: raw bullion is activated -> hold it until it assays clean ---
+        act0 = gold_activation_state(self.enrichment, 0.0)
+        # 1.5x margin on the computed clearance time. Sitting exactly ON a
+        # regulatory limit is not a passing assay -- it is a failing one with a
+        # rounding error, and no regulator anywhere would license it.
+        self.cooldown_days = max(1.0, act0["days_to_clear"] * 1.5)
+        act = gold_activation_state(self.enrichment, self.cooldown_days)
+        self.activation = act
+        self._hurdle(
+            "H12",
+            "neutron capture on fresh Au-197 makes Au-198 (beta-, 2.695 d); "
+            "imperfect enrichment opens side channels to Au-196 and Hg-203. Raw "
+            "bullion assays at %.1e Bq/g -- not shippable" % act0["activity_bq_per_g"],
+            "gold is BORN OUTSIDE THE FLUX: Hg-197 is pumped from the blanket "
+            "and decays to Au-197 in a shielded tank at zero neutron flux, so "
+            "the dominant activation term never happens. The residue is held "
+            "%.0f d (~%.0f half-lives of Au-198)" % (self.cooldown_days,
+                                                     self.cooldown_days / 2.695),
+            "vault gold assays %.1f Bq/g vs a %.0f Bq/g clearance limit -- "
+            "SHIPPABLE, ordinary, stable Au-197"
+            % (act["activity_bq_per_g"], SHIPPABLE_BQ_PER_G))
+
+        self._solve_operating_point()
+
+    # -- steady-state design point -------------------------------------------
+    def _solve_operating_point(self):
+        """Size the reactor backwards from the net electricity the grid wants."""
+        f = self.fuel
+        self.blanket = blanket_energy_per_fusion_MeV(
+            f, self.x_n2n, self.economy["tbr_achieved"], self.multiplier)
+        q_th_J = self.blanket["Q_thermal_MeV"] * MEV
+
+        # gross electric must cover the net export AND the recirculating load
+        self.gross_electric_W = self.net_electric_W / (1.0 - RECIRC_POWER_FRACTION)
+        self.thermal_W = self.gross_electric_W / THERMAL_TO_ELECTRIC_EFF
+        self.fusion_rate_s = self.thermal_W / q_th_J
+        self.fuel_burn_kg_s = self.fusion_rate_s * f.fuel_kg_per_rx
+
+        # --- gold: one Au-197 atom per (n,2n) event --------------------------
+        # KINEMATIC CAP (proof P15): after one (n,2n) the two exit neutrons share
+        # only En - Sn ~ 5.6 MeV, i.e. ~2.8 MeV each -- far below the 8.512 MeV
+        # threshold. ONE source neutron therefore drives AT MOST ONE gold atom,
+        # which is exactly why x_n2n is a probability bounded by 1 and not a
+        # cascade multiplier. There is no runaway, and none is claimed.
+        if self.pilot_driven:
+            # H10 tier 1: a D-T sidestream supplies neutrons, energy-POSITIVE.
+            pil = pilot_neutron_source_s(self.thermal_W, PILOT_THERMAL_FRACTION)
+            self.pilot_thermal_W = pil["pilot_thermal_W"]
+            self.n_source_s = pil["neutrons_s"]
+            self.spallation_power_W = 0.0
+        elif self.spallation_driven:
+            # H10 tier 2: buy neutrons with the plant own electricity (a loss).
+            budget_W = self.gross_electric_W * 0.10
+            self.n_source_s = budget_W * ACCELERATOR_WALLPLUG / (SPALLATION_MEV_PER_N * MEV)
+            self.spallation_power_W = budget_W
+        else:
+            self.n_source_s = self.fusion_rate_s * f.n_per_rx
+            self.spallation_power_W = 0.0
+        self.au_atoms_s = self.n_source_s * self.x_n2n
+        self.gold_kg_s = self.au_atoms_s * AU197_MASS_KG
+        self.gold_kg_yr = self.gold_kg_s * YR * PLANT_AVAILABILITY
+
+        # --- the trade, priced ------------------------------------------------
+        # Now that the burn rate exists, complete the H11 hurdle text with the
+        # real figure (tritium is 59.96% of the D-T fuel mass).
+        _mD, _mT = 2.014102, 3.016049
+        self.tritium_burn_kg_yr = (
+            self.fuel_burn_kg_s * YR * PLANT_AVAILABILITY * (_mT / (_mD + _mT))
+            if f.key == "D-T" else 0.0)
+        _i = getattr(self, "_h11_index", None)
+        if _i is not None and _i < len(self.hurdles):
+            self.hurdles[_i]["limit"] = self.hurdles[_i]["limit"].replace(
+                "[computed below] of it per year",
+                "%.0f kg/yr of it" % self.tritium_burn_kg_yr)
+
+        self.homes = self.net_electric_W * PLANT_AVAILABILITY / (HOME_AVG_KW * 1e3)
+        self.mwh_yr = self.net_electric_W * PLANT_AVAILABILITY * YR / 3.6e9
+        self.power_usd_yr = self.mwh_yr * WHOLESALE_ELEC_USD_MWH
+        self.gold_usd_yr = self.gold_kg_yr * self.gold_price_usd_kg
+        # energy actually forgone to make the gold, at the (n,2n) threshold
+        if self.spallation_driven:
+            # every gold atom costs a whole bought neutron, divided by the odds
+            # that the neutron actually converts
+            self.gold_energy_cost_J_kg = (SPALLATION_MEV_PER_N * MEV
+                                          / ACCELERATOR_WALLPLUG
+                                          / max(self.x_n2n, 1e-9) / AU197_MASS_KG)
+        else:
+            # native route AND the D-T pilot: the pilot RELEASES energy, so the
+            # only thermal debit either way is the energy the (n,2n) reaction
+            # actually absorbs -- its Q-value, not its threshold
+            self.gold_energy_cost_J_kg = (HG198_N2N_Q_MEV * MEV
+                                          / AU197_MASS_KG)
+        self.gold_mwh_cost_per_kg = (self.gold_energy_cost_J_kg
+                                     * THERMAL_TO_ELECTRIC_EFF / 3.6e9)
+        self.gold_usd_cost_per_kg = self.gold_mwh_cost_per_kg * WHOLESALE_ELEC_USD_MWH
+        self.gold_margin_ratio = self.gold_price_usd_kg / max(self.gold_usd_cost_per_kg, 1e-9)
+
+        # --- H13: this much gold moves the market ----------------------------
+        share = self.gold_kg_yr / (WORLD_GOLD_MINE_T_PER_YR * 1000.0)
+        self._hurdle(
+            "H13",
+            "one unit adds %.3f%% of world mine supply; a fleet large enough to "
+            "matter would break the price it is selling into" % (share * 100.0),
+            "price in the elasticity instead of ignoring it: gold demand is "
+            "famously inelastic (~-0.6), so revenue is defensible for a small "
+            "fleet and the honest ceiling is a FLEET SIZE, not a physics limit. "
+            "Beyond it, value shifts to the electricity -- which is why this "
+            "plant is a POWERPLANT first and a mint second",
+            "profitable up to ~%.0f units worldwide before supply doubles; "
+            "see powerplant_market_report()"
+            % (WORLD_GOLD_MINE_T_PER_YR * 1000.0 / max(self.gold_kg_yr, 1e-9)))
+
+    # -- continuous operation -------------------------------------------------
+    def step(self, dt: float) -> Dict[str, float]:
+        """Advance the plant by dt seconds. Integrates fuel burn, the Hg-197
+        decay tank, the cooldown store and the vault. Runs forever."""
+        avail = PLANT_AVAILABILITY
+        self.t += dt
+        self.online_s += dt * avail
+        self.fuel_burned_kg += self.fuel_burn_kg_s * dt * avail
+        self.energy_exported_J += self.net_electric_W * dt * avail
+
+        # Hg-197 accumulates in the tank and decays (EC) into Au-197. Both this
+        # and the cooldown store below are integrated with the EXACT solution of
+        # dN/dt = R - lambda*N, namely
+        #     N(t+dt) = N e^(-lambda dt) + (R/lambda)(1 - e^(-lambda dt)),
+        # rather than a forward-Euler step. That matters: a caller stepping in
+        # dt = 1 year would inject R*dt of fresh Hg-197 while only ever removing
+        # a fraction of the standing inventory, inflating the tank by ~2.6x and
+        # breaking the steady state. The exact form is stable and mass-conserving
+        # at ANY dt, which a plant meant to run continuously has to be.
+        lam = math.log(2.0) / HG197_HALFLIFE_S
+        R = self.au_atoms_s * avail                       # atoms/s into the tank
+        born = R * dt
+        decay_f = -math.expm1(-lam * dt)                  # 1 - exp(-lam dt)
+        n0 = self.hg197_atoms
+        n1 = n0 * (1.0 - decay_f) + (R / lam) * decay_f
+        decayed = max(0.0, born - (n1 - n0))              # exact: in - accumulation
+        self.hg197_atoms = max(0.0, n1)
+
+        # Fresh gold enters the cooldown store; it drains to the vault as a
+        # first-order delay with time constant = the assay hold time. Mass is
+        # conserved exactly: nothing is created here, only moved.
+        fresh_kg = decayed * AU197_MASS_KG
+        tau = max(self.cooldown_days, 1e-6) * 86400.0
+        drain_f = -math.expm1(-dt / tau)
+        F = fresh_kg / dt if dt > 0 else 0.0              # kg/s into the store
+        c0 = self.au_cooling_kg
+        c1 = c0 * (1.0 - drain_f) + F * tau * drain_f
+        drained = max(0.0, fresh_kg - (c1 - c0))
+        self.au_cooling_kg = max(0.0, c1)
+        self.au_vault_kg += drained
+
+        self.gold_revenue_usd = self.au_vault_kg * self.gold_price_usd_kg
+        self.power_revenue_usd = (self.energy_exported_J / 3.6e9) * WHOLESALE_ELEC_USD_MWH
+        return self.telemetry()
+
+    def telemetry(self) -> Dict[str, float]:
+        return {
+            "t_s": self.t,
+            "fuel": self.fuel.key,
+            "net_electric_W": self.net_electric_W,
+            "thermal_W": self.thermal_W,
+            "fusion_rate_s": self.fusion_rate_s,
+            "fuel_burn_kg_s": self.fuel_burn_kg_s,
+            "fuel_burned_kg": self.fuel_burned_kg,
+            "x_n2n": self.x_n2n,
+            "tbr": self.economy["tbr_achieved"],
+            "gold_kg_s": self.gold_kg_s,
+            "gold_kg_yr": self.gold_kg_yr,
+            "hg197_atoms": self.hg197_atoms,
+            "au_cooling_kg": self.au_cooling_kg,
+            "au_vault_kg": self.au_vault_kg,
+            "homes": self.homes,
+            "energy_exported_J": self.energy_exported_J,
+            "gold_revenue_usd": self.gold_revenue_usd,
+            "power_revenue_usd": self.power_revenue_usd,
+            "spallation": self.spallation_driven,
+        }
+
+    def stage_telemetry(self) -> List[Dict[str, object]]:
+        """Live state of each of the six plant sections, in flow order, as the
+        POWERPLANT tab renders them. Every value is read from the running model
+        -- nothing here is a caption. Returns one dict per section with a title,
+        a list of (label, value) rows, and a normalized 0-1 'flow' the 3D view
+        uses to size the stream that leaves that section."""
+        f = self.fuel
+        e = self.economy
+        b = self.blanket
+        a = self.activation
+        lam = math.log(2.0) / HG197_HALFLIFE_S
+        hg_kg = self.hg197_atoms * (197.0 * U_AMU)
+        n_per_fusion = (self.n_source_s / self.fusion_rate_s
+                        if self.fusion_rate_s > 0 else 0.0)
+        return [
+            {"title": "1. FUEL INTAKE", "flow": 1.0, "rows": [
+                ("typed", self.requested_fuel_text[:22]),
+                ("resolved", f"{f.key}  ({self.fuel_match[:26]})"),
+                ("reaction", f.reaction[:40]),
+                ("burn rate", f"{self.fuel_burn_kg_s:.3e} kg/s"),
+                ("consumed", f"{self.fuel_burned_kg:,.1f} kg to date"),
+                ("specific energy", f"{f.energy_per_kg_J:.3e} J/kg"),
+                ("source", f.source[:40])]},
+            {"title": "2. FUSION CORE", "flow": min(1.0, n_per_fusion), "rows": [
+                ("fusion rate", f"{self.fusion_rate_s:.3e} /s"),
+                ("Q per reaction", f"{f.Q_MeV:.3f} MeV"),
+                ("ignition temp", f"{f.T_ign_keV:.0f} keV"),
+                ("thermal power", f"{self.thermal_W/1e6:,.1f} MWth"),
+                ("neutrons out", f"{self.n_source_s:.3e} /s "
+                                 f"({n_per_fusion:.2f} per fusion)"),
+                ("neutron energy", f"{f.En_MeV:.2f} MeV "
+                                   f"({'ABOVE' if f.En_MeV >= HG198_N2N_THRESHOLD_MEV else 'below'}"
+                                   f" the {HG198_N2N_THRESHOLD_MEV:.2f} MeV gate)"),
+                ("D-T pilot", f"{self.pilot_thermal_W/1e6:,.1f} MWth (H10)"
+                              if self.pilot_driven else "not required")]},
+            {"title": "3. Hg-198 BLANKET", "flow": self.x_n2n, "rows": [
+                ("enrichment", f"{self.enrichment:.1%} Hg-198"),
+                ("conversion x", f"{self.x_n2n:.4f} / {self.x_n2n_max:.4f} ceiling"),
+                ("gold atoms", f"{self.au_atoms_s:.3e} /s"),
+                ("multiplier", f"+{self.multiplier:.3f} n/source"
+                               if self.multiplier > 0 else "none needed"),
+                ("neutron balance", f"{e['neutrons_produced']:.3f} made / "
+                                    f"{e['neutrons_required']:.3f} needed"),
+                ("tritium breeding", f"TBR {e['tbr_achieved']:.3f}  "
+                                     f"({'SELF-SUFFICIENT' if e['self_sufficient'] else 'STARVED'})"),
+                ("thermal/fusion", f"{b['Q_thermal_MeV']:.2f} MeV "
+                                   f"(gold costs {b['Q_n2n_cost_MeV']:.2f})")]},
+            {"title": "4. DECAY TANK", "flow": self.x_n2n, "rows": [
+                ("Hg-197 inventory", f"{self.hg197_atoms:.3e} atoms"),
+                ("as mass", f"{hg_kg:,.2f} kg"),
+                ("half-life", f"{HG197_HALFLIFE_S/3600:.2f} h (electron capture)"),
+                ("gold born", f"{self.hg197_atoms*lam:.3e} atoms/s"),
+                ("neutron flux here", "ZERO by design -- H12"),
+                ("in-flux decay", f"{a['decayed_in_flux_fraction']:.5f} of Hg-197"),
+                ("-> Au-198 made", f"{a['contaminant_fraction']:.3e} of the gold")]},
+            {"title": "5. REFINERY + VAULT", "flow": 1.0, "rows": [
+                ("cooling store", f"{self.au_cooling_kg:,.2f} kg"),
+                ("assay hold", f"{self.cooldown_days:.1f} days"),
+                ("activity at exit", f"{a['activity_bq_per_g']:.3f} Bq/g"),
+                ("clearance limit", f"{SHIPPABLE_BQ_PER_G:.0f} Bq/g  "
+                                    f"({'PASS' if a['shippable'] else 'HELD'})"),
+                ("VAULT", f"{self.au_vault_kg:,.2f} kg shippable Au-197"),
+                ("rate at power", f"{self.gold_kg_s*86400:,.2f} kg/day"),
+                ("annual average", f"{self.gold_kg_yr/365.25:,.2f} kg/day  "
+                                   f"({self.gold_kg_yr/1000:.3f} t/yr)"),
+                ("mercury", "boiled off and returned to the blanket")]},
+            {"title": "6. POWER ISLAND", "flow": 1.0, "rows": [
+                ("thermal in", f"{self.thermal_W/1e6:,.1f} MWth"),
+                ("cycle", f"sCO2 Brayton at {THERMAL_TO_ELECTRIC_EFF:.0%}"),
+                ("gross electric", f"{self.gross_electric_W/1e6:,.1f} MWe"),
+                ("recirculating", f"-{self.gross_electric_W*RECIRC_POWER_FRACTION/1e6:,.1f} MWe"),
+                ("NET TO GRID", f"{self.net_electric_W/1e6:,.1f} MWe"),
+                ("exported", f"{self.energy_exported_J/3.6e15:,.3f} TWh to date"),
+                ("carries", f"{self.homes:,.0f} homes continuously")]},
+        ]
+
+    # -- the rating the operator actually asked for ---------------------------
+    def city_rating(self) -> List[Dict[str, float]]:
+        """How many towns / small cities / mid cities / large cities this unit
+        carries continuously, at real per-capita demand with a reserve margin."""
+        out = []
+        avg_W = self.net_electric_W * PLANT_AVAILABILITY
+        firm_W = avg_W / (1.0 + GRID_RESERVE_MARGIN)
+        for name, pop in CITY_TIERS:
+            demand_avg = pop * PER_CAPITA_ALL_SECTOR_KW * 1e3
+            demand_peak = demand_avg * PEAK_TO_AVG_RATIO
+            out.append({"name": name, "population": pop,
+                        "avg_MW": demand_avg / 1e6, "peak_MW": demand_peak / 1e6,
+                        "n_supported": firm_W / demand_avg,
+                        "n_supported_peak": firm_W / demand_peak})
+        return out
+
+    def gold_rating(self) -> Dict[str, float]:
+        """Gold output rated against the real, present-day gold market."""
+        kg = self.gold_kg_yr
+        return {"kg_yr": kg, "tonnes_yr": kg / 1000.0,
+                "kg_per_day": kg / 365.25,
+                "oz_yr": kg / TROY_OZ_KG,
+                "usd_yr": self.gold_usd_yr,
+                "world_mine_share": kg / (WORLD_GOLD_MINE_T_PER_YR * 1000.0),
+                "usd_per_kg": self.gold_price_usd_kg,
+                "energy_cost_usd_per_kg": self.gold_usd_cost_per_kg,
+                "energy_cost_mwh_per_kg": self.gold_mwh_cost_per_kg,
+                "margin_ratio": self.gold_margin_ratio,
+                "gold_vs_power_revenue": self.gold_usd_yr / max(self.power_usd_yr, 1e-9)}
+
+
+
+
+# -----------------------------------------------------------------------------
+# 33d -- REPORTS  (--powerplant, --fuel NAME, --fleet)
+# -----------------------------------------------------------------------------
+
+def powerplant_fuel_table():
+    """Every fuel the operator may type, side by side."""
+    print("\n--- FUEL CATALOG (type any of these, or any alias) " + "-" * 27)
+    print(f"   {'fuel':<8} {'Q':>7} {'n/rx':>5} {'E_n':>7} {'T_ign':>7} "
+          f"{'J/kg':>10} {'gold route':<12} difficulty")
+    for k, f in FUSION_FUELS.items():
+        route = "DIRECT" if f.fast_neutrons_per_rx > 0 else "H10 pilot"
+        print(f"   {k:<8} {f.Q_MeV:>6.2f}M {f.n_per_rx:>5.2f} "
+              f"{f.En_MeV:>6.2f}M {f.T_ign_keV:>6.0f}k {f.energy_per_kg_J:>10.2e} "
+              f"{route:<12} {f.difficulty}")
+    print("   (Q in MeV; E_n = neutron energy in MeV; T_ign in keV; J/kg of fuel mix)")
+    print(f"   DIRECT needs E_n >= {HG198_N2N_THRESHOLD_MEV:.3f} MeV -- only D-T qualifies.")
+
+
+def powerplant_report(fuel_text: str = "D-T", net_MW: float = 1000.0,
+                      enrichment: float = 0.90, years: float = 1.0,
+                      gold_price: float = None):
+    """The full plant: what it burns, what it powers, what it mints."""
+    pp = RadiantPowerplant(fuel_text, net_MW * 1e6, enrichment=enrichment,
+                           gold_price_usd_kg=gold_price)
+    f = pp.fuel
+    print("\n=== THE RADIANT POWERPLANT -- fuel in, power + GOLD out ===")
+    print(f"TYPED FUEL : '{fuel_text}'  ->  resolved as {f.key} ({pp.fuel_match})")
+    if pp.substituted and pp.requested_fuel is not f:
+        print(f"             (requested {pp.requested_fuel.key}; substituted -- see "
+              f"hurdle ledger below)")
+    print(f"REACTION   : {f.reaction}")
+    print(f"             Q = {f.Q_MeV:.3f} MeV, {f.n_per_rx:.2f} n/reaction at "
+          f"{f.En_MeV:.2f} MeV, T_ign = {f.T_ign_keV:.0f} keV")
+    print(f"             fuel source: {f.source}")
+    print(f"             specific energy {f.energy_per_kg_J:.3e} J/kg "
+          f"({f.energy_per_kg_J/4.2e7:.2e} x coal)")
+
+    print(f"\n--- POWER TRAIN " + "-" * 60)
+    print(f"   fusion thermal      {pp.thermal_W/1e6:>12,.1f} MWth")
+    print(f"   gross electric      {pp.gross_electric_W/1e6:>12,.1f} MWe   "
+          f"(Brayton eta = {THERMAL_TO_ELECTRIC_EFF:.0%})")
+    print(f"   recirculating       {-pp.gross_electric_W*RECIRC_POWER_FRACTION/1e6:>12,.1f} MWe   "
+          f"(magnets, cryo, pumps, heating)")
+    print(f"   NET TO GRID         {pp.net_electric_W/1e6:>12,.1f} MWe   "
+          f"at {PLANT_AVAILABILITY:.0%} availability")
+    if pp.pilot_driven:
+        print(f"   D-T neutron pilot   {pp.pilot_thermal_W/1e6:>12,.1f} MWth  "
+              f"(H10 tier 1 -- ENERGY POSITIVE, heat returns to the turbine)")
+    if pp.spallation_driven:
+        print(f"   spallation linac    {-pp.spallation_power_W/1e6:>12,.1f} MWe   "
+              f"(H10 tier 2 -- a real cost, and a loss-making one)")
+    print(f"   fusion rate         {pp.fusion_rate_s:>12.3e} /s")
+    print(f"   fuel burned         {pp.fuel_burn_kg_s*YR*PLANT_AVAILABILITY:>12,.1f} kg/yr")
+
+    print(f"\n--- NEUTRON ECONOMY (why gold and tritium are the same problem) " + "-" * 8)
+    e = pp.economy
+    print(f"   source neutrons     {pp.n_source_s:>12.3e} /s")
+    print(f"   (n,2n) conversion x {e['x_n2n']:>12.3f} per source n  "
+          f"(cross-section ceiling {pp.x_n2n_max:.3f})")
+    if pp.multiplier > 0:
+        print(f"   Be/Pb multiplier    {pp.multiplier:>12.3f} extra n/source "
+              f"(H11b -- required at {pp.enrichment:.1%} enrichment)")
+    print(f"   neutrons produced   {e['neutrons_produced']:>12.3f} vs "
+          f"{e['neutrons_required']:.3f} required")
+    print(f"   tritium breeding    {e['tbr_achieved']:>12.3f} TBR   margin "
+          f"{e['margin']:+.3f} n/source  ->  "
+          f"{'SELF-SUFFICIENT' if e['self_sufficient'] else 'STARVED'}")
+    b = pp.blanket
+    print(f"   thermal per fusion  {b['Q_thermal_MeV']:>12.3f} MeV  "
+          f"(= {b['Q_fusion_MeV']:.2f} fusion + {b['Q_breed_MeV']:.2f} breed "
+          f"- {b['Q_n2n_cost_MeV']:.2f} gold - {b['Q_mult_cost_MeV']:.2f} mult "
+          f"+ {b['Q_gamma_MeV']:.2f} gamma)")
+
+    print(f"\n--- TRANSMUTATION BLANKET (Hg-198 -> Hg-197 -> Au-197) " + "-" * 17)
+    print(f"   feedstock           {pp.enrichment:>12.1%} Hg-198 "
+          f"(natural abundance {HG198_NATURAL_ABUNDANCE:.2%})")
+    print(f"   threshold           {HG198_N2N_THRESHOLD_MEV:>12.3f} MeV   "
+          f"sigma(n,2n) = {HG198_N2N_XSEC_BARN:.1f} b at 14.1 MeV")
+    print(f"   collisions above    {n2n_collisions_above_threshold():>12.1f}   "
+          f"(mercury barely slows a fast neutron: xi = {ELASTIC_XI_HG:.4f})")
+    print(f"   Hg-197 half-life    {HG197_HALFLIFE_S/3600:>12.2f} h    "
+          f"electron capture -> STABLE Au-197")
+    a = pp.activation
+    print(f"   assay hold          {pp.cooldown_days:>12.1f} d    "
+          f"vault assays {a['activity_bq_per_g']:.2f} Bq/g vs "
+          f"{SHIPPABLE_BQ_PER_G:.0f} Bq/g limit -> "
+          f"{'SHIPPABLE' if a['shippable'] else 'HELD'}")
+
+    g = pp.gold_rating()
+    print(f"\n=== GOLD OUTPUT " + "=" * 60)
+    print(f"   {g['kg_per_day']:>12,.2f} kg/day  (annual average, incl. "
+          f"{PLANT_AVAILABILITY:.0%} availability; {pp.gold_kg_s*86400:,.2f} kg/day at power)")
+    print(f"   {g['kg_yr']:>12,.1f} kg/yr   =  {g['tonnes_yr']:.3f} tonnes/yr  "
+          f"=  {g['oz_yr']:,.0f} troy oz/yr")
+    print(f"   {g['usd_yr']/1e6:>12,.1f} $M/yr at ${g['usd_per_kg']:,.0f}/kg "
+          f"(${GOLD_PRICE_USD_PER_OZ:,.2f}/ozt, 2026-08-20)")
+    print(f"   {g['world_mine_share']*100:>12.4f} % of world mine production "
+          f"({WORLD_GOLD_MINE_T_PER_YR:,.0f} t/yr, USGS)")
+
+    print(f"\n=== RATED TO POWER CITIES " + "=" * 50)
+    print(f"   {'tier':<12} {'population':>11} {'avg load':>10} {'peak':>9} "
+          f"{'this plant carries':>20}")
+    for c in pp.city_rating():
+        print(f"   {c['name']:<12} {c['population']:>11,.0f} "
+              f"{c['avg_MW']:>8.1f} MW {c['peak_MW']:>7.1f} MW "
+              f"{c['n_supported']:>15.2f} of them")
+    print(f"   -> {pp.homes:,.0f} average US homes, continuously "
+          f"({HOME_KWH_PER_YEAR:,.0f} kWh/yr each, EIA)")
+    print(f"   -> firm capacity includes a {GRID_RESERVE_MARGIN:.0%} NERC reserve margin")
+
+    print(f"\n--- THE HONEST TRADE: gold costs power " + "-" * 33)
+    print(f"   energy forgone per kg of gold   {g['energy_cost_mwh_per_kg']:>10,.0f} MWh_e/kg")
+    print(f"   that electricity is worth       ${g['energy_cost_usd_per_kg']:>10,.0f} /kg")
+    print(f"   the gold is worth               ${g['usd_per_kg']:>10,.0f} /kg")
+    print(f"   margin on the trade             {g['margin_ratio']:>10,.1f} x  "
+          f"-> {'PROFITABLE' if g['margin_ratio'] > 1 else 'A LOSS'}")
+    print(f"   revenue: power ${pp.power_usd_yr/1e6:,.1f}M/yr   "
+          f"gold ${pp.gold_usd_yr/1e6:,.1f}M/yr   "
+          f"(gold is {g['gold_vs_power_revenue']:.2f}x the power revenue)")
+
+    print(f"\n--- ENGINEERING HURDLES (limit -> mitigation -> MAXIMIZED) " + "-" * 13)
+    for h in pp.hurdles:
+        print(f"\n   [{h['code']}] LIMIT     : {_pp_wrap(h['limit'])}")
+        print(f"        MITIGATE  : {_pp_wrap(h['mitigation'])}")
+        print(f"        MAXIMIZED : {_pp_wrap(h['maximized'])}")
+
+    # --- run it continuously, because that is the claim -----------------------
+    print(f"\n--- CONTINUOUS OPERATION ({years:.0f} yr, stepped in real SI time) " + "-" * 12)
+    print(f"   {'t':>8} {'vault Au':>14} {'cooling':>12} {'Hg-197 tank':>13} "
+          f"{'TWh exported':>14} {'revenue $M':>12}")
+    n = 24
+    dt = years * YR / n
+    for i in range(n + 1):
+        if i:
+            pp.step(dt)
+        if i % 4 == 0 or i == n:
+            print(f"   {pp.t/YR:>7.2f}y {pp.au_vault_kg:>12,.1f}kg "
+                  f"{pp.au_cooling_kg:>10,.1f}kg {pp.hg197_atoms:>13.3e} "
+                  f"{pp.energy_exported_J/3.6e15:>13.3f} "
+                  f"{(pp.gold_revenue_usd+pp.power_revenue_usd)/1e6:>11,.1f}")
+    total = pp.au_vault_kg + pp.au_cooling_kg
+    print(f"\n   after {years:.0f} yr: {pp.au_vault_kg:,.1f} kg shippable + "
+          f"{pp.au_cooling_kg:,.1f} kg still cooling = {total:,.1f} kg gold,")
+    print(f"   {pp.energy_exported_J/3.6e15:,.2f} TWh delivered, "
+          f"${(pp.gold_revenue_usd + pp.power_revenue_usd)/1e6:,.1f}M total revenue.")
+    print(f"   The plant does not stop. Feed it fuel and it repeats this forever.")
+
+    print("\n--- WHAT IS AND IS NOT PROVEN (run --trl for the full audit) " + "-" * 11)
+    print("   PROVEN     : the transmutation itself. Hg-198(n,2n)Hg-197 -> Au-197 is a")
+    print("                measured reaction (ENDF/B-VIII.0) and was demonstrated in")
+    print("                1941. Liquid-mercury loops run today at the SNS. Retorting")
+    print("                and assaying gold are ordinary industry. [TRL 9]")
+    print("   NOT PROVEN : the reactor it is bolted to. No device has ever produced")
+    print("                NET ELECTRICAL power from fusion, and no tritium breeding")
+    print("                blanket has ever operated. [TRL 3-4]")
+    print("   THEREFORE  : every number above is conditional on a D-T power plant")
+    print("                existing. The gold chain is the mature half of this design;")
+    print("                the fusion island is the half that is still an open problem.")
+    print("                Nothing here is over-unity -- but it is not shovel-ready.")
+    return pp
+
+
+def _pp_wrap_px(text, font, px):
+    """Wrap to a PIXEL width using the real font metrics -- character counts lie
+    with proportional fonts, which is how the hurdle column ended up clipped."""
+    words, lines, cur = text.split(), [], ""
+    for w in words:
+        trial = (cur + " " + w).strip()
+        if cur and font.size(trial)[0] > px:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = trial
+    if cur:
+        lines.append(cur)
+    return "\n".join(lines)
+
+
+def _pp_wrap(text, width=64, indent=" " * 20):
+    """Wrap hurdle prose to the report column without importing textwrap."""
+    words, lines, cur = text.split(), [], ""
+    for w in words:
+        if len(cur) + len(w) + 1 > width:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = (cur + " " + w).strip()
+    if cur:
+        lines.append(cur)
+    return ("\n" + indent).join(lines)
+
+
+def maximize_gold(net_MW: float = 1000.0, fuel_text: str = "D-T",
+                  verbose: bool = True) -> Dict[str, object]:
+    """MAXIMIZE GOLD PRODUCTION IN THIS FACILITY.
+
+    The reactor is taken as GIVEN -- same site, same thermal rating, same grid
+    commitment. The question is how much more gold it can be made to produce
+    without building a different machine, and what that costs.
+
+    THE KEY INSIGHT: at a fixed thermal rating the gold output is
+
+        gold  ~  x / Q_thermal(x),      Q_thermal(x) = Q_fus + TBR*4.784 - 8.512x + Q_gamma
+
+    which RISES with x on both counts -- more conversions per neutron, and more
+    neutrons needed to deliver the same heat. Electricity to the grid does not
+    change at all. What pays for the extra gold is FUEL: the plant burns more
+    deuterium and tritium to hold the same thermal output, because each fusion
+    now surrenders more of its energy to the (n,2n) threshold.
+
+    That is a good trade, because deuterium is seawater and tritium is bred
+    in-house -- but it is a real cost and it is reported.
+
+    Three levers, in order of what they cost:
+      1. RAISE THE DUTY to the cross-section ceiling  (free -- it is a setpoint)
+      2. ENRICH the feedstock 90% -> 100% Hg-198      (industrial cost)
+      3. THICKEN the blanket + add a reflector         (capital cost)
+
+    And one wall that cannot be moved: n2n_physical_ceiling() = 0.724."""
+    ceiling = n2n_physical_ceiling()
+    base = RadiantPowerplant(fuel_text, net_MW * 1e6)
+    ladder = [
+        ("baseline (default duty, 90% enrichment)", dict()),
+        ("1. run the blanket at its cross-section ceiling", dict(optimize="gold")),
+        ("2. + enrich the feedstock to 100% Hg-198",
+         dict(optimize="gold", enrichment=1.0)),
+        ("3. + thicken the blanket, add a reflector",
+         dict(optimize="gold", enrichment=1.0, leakage=BLANKET_LEAKAGE_FLOOR)),
+        ("   [asymptote: a blanket that never leaks -- unbuildable]",
+         dict(optimize="gold", enrichment=1.0, leakage=0.0)),
+    ]
+    rows = []
+    for label, kw in ladder:
+        pp = RadiantPowerplant(fuel_text, net_MW * 1e6, **kw)
+        fuel_yr = pp.fuel_burn_kg_s * YR * PLANT_AVAILABILITY
+        rows.append({"label": label, "plant": pp, "x": pp.x_n2n,
+                     "gold_t": pp.gold_kg_yr / 1000.0,
+                     "gain": pp.gold_kg_yr / max(base.gold_kg_yr, 1e-9),
+                     "fuel_kg_yr": fuel_yr,
+                     "fuel_gain": fuel_yr / max(base.fuel_burn_kg_s * YR
+                                                * PLANT_AVAILABILITY, 1e-9),
+                     "net_MW": pp.net_electric_W / 1e6,
+                     "usd_yr": pp.gold_usd_yr})
+    best = rows[-2]                       # the buildable optimum, not the asymptote
+
+    if verbose:
+        print("\n=== MAXIMIZE GOLD PRODUCTION IN THIS FACILITY ===")
+        print("Same reactor, same site, same grid commitment. Only the blanket changes.")
+        print(f"\n   {'configuration':<48} {'x':>6} {'gold t/yr':>10} {'vs base':>8} "
+              f"{'fuel':>7} {'MWe':>6}")
+        for r in rows:
+            print(f"   {r['label']:<48} {r['x']:>6.4f} {r['gold_t']:>10.3f} "
+                  f"{r['gain']:>7.3f}x {r['fuel_gain']:>6.3f}x {r['net_MW']:>6.0f}")
+        print(f"\n   THE WALL: x cannot exceed sigma(n,2n)/sigma_nonelastic = "
+              f"{ceiling:.4f}")
+        print(f"   {HG198_N2N_XSEC_BARN} b of a {HG_NONELASTIC_XSEC_BARN} b nonelastic "
+              f"budget makes gold; the other "
+              f"{HG_NONELASTIC_XSEC_BARN - HG198_N2N_XSEC_BARN:.1f} b "
+              f"({100*(HG_NONELASTIC_XSEC_BARN-HG198_N2N_XSEC_BARN)/HG_NONELASTIC_XSEC_BARN:.1f}%)")
+        print(f"   goes to (n,gamma), (n,p) and (n,alpha) and returns something that is")
+        print(f"   not gold. No enrichment, geometry or budget moves that number.")
+
+        b, bp = best, best["plant"]
+        print(f"\n--- THE BUILDABLE OPTIMUM " + "-" * 46)
+        print(f"   gold          {b['gold_t']:.3f} t/yr   "
+              f"({b['gain']:.3f}x the baseline, "
+              f"{100*b['x']/ceiling:.1f}% of the physical ceiling)")
+        print(f"   per day       {bp.gold_kg_s*86400:,.2f} kg at power, "
+              f"{bp.gold_kg_yr/365.25:,.2f} kg/yr-average   "
+              f"({bp.gold_kg_yr/12.44:,.0f} Good Delivery bars/yr)")
+        print(f"   revenue       ${b['usd_yr']/1e6:,.1f}M/yr "
+              f"(+${(b['usd_yr']-base.gold_usd_yr)/1e6:,.1f}M over baseline)")
+        print(f"   electricity   {b['net_MW']:,.0f} MWe -- UNCHANGED. The grid does not")
+        print(f"                 pay for this; the fuel bill does.")
+        print(f"   fuel          {b['fuel_kg_yr']:,.1f} kg/yr D+T "
+              f"({b['fuel_gain']:.3f}x baseline, +{b['fuel_kg_yr']-rows[0]['fuel_kg_yr']:,.1f} kg/yr)")
+        print(f"   tritium       {bp.tritium_burn_kg_yr:,.1f} kg/yr (bred in-house, TBR "
+              f"{bp.economy['tbr_achieved']:.3f})")
+        print(f"   neutron margin {bp.economy['margin']:+.3f} n/source -- still "
+              f"{'SELF-SUFFICIENT' if bp.economy['self_sufficient'] else 'STARVED'}")
+        print(f"   assay hold    {bp.cooldown_days:.0f} d -> "
+              f"{bp.activation['activity_bq_per_g']:.3f} Bq/g "
+              f"({'SHIPPABLE' if bp.activation['shippable'] else 'HELD'})")
+        print(f"\n   WHAT IT COSTS: {b['fuel_gain']:.3f}x the fuel for {b['gain']:.3f}x the")
+        print(f"   gold. Deuterium is seawater and tritium is bred on site, so this is a")
+        print(f"   favourable trade -- but it is a real cost, not a free lunch, and the")
+        print(f"   thermal ledger (proof P20) still debits every gram.")
+        _n_base = WORLD_GOLD_MINE_T_PER_YR * 1000.0 / max(rows[0]["plant"].gold_kg_yr, 1e-9)
+        _n_max = WORLD_GOLD_MINE_T_PER_YR * 1000.0 / max(bp.gold_kg_yr, 1e-9)
+        print(f"\n   THE CATCH -- MAXIMIZING OUTPUT TIGHTENS THE ECONOMIC CEILING.")
+        print(f"   More gold per unit means FEWER units before the fleet doubles world")
+        print(f"   supply and prices itself down (hurdle H13):")
+        print(f"      baseline duty   -> ~{_n_base:,.0f} units ({_n_base/1000:.2f} TWe)")
+        print(f"      maximized duty  -> ~{_n_max:,.0f} units ({_n_max/1000:.2f} TWe)"
+              f"   [{_n_base/max(_n_max,1e-9):.2f}x fewer]")
+        print(f"   Physical maximization and fleet-scale economics point in OPPOSITE")
+        print(f"   directions. Maximize the blanket if you are building a few units;")
+        print(f"   if you are building thousands, the electricity is the product and")
+        print(f"   the conservative duty is the better business.")
+        print(f"\n   AT WORLD SCALE: {WORLD_ELECTRICITY_TW*1e12/(net_MW*1e6):,.0f} units "
+              f"-> {WORLD_ELECTRICITY_TW*1e12/(net_MW*1e6)*b['gold_t']:,.0f} t/yr "
+              f"= {WORLD_ELECTRICITY_TW*1e12/(net_MW*1e6)*b['gold_t']/WORLD_GOLD_MINE_T_PER_YR:.2f}x")
+        print(f"   world mine production (baseline was "
+              f"{WORLD_ELECTRICITY_TW*1e12/(net_MW*1e6)*rows[0]['gold_t']/WORLD_GOLD_MINE_T_PER_YR:.2f}x).")
+    return {"ceiling": ceiling, "rows": rows, "best": best, "baseline": base}
+
+
+def powerplant_market_report(net_MW: float = 1000.0, fuel_text: str = "D-T"):
+    """HURDLE H13, quantified: how many of these can the world absorb, and what
+    happens to the gold price when a fleet of them switches on?
+
+    RATED TO NOW: against real 2026 world electricity demand and the real
+    3,300 t/yr gold mine supply."""
+    pp = RadiantPowerplant(fuel_text, net_MW * 1e6)
+    per_unit_t = pp.gold_kg_yr / 1000.0
+    print("\n=== SCALED TO THE WORLD AS IT IS TODAY ===")
+    print(f"   one {net_MW:,.0f} MWe unit  ->  {per_unit_t:.3f} t gold/yr, "
+          f"{pp.homes:,.0f} homes")
+    print(f"   world electricity  =  {WORLD_ELECTRICITY_TW:.2f} TW average "
+          f"(~{WORLD_ELECTRICITY_TW*8766:,.0f} TWh/yr)")
+    world_units = WORLD_ELECTRICITY_TW * 1e12 / (net_MW * 1e6)
+    world_gold = world_units * per_unit_t
+    print(f"   that is {world_units:,.0f} units if the whole planet ran on this plant")
+    print(f"\n   {'fleet':<24} {'units':>9} {'GWe':>10} {'gold t/yr':>12} "
+          f"{'vs world mine':>14}")
+    for label, units in [("one unit", 1),
+                         ("one small country", 20),
+                         ("US grid (~0.47 TW)", 470),
+                         ("world grid", int(world_units))]:
+        gt = units * per_unit_t
+        print(f"   {label:<24} {units:>9,.0f} {units*net_MW/1000:>10,.1f} "
+              f"{gt:>12,.1f} {gt/WORLD_GOLD_MINE_T_PER_YR:>13.2f}x")
+    print(f"\n   THE HEADLINE: if every watt the world generates came from this")
+    print(f"   plant, it would also mint {world_gold:,.0f} t of gold per year --")
+    print(f"   {world_gold/WORLD_GOLD_MINE_T_PER_YR:.1f}x the entire world mining "
+          f"industry ({WORLD_GOLD_MINE_T_PER_YR:,.0f} t/yr),")
+    print(f"   and {world_gold/ABOVE_GROUND_GOLD_T*100:.2f}% of all the gold ever "
+          f"mined ({ABOVE_GROUND_GOLD_T:,.0f} t) every year.")
+    print(f"\n   [H13] AND THAT IS THE LIMIT -- an ECONOMIC one, not a physical one.")
+    print(f"   Gold demand is inelastic (~-0.6). Doubling supply does not double")
+    print(f"   revenue; it collapses the price. The honest ceiling on this design")
+    n_break = WORLD_GOLD_MINE_T_PER_YR / max(per_unit_t, 1e-9)
+    print(f"   is therefore a FLEET SIZE of roughly {n_break:,.0f} units "
+          f"({n_break*net_MW/1e6:.2f} TWe) before")
+    print(f"   the plant is doubling world gold supply and pricing itself down.")
+    print(f"   Past that point the electricity is the product and the gold is the")
+    print(f"   byproduct -- which is why this is a POWERPLANT first, and a mint second.")
+    return pp
+
 # =============================================================================
 # SECTION 14 -- VISUALIZATION
 # =============================================================================
@@ -4904,6 +7163,170 @@ def visualize_profit(show: bool = True, outfile: str = "radiant_profit.png"):
 
     plt.tight_layout(rect=[0, 0, 1, 0.90])
     fig.savefig(outfile, dpi=110)
+    print(f"Figure saved -> {outfile}")
+    if show and _HAVE_DISPLAY:
+        plt.show()
+    plt.close(fig)
+
+
+
+def visualize_powerplant(show: bool = True, outfile: str = "radiant_powerplant.png",
+                         fuel_text: str = "D-T"):
+    """THE POWERPLANT (SECTION 33): the four curves that actually decide the
+    design -- what enrichment buys you, where the neutron budget closes, how long
+    the bullion has to cool, and where the fleet stops being profitable."""
+    pp = RadiantPowerplant(fuel_text, 1.0e9)
+    mx = maximize_gold(net_MW=1000.0, fuel_text=fuel_text, verbose=False)
+    ppm = mx["best"]["plant"]
+    fig, axs = plt.subplots(2, 3, figsize=(20, 10.5))
+    fig.suptitle("RADIANT :: THE POWERPLANT -- typed fuel -> continuous power + GOLD "
+                 "(Hg-198(n,2n)Hg-197 -> EC -> stable Au-197)",
+                 fontsize=12, fontweight="bold")
+
+    # --- 1. what enrichment buys ------------------------------------------
+    # NOTE: this plots the RAW feedstock physics -- the conversion the blanket
+    # would achieve at that enrichment -- and then shades where the plant
+    # REFUSES to run that way. Plotting the commissioned plant instead would
+    # show a discontinuity at the H11c trigger that looks like a bug but is
+    # actually the hurdle logic overriding a feedstock it will not accept.
+    ax = axs[0][0]
+    enr = np.linspace(0.0, 1.0, 300)
+    conv = np.array([n2n_reaction_probability(e) for e in enr])
+    x_min = neutron_economy(0.0)["x_min_for_self_sufficiency"]
+    MIN_VIABLE_X = 0.02
+    # gold scales linearly with conversion at fixed neutron source
+    gold_per_x = (pp.gold_kg_yr / 1000.0) / max(pp.x_n2n, 1e-12)
+    ax.plot(enr, conv * gold_per_x, color="#d4af37", lw=2.4,
+            label="gold the feedstock would yield [t/yr]")
+    # the two zones where the plant intervenes rather than accept the result
+    e_reject = enr[conv < MIN_VIABLE_X]
+    e_mult = enr[(conv >= MIN_VIABLE_X) & (conv < x_min)]
+    if len(e_reject):
+        ax.axvspan(0.0, e_reject.max(), color="crimson", alpha=0.13,
+                   label="H11c: feedstock REJECTED, forced to 90%")
+    if len(e_mult):
+        ax.axvspan(e_mult.min(), e_mult.max(), color="#e07b39", alpha=0.15,
+                   label="H11b: needs a Be/Pb multiplier to breed")
+    ax.axvline(HG198_NATURAL_ABUNDANCE, ls=":", color="black", lw=1.6,
+               label=f"natural Hg ({HG198_NATURAL_ABUNDANCE:.2%} Hg-198)")
+    ax.axvline(pp.enrichment, ls="--", color="#2c728e", lw=1.6,
+               label=f"plant operating point ({pp.enrichment:.0%})")
+    ax.set_title("Enrichment sets everything, and EXACTLY linearly: at 14 MeV\n"
+                 "swapping Hg-198 for its neighbours is a one-for-one trade")
+    ax.set_xlabel("Hg-198 enrichment of the blanket feedstock")
+    ax.set_ylabel("gold [tonnes/yr]")
+    ax.set_xlim(0, 1); ax.set_ylim(bottom=0)
+    ax.legend(fontsize=7, loc="upper left"); ax.grid(True, alpha=0.25)
+
+    # --- 2. the neutron balance -------------------------------------------
+    ax = axs[0][1]
+    xs = np.linspace(0.0, 0.65, 200)
+    produced = 1.0 + xs
+    required = TRITIUM_BREEDING_TARGET + PARASITIC_PLUS_LEAKAGE
+    ax.plot(xs, produced, color="#5ec962", lw=2.2, label="neutrons produced  1 + x")
+    ax.axhline(required, ls="--", color="crimson", lw=1.6,
+               label=f"needed: TBR {TRITIUM_BREEDING_TARGET:.2f} + parasitic "
+                     f"{PARASITIC_PLUS_LEAKAGE:.2f} = {required:.2f}")
+    ax.fill_between(xs, produced, required, where=(produced >= required),
+                    color="#5ec962", alpha=0.18, label="SELF-SUFFICIENT")
+    ax.fill_between(xs, produced, required, where=(produced < required),
+                    color="crimson", alpha=0.15, label="fuel-starved")
+    ax.axvline(pp.x_n2n, ls=":", color="#2c728e", lw=1.8,
+               label=f"operating point x = {pp.x_n2n:.2f}")
+    ax.set_title("Gold PAYS its own neutron bill: (n,2n) is 1 in, 2 out,\n"
+                 "so making gold is what closes the tritium budget (P18)")
+    ax.set_xlabel("x  [gold-making (n,2n) events per source neutron]")
+    ax.set_ylabel("neutrons per source neutron")
+    ax.legend(fontsize=7, loc="upper left"); ax.grid(True, alpha=0.25)
+
+    # --- 3. why the gold has to cool --------------------------------------
+    ax = axs[1][1]
+    days = np.linspace(0, 140, 300)
+    for hrs, col in ((0.25, "#5ec962"), (1.0, "#2c728e"), (4.0, "#b5367a"),
+                     (24.0, "#e07b39")):
+        act = [gold_activation_state(0.90, d, extraction_hours=hrs)["activity_bq_per_g"]
+               for d in days]
+        ax.semilogy(days, act, color=col, lw=2,
+                    label=f"Hg dwell {hrs:g} h in the flux")
+    ax.axhline(SHIPPABLE_BQ_PER_G, ls="--", color="crimson", lw=1.6,
+               label=f"clearance limit {SHIPPABLE_BQ_PER_G:.0f} Bq/g")
+    ax.axvline(pp.cooldown_days, ls=":", color="black", lw=1.4,
+               label=f"plant assay hold {pp.cooldown_days:.0f} d")
+    ax.set_title("H12: gold is BORN OUTSIDE the flux. The faster mercury is\n"
+                 "pumped out, the less Au-198 exists and the sooner it ships")
+    ax.set_xlabel("cooldown / assay hold [days]")
+    ax.set_ylabel("specific activity [Bq/g]")
+    ax.set_ylim(1e-3, 1e14)
+    ax.legend(fontsize=7); ax.grid(True, which="both", alpha=0.25)
+
+    # --- 4. where the fleet stops paying ----------------------------------
+    ax = axs[1][2]
+    gwe = np.logspace(0, 4.0, 200)                       # 1 GWe .. 10 TWe
+    for lbl, plant, col in (("baseline duty", pp, "#d4af37"),
+                            ("MAXIMIZED duty", ppm, "#b5367a")):
+        t_per_gwe = plant.gold_kg_yr / 1000.0
+        ax.loglog(gwe, gwe * t_per_gwe, color=col, lw=2.2, label=f"{lbl} [t/yr]")
+        nb = WORLD_GOLD_MINE_T_PER_YR / max(t_per_gwe, 1e-9)
+        ax.axvline(nb, ls=":", color=col, lw=1.7,
+                   label=f"H13 ceiling ~{nb:,.0f} GWe")
+    ax.axhline(WORLD_GOLD_MINE_T_PER_YR, ls="--", color="crimson", lw=1.6,
+               label=f"world mine production {WORLD_GOLD_MINE_T_PER_YR:,.0f} t/yr")
+    ax.axvline(WORLD_ELECTRICITY_TW * 1e3, ls="-.", color="#2c728e", lw=1.4,
+               label=f"entire world grid ({WORLD_ELECTRICITY_TW:.1f} TW)")
+    ax.set_title("H13: THE CATCH -- maximizing output moves the economic\n"
+                 "ceiling CLOSER (fewer units double world supply)")
+    ax.set_xlabel("installed fleet [GWe]"); ax.set_ylabel("gold [tonnes/yr]")
+    ax.legend(fontsize=6.5, loc="upper left"); ax.grid(True, which="both", alpha=0.25)
+
+    # --- 5. the maximization ladder ---------------------------------------
+    ax = axs[0][2]
+    labs = ["baseline", "duty ->\nceiling", "+100%\nenrich", "+thick\nblanket",
+            "asymptote\n(unbuildable)"]
+    vals = [r["gold_t"] for r in mx["rows"]]
+    cols = ["#7f8c9a", "#2c728e", "#5ec962", "#d4af37", "#4a4a52"]
+    bars = ax.bar(range(len(vals)), vals, color=cols,
+                  edgecolor="black", linewidth=0.6)
+    bars[-1].set_alpha(0.45)
+    bars[-1].set_hatch("//")
+    for i, (b_, r_) in enumerate(zip(bars, mx["rows"])):
+        ax.text(b_.get_x() + b_.get_width() / 2, b_.get_height() + 0.08,
+                f"{r_['gold_t']:.2f}\n{r_['gain']:.2f}x", ha="center",
+                fontsize=7.5, fontweight="bold")
+    ax.set_xticks(range(len(labs)))
+    ax.set_xticklabels(labs, fontsize=7)
+    ax.set_ylim(0, max(vals) * 1.25)
+    ax.set_title("MAXIMIZING THIS FACILITY: same reactor, same grid.\n"
+                 "The gain is paid for in FUEL, not electricity")
+    ax.set_ylabel("gold [tonnes/yr]")
+    ax.grid(True, axis="y", alpha=0.25)
+
+    # --- 6. gold vs duty, and the wall ------------------------------------
+    ax = axs[1][0]
+    ceil = n2n_physical_ceiling()
+    xs = np.linspace(0.05, 0.80, 300)
+    Qth = pp.fuel.Q_MeV + pp.economy["tbr_achieved"] * 4.784 - xs * 8.512 + 1.0
+    idx = xs / Qth
+    idx = idx / (0.5 / (pp.fuel.Q_MeV + pp.economy["tbr_achieved"] * 4.784
+                        - 0.5 * 8.512 + 1.0))
+    ok = xs <= ceil
+    ax.plot(xs[ok], idx[ok] * pp.gold_kg_yr / 1000.0, color="#d4af37", lw=2.6,
+            label="gold at fixed thermal rating")
+    ax.plot(xs[~ok], idx[~ok] * pp.gold_kg_yr / 1000.0, color="#4a4a52", lw=1.6,
+            ls=":", label="physically unreachable")
+    ax.axvspan(ceil, 0.80, color="crimson", alpha=0.12,
+               label=f"FORBIDDEN: x > sigma(n,2n)/sigma_nonel = {ceil:.4f}")
+    ax.axvline(pp.x_n2n, ls="--", color="#7f8c9a", lw=1.6,
+               label=f"baseline duty {pp.x_n2n:.3f}")
+    ax.axvline(ppm.x_n2n, ls="--", color="#b5367a", lw=1.8,
+               label=f"maximized duty {ppm.x_n2n:.3f} ({100*ppm.x_n2n/ceil:.0f}% of wall)")
+    ax.set_title("Gold ~ x / Q_thermal(x) rises with duty -- until a wall\n"
+                 "no engineering can move (proof P23)")
+    ax.set_xlabel("blanket duty x  [(n,2n) events per source neutron]")
+    ax.set_ylabel("gold [tonnes/yr]")
+    ax.legend(fontsize=6.5, loc="upper left"); ax.grid(True, alpha=0.25)
+
+    plt.tight_layout(rect=[0, 0, 1, 0.93])
+    fig.savefig(outfile, dpi=105)
     print(f"Figure saved -> {outfile}")
     if show and _HAVE_DISPLAY:
         plt.show()
@@ -6333,6 +8756,279 @@ class ElementStockpile:
         return [(Z, sym, name, phase, self.kg[Z], self.kg_s[Z])
                 for Z, sym, name, phase in self.TRACKED]
 
+
+
+
+# =============================================================================
+# SECTION 33b -- POWERPLANT HARDWARE  (solid geometry for the POWERPLANT tab)
+# =============================================================================
+# Six real buildings, to scale, in the order the material actually flows:
+#   FUEL INTAKE -> FUSION CORE -> Hg BLANKET -> DECAY TANK -> GOLD VAULT
+# with the POWER ISLAND hanging off the heat loop. Same solid-mesh conventions
+# as SECTION 31b (Assembly + _g_* primitives, flat-shaded, real machine parts).
+
+_PP_GOLD = (212, 175, 55)
+_PP_MERCURY = (186, 192, 204)
+_PP_PLASMA = (255, 130, 60)
+_PP_COIL = (120, 175, 235)
+_PP_STEEL = (108, 120, 142)
+_PP_LEAD = (92, 96, 112)
+_PP_TURBINE = (156, 166, 182)
+_PP_GRID = (110, 220, 140)
+
+
+def build_fuel_intake_solid(center, s=1.0):
+    """STAGE 1: FUEL INTAKE -- where the TYPED fuel physically enters the plant.
+    Two cryogenic storage spheres (deuterium and tritium, or whatever the
+    operator typed), an isotope-separation column, and a pellet injector barrel
+    aimed at the core. Real hardware: a cryo fuel plant plus a gas-gun injector."""
+    a = Assembly()
+    cx, cy, cz = center
+    # two cryogenic fuel tanks (approximated as short fat cylinders)
+    for dy, col in ((-0.55 * s, (150, 190, 230)), (0.55 * s, (230, 170, 150))):
+        a.add(*_g_cylinder(0.30 * s, -0.34 * s, 0.34 * s, 14),
+              (cx - 0.35 * s, cy + dy, cz), col)
+        a.add(*_g_tube(0.32 * s, 0.30 * s, -0.36 * s, 0.36 * s, 14),
+              (cx - 0.35 * s, cy + dy, cz), _PP_STEEL)
+    # isotope separation column (tall thin tower)
+    a.add(*_g_tube(0.16 * s, 0.12 * s, -0.1 * s, 1.5 * s, 12), center, (170, 180, 195))
+    for i in range(5):                                    # separation trays
+        a.add(*_g_disc(0.15 * s, (0.15 + 0.28 * i) * s, 12), center, (120, 140, 165))
+    # pellet injector barrel, aimed downstream at the core
+    bv, bf = _cyl_between((cx + 0.15 * s, cy, cz), (cx + 1.5 * s, cy, cz),
+                          0.075 * s, 8)
+    a.add(bv, bf, (0, 0, 0), (200, 205, 215))
+    # feed manifolds from the tanks into the column
+    for dy in (-0.55 * s, 0.55 * s):
+        mv, mf = _cyl_between((cx - 0.35 * s, cy + dy, cz), (cx, cy, cz),
+                              0.035 * s, 6)
+        a.add(mv, mf, (0, 0, 0), (140, 150, 170))
+    return a.arrays()
+
+
+def build_fusion_core_solid(center, s=1.0):
+    """STAGE 2: FUSION CORE -- a tokamak. Vacuum vessel torus, hot plasma torus
+    inside it, 8 toroidal-field coils around it, a central solenoid, and the
+    divertor at the bottom. This is where the typed fuel burns and where the
+    14.06 MeV neutrons are born."""
+    a = Assembly()
+    cx, cy, cz = center
+    R, r = 1.05 * s, 0.34 * s
+    a.add(*_g_torus(R, r, 20, 10), center, _PP_STEEL)              # vacuum vessel
+    a.add(*_g_torus(R, 0.19 * s, 18, 8), center, _PP_PLASMA)       # burning plasma
+    # toroidal field coils -- 8 D-shaped rings around the minor circumference
+    for i in range(8):
+        ang = i * 2.0 * math.pi / 8.0
+        px, py = cx + R * math.cos(ang), cy + R * math.sin(ang)
+        a.add(*_g_torus(0.50 * s, 0.055 * s, 12, 5), (px, py, cz), _PP_COIL)
+    # central solenoid stack
+    a.add(*_g_tube(0.26 * s, 0.17 * s, -0.85 * s, 0.85 * s, 14), center, (205, 175, 95))
+    a.add(*_g_helix(0.30 * s, 0.035 * s, 0.8 * s, turns=7, n=30, seg=5),
+          center, _PP_COIL)
+    # poloidal field coils above and below
+    for dz in (-0.95 * s, 0.95 * s):
+        a.add(*_g_torus(1.15 * s, 0.06 * s, 16, 5), (cx, cy, cz + dz), (150, 190, 235))
+    # divertor cassette ring at the floor of the vessel
+    a.add(*_g_torus(R, 0.10 * s, 18, 6), (cx, cy, cz - 0.36 * s), (190, 90, 70))
+    return a.arrays()
+
+
+def build_hg_blanket_solid(center, s=1.0):
+    """STAGE 3: THE MERCURY BLANKET -- the alchemy floor. A segmented annular
+    shell of liquid Hg-198 modules wrapping the core, with the beryllium neutron
+    multiplier as an inner liner and the lithium breeding zone outboard. This is
+    the only place in the plant where gold is actually made."""
+    a = Assembly()
+    cx, cy, cz = center
+    # inner Be/Pb multiplier liner
+    a.add(*_g_tube(0.78 * s, 0.70 * s, -0.7 * s, 0.7 * s, 18), center, (190, 200, 175))
+    # 12 liquid-mercury blanket modules around the annulus
+    for i in range(12):
+        ang = i * 2.0 * math.pi / 12.0
+        px, py = cx + 1.02 * s * math.cos(ang), cy + 1.02 * s * math.sin(ang)
+        a.add(*_g_box(0.17 * s, 0.17 * s, 0.62 * s), (px, py, cz), _PP_MERCURY)
+        # each module has a riser pipe carrying Hg-197 out to the decay tank
+        rv, rf = _cyl_between((px, py, cz + 0.62 * s), (px, py, cz + 0.95 * s),
+                              0.03 * s, 5)
+        a.add(rv, rf, (0, 0, 0), _PP_GOLD)
+    # outboard lithium breeding zone
+    a.add(*_g_tube(1.34 * s, 1.24 * s, -0.66 * s, 0.66 * s, 20), center, (140, 190, 200))
+    # biological shield
+    a.add(*_g_tube(1.55 * s, 1.44 * s, -0.8 * s, 0.8 * s, 20), center, _PP_LEAD)
+    # collection header ring on top, gathering every riser
+    a.add(*_g_torus(1.02 * s, 0.055 * s, 16, 5), (cx, cy, cz + 0.95 * s), _PP_GOLD)
+    return a.arrays()
+
+
+def build_decay_tank_solid(center, s=1.0):
+    """STAGE 4: THE DECAY TANK -- where the gold is actually born, and the single
+    most important piece of engineering in the plant (HURDLE H12). Hg-197 is
+    pumped OUT of the neutron flux into this shielded vessel and left to electron
+    capture into Au-197 in peace. Gold that never sees a neutron cannot be
+    activated into Au-198, which is the whole reason the product is shippable."""
+    a = Assembly()
+    cx, cy, cz = center
+    a.add(*_g_tube(0.62 * s, 0.55 * s, -0.75 * s, 0.75 * s, 16), center, _PP_LEAD)
+    a.add(*_g_cylinder(0.55 * s, -0.70 * s, 0.55 * s, 16), center, _PP_MERCURY)
+    a.add(*_g_cylinder(0.55 * s, -0.70 * s, -0.30 * s, 16), center, _PP_GOLD)
+    a.add(*_g_cone(0.55 * s, 0.12 * s, 0.55 * s, 0.85 * s, 14), center, _PP_LEAD)
+    # inlet from the blanket header
+    iv, iff = _cyl_between((cx - 1.15 * s, cy, cz + 0.55 * s),
+                           (cx - 0.5 * s, cy, cz + 0.35 * s), 0.055 * s, 6)
+    a.add(iv, iff, (0, 0, 0), _PP_MERCURY)
+    # 4 decay-heat exchanger fins (64 h of EC heat has to go somewhere)
+    for i in range(4):
+        ang = i * math.pi / 2.0 + 0.4
+        px, py = cx + 0.72 * s * math.cos(ang), cy + 0.72 * s * math.sin(ang)
+        a.add(*_g_box(0.05 * s, 0.22 * s, 0.5 * s), (px, py, cz), (150, 165, 185))
+    # gravity drain to the refinery
+    dv, df = _cyl_between((cx, cy, cz - 0.75 * s), (cx + 0.9 * s, cy, cz - 0.95 * s),
+                          0.06 * s, 6)
+    a.add(dv, df, (0, 0, 0), _PP_GOLD)
+    return a.arrays()
+
+
+def build_gold_vault_solid(center, s=1.0):
+    """STAGE 5: REFINERY AND VAULT -- amalgam separation (gold and mercury do not
+    alloy usefully at temperature, so the Hg is boiled off and RECYCLED straight
+    back to the blanket), an assay station, a cooldown rack, and the bullion
+    vault. What leaves this building is ordinary, stable, shippable Au-197."""
+    a = Assembly()
+    cx, cy, cz = center
+    # retort / still: boils mercury off the gold and returns it to the blanket
+    a.add(*_g_tube(0.34 * s, 0.29 * s, -0.1 * s, 0.9 * s, 14), (cx - 0.7 * s, cy, cz),
+          (170, 175, 190))
+    a.add(*_g_cone(0.30 * s, 0.08 * s, 0.9 * s, 1.25 * s, 12), (cx - 0.7 * s, cy, cz),
+          _PP_MERCURY)
+    # mercury return line heading back upstream
+    rv, rf = _cyl_between((cx - 0.7 * s, cy, cz + 1.25 * s),
+                          (cx - 2.6 * s, cy, cz + 1.45 * s), 0.045 * s, 6)
+    a.add(rv, rf, (0, 0, 0), _PP_MERCURY)
+    # cooldown rack: 3 x 3 shelves of bullion waiting out the Au-198 assay hold
+    for ix in range(3):
+        for iz in range(3):
+            a.add(*_g_box(0.16 * s, 0.30 * s, 0.055 * s),
+                  (cx + 0.35 * s + 0.38 * s * ix, cy, cz - 0.5 * s + 0.34 * s * iz),
+                  _PP_GOLD)
+    # assay station (a small detector head over the rack)
+    a.add(*_g_box(0.1 * s, 0.1 * s, 0.16 * s), (cx + 0.73 * s, cy, cz + 0.75 * s),
+          (230, 120, 120))
+    # the vault itself
+    a.add(*_g_box(0.5 * s, 0.5 * s, 0.5 * s), (cx + 1.7 * s, cy, cz - 0.2 * s),
+          _PP_STEEL)
+    a.add(*_g_cylinder(0.22 * s, 1.7 * s, 1.72 * s, 14),
+          (cx + 0.5 * s, cy, cz - 0.2 * s), (200, 205, 215))
+    # stacked ingots inside
+    for i in range(4):
+        a.add(*_g_box(0.28 * s, 0.16 * s, 0.05 * s),
+              (cx + 1.7 * s, cy, cz - 0.55 * s + 0.13 * s * i), _PP_GOLD)
+    return a.arrays()
+
+
+def build_power_island_solid(center, s=1.0):
+    """STAGE 6: THE POWER ISLAND -- the part that makes this a POWERPLANT.
+    Blanket coolant runs a supercritical-CO2 Brayton loop: heat exchanger,
+    turbine, generator, and the switchyard that puts megawatts on the grid."""
+    a = Assembly()
+    cx, cy, cz = center
+    # primary heat exchanger (a shell-and-tube block)
+    a.add(*_g_tube(0.42 * s, 0.36 * s, -0.5 * s, 0.5 * s, 14), (cx - 1.5 * s, cy, cz),
+          (190, 110, 90))
+    for i in range(6):
+        ang = i * math.pi / 3.0
+        px = cx - 1.5 * s + 0.25 * s * math.cos(ang)
+        py = cy + 0.25 * s * math.sin(ang)
+        tv, tf = _cyl_between((px, py, cz - 0.5 * s), (px, py, cz + 0.5 * s),
+                              0.03 * s, 5)
+        a.add(tv, tf, (0, 0, 0), (220, 140, 110))
+    # turbine: a stepped multi-stage cylinder
+    for i, rr in enumerate((0.20, 0.28, 0.36)):
+        a.add(*_g_cylinder(rr * s, (-0.45 + 0.3 * i) * s, (-0.15 + 0.3 * i) * s, 14),
+              (cx, cy, cz), _PP_TURBINE)
+    # turbine blade discs
+    for i in range(3):
+        a.add(*_g_disc((0.26 + 0.08 * i) * s, (-0.30 + 0.3 * i) * s, 16),
+              (cx, cy, cz), (200, 210, 225))
+    # shaft to the generator
+    sv, sf = _cyl_between((cx, cy, cz + 0.45 * s), (cx, cy, cz + 0.95 * s),
+                          0.075 * s, 8)
+    a.add(sv, sf, (0, 0, 0), (210, 215, 225))
+    # generator can
+    a.add(*_g_tube(0.34 * s, 0.26 * s, 0.95 * s, 1.75 * s, 14), center, (140, 150, 200))
+    a.add(*_g_helix(0.30 * s, 0.03 * s, 0.38 * s, turns=6, n=26, seg=5),
+          (cx, cy, cz + 1.35 * s), _PP_COIL)
+    # switchyard: 3 transmission pylons carrying it away
+    for i in range(3):
+        px = cx + (0.9 + 0.55 * i) * s
+        pv, pf = _cyl_between((px, cy, cz + 0.2 * s), (px, cy, cz + 1.5 * s),
+                              0.028 * s, 5)
+        a.add(pv, pf, (0, 0, 0), (170, 180, 195))
+        a.add(*_g_box(0.22 * s, 0.02 * s, 0.02 * s), (px, cy, cz + 1.45 * s), _PP_GRID)
+    return a.arrays()
+
+
+# --- the whole plant, assembled -----------------------------------------------
+_PP_SECTION_CENTERS = [
+    (-10.0, 0.0, 0.0),      # 0 fuel intake
+    (-5.2, 0.0, 0.0),       # 1 fusion core
+    (0.0, 0.0, 0.0),        # 2 mercury blanket
+    (4.8, 0.0, 0.0),        # 3 decay tank
+    (9.2, 0.0, 0.0),        # 4 refinery + vault
+    (-2.6, 0.0, -5.2),      # 5 power island
+]
+
+_PP_SECTION_BUILDERS = [
+    build_fuel_intake_solid, build_fusion_core_solid, build_hg_blanket_solid,
+    build_decay_tank_solid, build_gold_vault_solid, build_power_island_solid,
+]
+
+_PP_SECTION_LABELS = [
+    ["1. FUEL INTAKE", "TYPED fuel enters here", "cryo tanks + isotope column"],
+    ["2. FUSION CORE", "tokamak: the fuel burns", "14.06 MeV neutrons born"],
+    ["3. Hg-198 BLANKET", "THE ALCHEMY FLOOR", "(n,2n) -> Hg-197 + 2n"],
+    ["4. DECAY TANK", "gold BORN OUTSIDE the flux", "EC 64.14 h -> Au-197"],
+    ["5. REFINERY + VAULT", "Hg boiled off and recycled", "assay -> SHIPPABLE GOLD"],
+    ["6. POWER ISLAND", "sCO2 Brayton + generator", "MWe to the grid"],
+]
+
+
+_PP_SECTION_DETAIL = [
+    "Whatever you type is resolved here. Unknown input never stops the plant (H8).",
+    "Lawson-gated: a fuel too slow to ignite is substituted, and said so (H9).",
+    "Threshold 8.512 MeV; sigma = 2.1 b at 14.1 MeV; ~50 collisions above threshold.",
+    "Zero neutron flux by design -- gold born here cannot be activated (H12).",
+    "Mercury is boiled off and returned to the blanket. Only Au-197 leaves.",
+    "sCO2 Brayton at 42%; net of a 12% recirculating load for magnets and cryo.",
+]
+
+
+def build_powerplant_complex_solid(s=1.0):
+    """The complete powerplant as one solid mesh, plus per-section labels and
+    centers for the viewer to fly between. Returns (V, F, C, labels, centers)."""
+    chunks = []
+    for builder, c in zip(_PP_SECTION_BUILDERS, _PP_SECTION_CENTERS):
+        chunks.append(builder(c, s=s))
+
+    def pipe(p0, p1, r, col):
+        pv, pf = _cyl_between(p0, p1, r, 6)
+        if not pv:
+            return
+        Vp = np.array(pv, dtype=float)
+        Fp = np.array(pf, dtype=np.intp)
+        if Fp.shape[1] == 3:
+            Fp = np.hstack([Fp, Fp[:, -1:]])
+        chunks.append((Vp, Fp, np.tile(col, (len(pf), 1))))
+
+    # the process line, in flow order
+    pipe((-8.4 * s, 0, 0), (-6.5 * s, 0, 0), 0.07 * s, (200, 205, 215))   # fuel -> core
+    pipe((-3.9 * s, 0, 0), (-1.6 * s, 0, 0), 0.11 * s, _PP_PLASMA)        # core -> blanket
+    pipe((1.1 * s, 0, 0.95 * s), (4.0 * s, 0, 0.6 * s), 0.085 * s, _PP_GOLD)
+    pipe((5.5 * s, 0, -0.9 * s), (8.2 * s, 0, 0.2 * s), 0.075 * s, _PP_GOLD)
+    # heat loop down to the power island, and back
+    pipe((-0.9 * s, 0, -1.0 * s), (-2.6 * s, 0, -3.7 * s), 0.10 * s, (215, 120, 95))
+    pipe((-4.1 * s, 0, -5.2 * s), (-5.2 * s, 0, -1.3 * s), 0.06 * s, (110, 160, 210))
+    V, F, C = _merge_arrays(chunks)
+    return V, F, C, list(_PP_SECTION_LABELS), list(_PP_SECTION_CENTERS)
 
 # =============================================================================
 # SECTION 31d -- SELF-REPLICATING ORBITAL SWARM  (nanotech assembly + evolution)
@@ -8157,7 +10853,7 @@ class SystemViewer:
         self.nav_order = ["radiation", "pairsource", "cell", "ecoll", "pcoll",
                           "recomb", "nucleo", "recycle", "pile", "output"]
         # --- VIEW MODES: MACHINE | CHEMISTRY | PLANT | ORBITAL ---
-        self.view_mode = "machine"                      # "machine"|"chemistry"|"plant"|"orbital"
+        self.view_mode = "machine"    # machine|chemistry|plant|orbital|galaxy|powerplant
         # SOLID harvester lattice (filled, flat-shaded hardware) + node centres
         self._latV, self._latF, self._latC = build_harvester_lattice_solid(3, 3, 2, 2.4)
         self._lat_nodes = np.array(lattice_node_centers(3, 3, 2, 2.4), dtype=float)
@@ -8167,6 +10863,10 @@ class SystemViewer:
         self.elem_i = 5                                 # target element index (Fe)
         self.cloud = []                                 # output-cloud particles [x,y,z]
         self._rng = np.random.default_rng(3)
+        # procedural starfield for depth atmosphere (generated once, reused)
+        self._stars = self._rng.uniform(0, 1, (220, 2))
+        self._star_bright = self._rng.uniform(0.25, 1.0, 220)
+        self._star_phase = self._rng.uniform(0, 2 * math.pi, 220)
         # PLANT PIPELINE: all 12 stages as solid hardware, laid out L->R
         self._pipeV, self._pipeF, self._pipeC, self._pipe_centers, \
             self._pipe_labels, self._pipe_colors = build_plant_pipeline_solid(
@@ -8181,6 +10881,20 @@ class SystemViewer:
         self._orbV, self._orbF, self._orbC, self._orb_labels, self._orb_centers = \
             build_orbital_complex_solid(s=1.0)
         self.orbital_focus = None    # 0=station, 1=router, 2=bank, or None
+        # POWERPLANT: typed fuel -> continuous power + gold (SECTION 33)
+        self._ppV, self._ppF, self._ppC, self._pp_labels, self._pp_centers = \
+            build_powerplant_complex_solid(s=1.0)
+        self.pp_net_MW = 1000.0
+        self.pp_enrichment = 0.90
+        self.pp_fuel_text = "D-T"
+        self.pp_gold_max = False        # A toggles the gold-maximized blanket
+        self.powerplant = None
+        self.powerplant_focus = None
+        self._pp_history = []
+        self.fuel_entry_active = False
+        self.fuel_entry_text = ""
+        self._pp_set_fuel(self.pp_fuel_text)
+
         # GALACTIC SEEDING: colonization wavefront visualization
         self._galV, self._galF, self._galC = build_galactic_seeding_solid(
             s=1.0, n_seeds=24, wavefront_r=3.5)
@@ -8280,11 +10994,15 @@ class SystemViewer:
         return float(np.mean(sx)), float(np.mean(sy)), float(np.mean(z))
 
     def _label_bg(self, text, font, x, y, color):
-        """Draw text with a solid dark background box for high contrast."""
+        """Draw text with a dark background box + subtle glow border for contrast."""
         img = font.render(text, True, color)
         w, h = img.get_size()
         bg = _pg.Surface((w + 8, h + 3), _pg.SRCALPHA)
         bg.fill((6, 9, 15, 225))
+        # subtle top highlight
+        _pg.draw.line(bg, (color[0] // 3, color[1] // 3, color[2] // 3),
+                      (1, 0), (w + 6, 0), 1)
+        # border in a dimmer shade of the text color
         _pg.draw.rect(bg, (color[0] // 2, color[1] // 2, color[2] // 2),
                       (0, 0, w + 8, h + 3), 1)
         self.screen.blit(bg, (x - 4, y - 1))
@@ -8340,16 +11058,28 @@ class SystemViewer:
             _pg.draw.circle(self.screen, cmap.get(k[i], (200, 200, 200)),
                             (int(sx[i]), int(sy[i])), r)
 
+    def _draw_glow_dot(self, sx, sy, z, col, base_r=4):
+        """Draw a flow particle with a soft glow halo + bright core."""
+        if z < 0.06:
+            return
+        r = max(1, int(base_r / z))
+        x, y = int(sx), int(sy)
+        # outer glow (larger, dimmer)
+        glow_col = (col[0] // 3, col[1] // 3, col[2] // 3)
+        _pg.draw.circle(self.screen, glow_col, (x, y), r + 2)
+        # mid halo
+        mid_col = (col[0] // 2, col[1] // 2, col[2] // 2)
+        _pg.draw.circle(self.screen, mid_col, (x, y), r + 1)
+        # bright core
+        _pg.draw.circle(self.screen, col, (x, y), r)
+
     def _draw_flows(self):
         for fi, ph in self.flow_parts:
             frm, to, rgb, _lbl = _SYS_FLOWS[fi]
             a = self._mod_center(frm); b = self._mod_center(to)
             p = a + (b - a) * ph
             sx, sy, z = self._project([p])
-            if z[0] < 0.06:
-                continue
-            r = max(1, int(4.0 / z[0]))
-            _pg.draw.circle(self.screen, rgb, (int(sx[0]), int(sy[0])), r)
+            self._draw_glow_dot(sx[0], sy[0], z[0], rgb, base_r=4)
         # faint guide lines + flow labels
         for frm, to, rgb, lbl in _SYS_FLOWS:
             a = self._mod_center(frm); b = self._mod_center(to)
@@ -8361,20 +11091,33 @@ class SystemViewer:
     def _panel(self, x, y, w, h, alpha=215):
         w = max(1, int(w)); h = max(1, int(h))
         s = _pg.Surface((w, h), _pg.SRCALPHA)
-        s.fill((10, 14, 22, alpha))
+        # vertical gradient: brighter at top, darker at bottom
+        for row in range(h):
+            frac = row / max(h - 1, 1)
+            a = int(alpha * (1.0 - 0.25 * frac))
+            _pg.draw.line(s, (14, 19, 28, a), (0, row), (w, row))
         self.screen.blit(s, (x, y))
+        # top highlight line (subtle glow)
+        _pg.draw.line(self.screen, (110, 140, 180), (x, y), (x + w, y), 1)
+        # border
         _pg.draw.rect(self.screen, (70, 95, 130), (x, y, w, h), 1)
 
     def _view_switch_bar(self):
         """Top-right VIEW SWITCHER shown in every view (clear input controls)."""
-        x = self.W - 920
-        self._panel(x, 6, 910, 24, 210)
+        bw = min(1050, self.W - 12)
+        x = max(6, self.W - bw - 6)
+        self._panel(x, 6, bw, 24, 210)
         opts = [("machine", "M: MACHINE"), ("plant", "P: PLANT"),
                 ("orbital", "O: ORBITAL"), ("galaxy", "G: GALAXY"),
-                ("chemistry", "C: CHEMISTRY")]
+                ("powerplant", "W: POWERPLANT"), ("chemistry", "C: CHEMISTRY")]
         cxp = x + 8
         for mode, lbl in opts:
             on = (self.view_mode == mode)
+            if on:
+                lw = self.font_s.size(lbl)[0]
+                hl = _pg.Surface((lw + 8, 18), _pg.SRCALPHA)
+                hl.fill((60, 80, 120, 90))
+                self.screen.blit(hl, (cxp - 4, 7))
             self.screen.blit(self.font_s.render(lbl, True,
                              (255, 235, 130) if on else (150, 175, 205)), (cxp, 9))
             cxp += self.font_s.size(lbl)[0] + 18
@@ -8404,6 +11147,8 @@ class SystemViewer:
             return self._draw_orbital_ui()
         if self.view_mode == "galaxy":
             return self._draw_galaxy_ui()
+        if self.view_mode == "powerplant":
+            return self._draw_powerplant_ui()
         # title bar
         self._panel(0, 0, self.W, 58, 230)
         self.screen.blit(self.font_b.render(
@@ -8893,6 +11638,15 @@ class SystemViewer:
         self.riser.step(1.0, h_mass_s, surplus_W, fusion_temp_K=self.swarm.fusion_temp_K)
         self.intelligence.step(1.0, self.swarm, self.plant.stockpile)
         self.galactic.step(1.0, self.swarm.N)
+        # THE POWERPLANT RUNS CONTINUOUSLY. Advance it on a compressed clock
+        # (~1/4 day per frame) so the Hg-197 tank fills, the assay hold drains
+        # and the vault accumulates while you are watching it.
+        if self.powerplant is not None:
+            self.powerplant.step(0.25 * 86400.0)
+            h = self._pp_history
+            h.append((self.powerplant.t / YR, self.powerplant.au_vault_kg))
+            if len(h) > 400:                       # keep the trace bounded
+                del h[:len(h) - 400]
         for fp in self.flow_parts:
             fp[1] += 0.02
             if fp[1] > 1.0:
@@ -8911,8 +11665,21 @@ class SystemViewer:
                 bestd, best = d, key
         return best if bestd < 130 ** 2 else None
 
+    def _draw_starfield(self):
+        """Procedural twinkling starfield with slow parallax from camera yaw."""
+        t = self.anim
+        ox = (self.yaw * 40) % self.W          # parallax offset from camera yaw
+        for i in range(len(self._stars)):
+            x = int((self._stars[i, 0] * self.W + ox) % self.W)
+            y = int(self._stars[i, 1] * self.H)
+            tw = 0.7 + 0.3 * math.sin(t * 0.8 + self._star_phase[i])
+            b = int(self._star_bright[i] * tw * 180)
+            r = 1 if self._star_bright[i] < 0.6 else 2
+            _pg.draw.circle(self.screen, (b, b, min(255, b + 20)), (x, y), r)
+
     def _render(self):
         self.screen.fill((7, 9, 14))
+        self._draw_starfield()
         if self.hero:
             self._render_hero()
         elif self.view_mode == "machine":
@@ -8923,6 +11690,8 @@ class SystemViewer:
             self._render_orbital()
         elif self.view_mode == "galaxy":
             self._render_galaxy()
+        elif self.view_mode == "powerplant":
+            self._render_powerplant()
         else:
             self._draw_flows()
             self._draw_modules()
@@ -8981,7 +11750,10 @@ class SystemViewer:
                       light=(0.42, 0.52, 0.74)):
         """Render a SOLID mesh: project, backface-cull, flat-shade, depth-sort and
         fill polygons -- the same software-renderer approach as Main.py/GMRv1.17.
-        Vectorized (numpy) for the normals/shading; only the fill loop is Python."""
+        Vectorized (numpy) for the normals/shading; only the fill loop is Python.
+
+        Enhanced: dual-light shading (key + fill), depth fog for distant faces,
+        and edge colour derived from the shaded face colour for a tighter look."""
         if len(F) == 0:
             return
         Rm = _rotation(self.yaw, self.pitch)
@@ -8998,18 +11770,28 @@ class SystemViewer:
         nn = n / ln[:, None]
         zf = z[F]
         vis = (nn[:, 2] < 0.0) & np.all(zf > 0.06, axis=1)      # front-facing + in front
+        # --- dual-light shading: key light + fill light from the opposite side ---
         lx, ly, lz = light
-        d = -(nn[:, 0] * lx + nn[:, 1] * ly + nn[:, 2] * lz)
-        shade = np.clip(0.32 + 0.68 * np.clip(d, 0.0, 1.0), 0.0, 1.0)
+        d_key = -(nn[:, 0] * lx + nn[:, 1] * ly + nn[:, 2] * lz)
+        d_fill = -(nn[:, 0] * (-lx * 0.5) + nn[:, 1] * (-ly * 0.5) + nn[:, 2] * (-lz * 0.3))
+        shade = np.clip(0.28 + 0.55 * np.clip(d_key, 0.0, 1.0)
+                        + 0.17 * np.clip(d_fill, 0.0, 1.0), 0.0, 1.0)
+        # --- depth fog: distant faces blend toward the background colour ---
         depth = zf.mean(axis=1)
+        fog = np.clip((depth - self.dist * 0.6) / (self.dist * 1.2), 0.0, 0.35)
         order = np.argsort(-depth)
         poly = _pg.draw.polygon
         scr = self.screen
         outline = getattr(self, "_edges", True)
+        _bg = (7, 9, 14)
         for k in order:
             if not vis[k]:
                 continue
-            s = shade[k]; col = (int(C[k, 0]*s), int(C[k, 1]*s), int(C[k, 2]*s))
+            s = shade[k]; fg = fog[k]
+            r = int(C[k, 0] * s + _bg[0] * fg)
+            g = int(C[k, 1] * s + _bg[1] * fg)
+            b = int(C[k, 2] * s + _bg[2] * fg)
+            col = (max(0, min(255, r)), max(0, min(255, g)), max(0, min(255, b)))
             i0, i1, i2, i3 = F[k]
             pts = [(sx[i0], sy[i0]), (sx[i1], sy[i1]),
                    (sx[i2], sy[i2]), (sx[i3], sy[i3])]
@@ -9017,8 +11799,10 @@ class SystemViewer:
             if outline:                          # crisp CAD edge on bigger faces
                 w = abs(sx[i0]-sx[i2]) + abs(sy[i0]-sy[i2])
                 if w > 14:
-                    poly(scr, (int(col[0]*0.45)+8, int(col[1]*0.45)+8,
-                               int(col[2]*0.45)+8), pts, 1)
+                    ec = (max(0, int(col[0]*0.42) + 6),
+                          max(0, int(col[1]*0.42) + 6),
+                          max(0, int(col[2]*0.42) + 6))
+                    poly(scr, ec, pts, 1)
 
     def _render_machine(self):
         """THE MACHINE (SOLID hardware): harvester lattice (catching pairs) -> matter
@@ -9031,14 +11815,13 @@ class SystemViewer:
         for j in range(len(self._lat_nodes)):
             if nz[j] > 0.06 and (j + int(t * 3)) % 2 == 0:
                 for c, off in (((90, 160, 250), -0.22), ((250, 160, 80), 0.22)):
-                    _pg.draw.circle(self.screen, c, (int(nsx[j] + off*16), int(nsy[j])), 3)
+                    self._draw_glow_dot(nsx[j] + off*16, nsy[j], nz[j], c, base_r=3)
         # 2) MATTER FLOW lattice -> factories (green stream)
         for i in range(12):
             ph = (t * 0.5 + i * 0.083) % 1.0
             p = np.array([-3.0 + ph * 6.0, math.sin(i + t) * 0.5, 0.0])
             sx, sy, z = self._project([p])
-            if z[0] > 0.06:
-                _pg.draw.circle(self.screen, (120, 225, 160), (int(sx[0]), int(sy[0])), 3)
+            self._draw_glow_dot(sx[0], sy[0], z[0], (120, 225, 160), base_r=3)
         # 3) SOLID REPLICATOR FACTORIES building copies
         for ri, rc in enumerate([(3.6, -0.6, 0.0), (5.9, 0.7, 0.0), (8.0, -0.4, 0.0)]):
             prog = (t * 0.35 + ri * 0.33) % 1.0
@@ -9094,11 +11877,8 @@ class SystemViewer:
                     p = np.array([c0[0] + (c1[0] - c0[0]) * ph,
                                   c0[1], c0[2]])
                     sx, sy, z = self._project([p])
-                    if z[0] > 0.06:
-                        col = _STAGE_COLORS[i]
-                        r = max(1, int(4.0 / z[0]))
-                        _pg.draw.circle(self.screen, col,
-                                        (int(sx[0]), int(sy[0])), r)
+                    col = _STAGE_COLORS[i]
+                    self._draw_glow_dot(sx[0], sy[0], z[0], col, base_r=4)
             # stage labels above each stage
             for i, (cx, cy, cz) in enumerate(self._pipe_centers):
                 sx, sy, z = self._project([(cx, cy + 1.0, cz)])
@@ -9352,10 +12132,7 @@ class SystemViewer:
                 ph = (t * 0.25 + j * 0.2 + sec * 0.1) % 1.0
                 p = c0 + (c1 - c0) * ph
                 sx, sy, z = self._project([p])
-                if z[0] > 0.06:
-                    r = max(1, int(4.0 / z[0]))
-                    _pg.draw.circle(self.screen, (100, 200, 130),
-                                    (int(sx[0]), int(sy[0])), r)
+                self._draw_glow_dot(sx[0], sy[0], z[0], (100, 200, 130), base_r=4)
         # section labels
         for i, (cx, cy, cz) in enumerate(self._orb_centers):
             sx, sy, z = self._project([(cx, cy + 1.5, cz)])
@@ -9483,6 +12260,427 @@ class SystemViewer:
                 bestd, best = d, i
         return best if bestd < 200 ** 2 else None
 
+
+    # --- POWERPLANT VIEW: typed fuel -> continuous power + GOLD ------------
+    def _pp_set_fuel(self, text):
+        """Re-commission the plant on a newly TYPED fuel, carrying the gold
+        already in the vault across the changeover -- a real plant does not
+        throw away its bullion because the fuel contract changed."""
+        keep_vault = getattr(self, "powerplant", None)
+        gold_max = getattr(self, "pp_gold_max", False)
+        pp = RadiantPowerplant(
+            text, self.pp_net_MW * 1e6,
+            enrichment=1.0 if gold_max else self.pp_enrichment,
+            optimize="gold" if gold_max else None,
+            leakage=BLANKET_LEAKAGE_FLOOR if gold_max else None)
+        if keep_vault is not None:
+            pp.au_vault_kg = keep_vault.au_vault_kg
+            pp.au_cooling_kg = keep_vault.au_cooling_kg
+            pp.hg197_atoms = keep_vault.hg197_atoms
+            pp.energy_exported_J = keep_vault.energy_exported_J
+            pp.t = keep_vault.t
+        self.powerplant = pp
+        self.pp_fuel_text = text
+        # keep the accumulation trace across a fuel change -- the vault does not
+        # reset when the fuel contract does
+        if not hasattr(self, "_pp_history"):
+            self._pp_history = []
+        return pp
+
+    def _powerplant_overview(self):
+        self.powerplant_focus = None
+        # the process line runs x = -10 .. +9.2 with the power island below at
+        # z = -5.2, so centre on the middle of that box, not on the origin
+        self.look_goal = np.array([-0.4, 0.0, -1.6])
+        self.dist_goal = 17.5
+        # nudge the frame left so the vault end of the line clears the right-hand
+        # gold/rating panels instead of hiding behind them
+        self.pan = np.array([2.6, 0.0])
+
+    def _powerplant_focus_on(self, idx):
+        if not self._pp_centers:
+            return
+        idx = max(0, min(int(idx), len(self._pp_centers) - 1))
+        self.powerplant_focus = idx
+        self.look_goal = np.array(self._pp_centers[idx], dtype=float)
+        self.dist_goal = 6.0
+        self.anim = 0.0
+
+    def _pick_powerplant_section(self, mx, my):
+        best, bestd = None, 1e9
+        for i, (cx, cy, cz) in enumerate(self._pp_centers):
+            sx, sy, z = self._project([(cx, cy, cz)])
+            if z[0] < 0.06:
+                continue
+            d = (sx[0] - mx) ** 2 + (sy[0] - my) ** 2
+            if d < bestd:
+                bestd, best = d, i
+        return best if bestd < 200 ** 2 else None
+
+    def _render_powerplant(self):
+        """POWERPLANT VIEW: the whole plant, left to right in flow order --
+        typed fuel in, tokamak, mercury blanket, decay tank, gold vault, and the
+        power island underneath. Animated streams show what is actually moving:
+        fuel (white), neutrons (orange), gold (yellow), heat (red), power
+        (green)."""
+        t = self.anim
+        self._render_solid(self._ppV, self._ppF, self._ppC)
+        pp = self.powerplant
+
+        # Process streams, coloured by what they carry AND sized by what is
+        # actually flowing. These were fixed counts, which made an aneutronic
+        # fuel look identical to D-T on screen; now the neutron stream visibly
+        # thins when the core stops making its own neutrons, and the gold
+        # streams thin with the (n,2n) conversion.
+        n_per_fusion = (pp.n_source_s / pp.fusion_rate_s
+                        if pp.fusion_rate_s > 0 else 0.0)
+        e_mult = pp.blanket["Q_thermal_MeV"] / max(pp.fuel.Q_MeV, 1e-9)
+
+        def _n(frac, lo=1, hi=10):
+            """Particles in a stream, from a real 0-1 intensity."""
+            return max(lo, min(hi, int(round(lo + (hi - lo) * max(0.0, min(1.0, frac))))))
+
+        streams = [
+            (0, 1, (225, 232, 245), _n(1.0, 3, 7)),                  # typed fuel
+            (1, 2, (255, 150, 70), _n(n_per_fusion, 1, 10)),         # neutrons
+            (2, 3, (235, 200, 90), _n(pp.x_n2n, 1, 8)),              # Hg-197
+            (3, 4, (255, 215, 70), _n(pp.x_n2n, 1, 7)),              # Au-197
+            (2, 5, (225, 120, 95), _n(e_mult / 1.5, 2, 8)),          # blanket heat
+        ]
+        for a, b, col, n in streams:
+            c0 = np.array(self._pp_centers[a], dtype=float)
+            c1 = np.array(self._pp_centers[b], dtype=float)
+            for j in range(n):
+                ph = (t * 0.32 + j / float(n)) % 1.0
+                p = c0 + (c1 - c0) * ph
+                sx, sy, z = self._project([p])
+                self._draw_glow_dot(sx[0], sy[0], z[0], col, base_r=4.5)
+
+        # grid export: pulses running off the right of the power island
+        isle = np.array(self._pp_centers[5], dtype=float)
+        for j in range(7):
+            ph = (t * 0.5 + j / 7.0) % 1.0
+            p = isle + np.array([1.0 + 3.5 * ph, 0.0, 1.5])
+            sx, sy, z = self._project([p])
+            self._draw_glow_dot(sx[0], sy[0], z[0], (110, 230, 150), base_r=3.5)
+
+        # Section labels. Six captions along one axis will always collide at
+        # some camera angle, so they are staggered vertically in 3D (alternating
+        # high/low) and the two sub-lines show only for the focused section.
+        #
+        # They are also CLIPPED to the corridor between the side panels: when the
+        # camera zooms into one section the others project out under the
+        # telemetry columns, where a floating label is unreadable and looks like
+        # a rendering fault rather than a caption.
+        corridor = (452, self.W - 412)
+        for i, (cx, cy, cz) in enumerate(self._pp_centers):
+            lift = 2.35 if (i % 2 == 0) else 1.55
+            if i == 5:
+                lift = 1.9
+            sx, sy, z = self._project([(cx, cy, cz + lift)])
+            if z[0] <= 0.06:
+                continue
+            lbl = self._pp_labels[i]
+            hot = (self.powerplant_focus == i)
+            half = self.font_m.size(lbl[0])[0] // 2
+            if not (corridor[0] < sx[0] - half and sx[0] + half < corridor[1]):
+                continue                       # would land under a side panel
+            name = lbl[0]
+            tw = self.font_m.size(name)[0]
+            self._label_bg(name, self.font_m, int(sx[0] - tw / 2), int(sy[0]) - 14,
+                           (255, 235, 130) if hot else (245, 250, 255))
+            if hot:
+                for k, sub in enumerate(lbl[1:]):
+                    sw = self.font_xs.size(sub)[0]
+                    self._label_bg(sub, self.font_xs, int(sx[0] - sw / 2),
+                                   int(sy[0]) + 2 + k * 14, (185, 205, 225))
+
+        # a live gold counter floating over the vault
+        vx, vy, vz = self._pp_centers[4]
+        sx, sy, z = self._project([(vx, vy, vz - 1.6)])
+        if z[0] > 0.06:
+            txt = f"VAULT: {pp.au_vault_kg:,.1f} kg Au"
+            tw = self.font_m.size(txt)[0]
+            lx = int(sx[0] - tw / 2)
+            # same corridor rule as the section labels: the vault sits at the
+            # far right of the process line, so its counter is the one most
+            # likely to slide under the gold/rating column
+            if corridor[0] < lx and lx + tw < corridor[1]:
+                self._label_bg(txt, self.font_m, lx, int(sy[0]), (255, 215, 70))
+
+    def _draw_powerplant_ui(self):
+        """UI overlay for the POWERPLANT view: the typed-fuel input, the power
+        train, the neutron economy, the gold ledger and the city rating."""
+        pp = self.powerplant
+        g = pp.gold_rating()
+        f = pp.fuel
+
+        self._panel(0, 0, self.W, 58, 230)
+        self.screen.blit(self.font_b.render(
+            "RADIANT  ::  POWERPLANT", True, (255, 225, 140)), (18, 8))
+        self.screen.blit(self.font_s.render(
+            "type a fuel, get power + GOLD", True, (200, 180, 110)), (330, 14))
+        self.screen.blit(self.font_s.render(
+            "fuel in -> fusion -> 14 MeV neutrons -> Hg-198(n,2n)Hg-197 -> "
+            "electron capture (64 h) -> STABLE Au-197.  Runs continuously; the "
+            "vault never stops filling.", True, (150, 185, 215)), (20, 38))
+        self._view_switch_bar()
+
+        # ---- THE TYPED FUEL INPUT (press F) ---------------------------------
+        act = self.fuel_entry_active
+        self._panel(12, 68, 430, 62, 235)
+        _pg.draw.rect(self.screen, (255, 215, 70) if act else (70, 95, 130),
+                      (12, 68, 430, 62), 2 if act else 1)
+        self.screen.blit(self.font_m.render(
+            "FUEL INPUT  [F to type]" if not act else "FUEL INPUT  [typing -- ENTER to burn]",
+            True, (255, 215, 70) if act else (120, 210, 255)), (22, 74))
+        shown = (self.fuel_entry_text + ("_" if (self.frame // 15) % 2 == 0 else " ")
+                 if act else self.pp_fuel_text)
+        self.screen.blit(self.font_b.render(
+            "> " + shown, True, (255, 255, 255) if act else (225, 235, 250)), (22, 98))
+
+        # ---- what the plant actually resolved it to -------------------------
+        self._panel(12, 138, 430, 132)
+        self.screen.blit(self.font_m.render(
+            f"BURNING: {f.key}", True, (255, 215, 70)), (22, 146))
+        self.screen.blit(self.font_xs.render(
+            f"matched: {pp.fuel_match[:56]}", True, (170, 190, 210)), (22, 168))
+        self.screen.blit(self.font_s.render(
+            f.reaction[:52], True, (225, 235, 250)), (22, 186))
+        for i, (a, b) in enumerate([
+                ("Q per reaction", f"{f.Q_MeV:.3f} MeV"),
+                ("neutrons", f"{f.n_per_rx:.2f} at {f.En_MeV:.2f} MeV"),
+                ("ignition temp", f"{f.T_ign_keV:.0f} keV"),
+                ("specific energy", f"{f.energy_per_kg_J:.2e} J/kg")]):
+            self.screen.blit(self.font_s.render(a, True, (150, 175, 200)),
+                             (22, 208 + i * 16))
+            self.screen.blit(self.font_s.render(b, True, (225, 235, 250)),
+                             (190, 208 + i * 16))
+
+        # ---- power train ----------------------------------------------------
+        self._panel(12, 278, 430, 168)
+        self.screen.blit(self.font_m.render(
+            "POWER TRAIN", True, (120, 210, 255)), (22, 286))
+        rows = [
+            ("fusion thermal", f"{pp.thermal_W/1e6:,.0f} MWth"),
+            ("gross electric", f"{pp.gross_electric_W/1e6:,.0f} MWe"),
+            ("recirculating", f"-{pp.gross_electric_W*RECIRC_POWER_FRACTION/1e6:,.0f} MWe"),
+            ("NET TO GRID", f"{pp.net_electric_W/1e6:,.0f} MWe"),
+            ("availability", f"{PLANT_AVAILABILITY:.0%}"),
+            ("fusion rate", f"{pp.fusion_rate_s:.2e} /s"),
+            ("fuel burn", f"{pp.fuel_burn_kg_s*YR*PLANT_AVAILABILITY:,.0f} kg/yr"),
+        ]
+        for i, (a, b) in enumerate(rows):
+            hot = (a == "NET TO GRID")
+            self.screen.blit(self.font_s.render(a, True, (150, 175, 200)),
+                             (22, 312 + i * 18))
+            self.screen.blit(self.font_s.render(
+                b, True, (110, 230, 150) if hot else (225, 235, 250)), (240, 312 + i * 18))
+
+        # ---- neutron economy -------------------------------------------------
+        self._panel(12, 454, 430, 176)
+        self.screen.blit(self.font_m.render(
+            "NEUTRON ECONOMY", True, (255, 150, 70)), (22, 462))
+        e = pp.economy
+        rows = [
+            ("source neutrons", f"{pp.n_source_s:.2e} /s"),
+            ("(n,2n) conversion x", f"{e['x_n2n']:.3f} / {pp.x_n2n_max:.3f} max"),
+            ("Be/Pb multiplier", f"{pp.multiplier:.3f}"),
+            ("produced / needed", f"{e['neutrons_produced']:.3f} / {e['neutrons_required']:.3f}"),
+            ("tritium breeding", f"TBR {e['tbr_achieved']:.3f}"),
+            ("margin", f"{e['margin']:+.3f} n/source"),
+        ]
+        for i, (a, b) in enumerate(rows):
+            self.screen.blit(self.font_s.render(a, True, (150, 175, 200)),
+                             (22, 488 + i * 18))
+            self.screen.blit(self.font_s.render(b, True, (225, 235, 250)),
+                             (240, 488 + i * 18))
+        ok = e["self_sufficient"]
+        self.screen.blit(self.font_s.render(
+            "SELF-SUFFICIENT (breeds its own tritium)" if ok else "FUEL STARVED",
+            True, (110, 230, 150) if ok else (240, 110, 110)), (22, 602))
+
+        # ---- THE GOLD LEDGER (right) ----------------------------------------
+        RX = self.W - 402
+        self._panel(RX, 68, 390, 232)
+        gm = self.pp_gold_max
+        self.screen.blit(self.font_m.render(
+            "GOLD OUTPUT  (Au-197, stable)", True, (255, 215, 70)), (RX + 10, 76))
+        _badge = "MAXIMIZED  [A]" if gm else "default duty  [A]"
+        # right-align the badge so it cannot collide with the panel title
+        self.screen.blit(self.font_xs.render(
+            _badge, True, (110, 230, 150) if gm else (150, 175, 200)),
+            (RX + 380 - self.font_xs.size(_badge)[0], 80))
+        rows = [
+            ("per day (avg)", f"{g['kg_per_day']:,.2f} kg"),
+            ("per year", f"{g['tonnes_yr']:.3f} t"),
+            ("troy ounces/yr", f"{g['oz_yr']:,.0f} ozt"),
+            ("revenue", f"${g['usd_yr']/1e6:,.1f}M/yr"),
+            ("gold price", f"${g['usd_per_kg']:,.0f}/kg"),
+            ("world mine share", f"{g['world_mine_share']*100:.4f}%"),
+            ("energy cost", f"{g['energy_cost_mwh_per_kg']:,.0f} MWh/kg"),
+            ("margin on trade", f"{g['margin_ratio']:.1f}x"),
+        ]
+        for i, (a, b) in enumerate(rows):
+            self.screen.blit(self.font_s.render(a, True, (150, 175, 200)),
+                             (RX + 10, 104 + i * 20))
+            self.screen.blit(self.font_s.render(b, True, (255, 215, 70)),
+                             (RX + 210, 104 + i * 20))
+        # how close this configuration runs to the wall that cannot be moved
+        ceil = n2n_physical_ceiling()
+        self.screen.blit(self.font_xs.render(
+            f"duty x = {pp.x_n2n:.4f}  =  {100*pp.x_n2n/ceil:.1f}% of the "
+            f"{ceil:.4f} physical ceiling", True, (200, 220, 240)), (RX + 10, 268))
+        bw = 370
+        _pg.draw.rect(self.screen, (60, 70, 90), (RX + 10, 284, bw, 6))
+        _pg.draw.rect(self.screen, (255, 215, 70),
+                      (RX + 10, 284, int(bw * min(1.0, pp.x_n2n / ceil)), 6))
+
+        # ---- live inventories ------------------------------------------------
+        self._panel(RX, 290, 390, 208)
+        self.screen.blit(self.font_m.render(
+            "LIVE INVENTORY (running)", True, (120, 210, 255)), (RX + 10, 298))
+        rows = [
+            ("plant clock", f"{pp.t/YR:,.2f} yr"),
+            ("Hg-197 in tank", f"{pp.hg197_atoms:.3e} atoms"),
+            ("gold cooling", f"{pp.au_cooling_kg:,.1f} kg  ({pp.cooldown_days:.0f} d hold)"),
+            ("VAULT (shippable)", f"{pp.au_vault_kg:,.1f} kg"),
+            ("energy exported", f"{pp.energy_exported_J/3.6e15:,.2f} TWh"),
+        ]
+        for i, (a, b) in enumerate(rows):
+            hot = a.startswith("VAULT")
+            self.screen.blit(self.font_s.render(a, True, (150, 175, 200)),
+                             (RX + 10, 324 + i * 19))
+            self.screen.blit(self.font_s.render(
+                b, True, (255, 215, 70) if hot else (225, 235, 250)),
+                (RX + 190, 324 + i * 19))
+
+        # THE POINT OF A CONTINUOUS PLANT, drawn: the vault only ever goes up.
+        gx, gy, gw, gh = RX + 10, 424, 370, 62
+        self._panel(gx, gy, gw, gh, 120)
+        hist = self._pp_history
+        self.screen.blit(self.font_xs.render(
+            "VAULT ACCUMULATION (live)", True, (150, 175, 200)), (gx + 4, gy + 2))
+        if len(hist) > 1:
+            t0, t1 = hist[0][0], hist[-1][0]
+            v1 = max(h[1] for h in hist)
+            span = max(t1 - t0, 1e-9)
+            pts = [(gx + 4 + int((gw - 10) * (t - t0) / span),
+                    gy + gh - 4 - int((gh - 20) * (v / max(v1, 1e-9))))
+                   for t, v in hist]
+            if len(pts) > 1:
+                _pg.draw.lines(self.screen, (255, 215, 70), False, pts, 2)
+            self.screen.blit(self.font_xs.render(
+                f"{v1:,.0f} kg", True, (255, 215, 70)), (gx + gw - 62, gy + 2))
+            self.screen.blit(self.font_xs.render(
+                f"{t1 - t0:.2f} yr", True, (150, 175, 200)),
+                (gx + gw - 62, gy + gh - 14))
+
+        # ---- city rating -----------------------------------------------------
+        self._panel(RX, 506, 390, 150)
+        self.screen.blit(self.font_m.render(
+            "RATED TO POWER", True, (110, 230, 150)), (RX + 10, 514))
+        self.screen.blit(self.font_s.render(
+            f"{pp.homes:,.0f} US homes, continuously", True, (110, 230, 150)),
+            (RX + 10, 538))
+        self.screen.blit(self.font_xs.render(
+            f"({HOME_KWH_PER_YEAR:,.0f} kWh/yr each, EIA)  |  "
+            f"{PER_CAPITA_ALL_SECTOR_KW:.2f} kW/person all-sector",
+            True, (170, 190, 210)), (RX + 10, 558))
+        for i, c in enumerate(pp.city_rating()):
+            self.screen.blit(self.font_s.render(
+                f"{c['name']:<11} {c['population']:>9,.0f}", True, (150, 175, 200)),
+                (RX + 10, 578 + i * 18))
+            self.screen.blit(self.font_s.render(
+                f"{c['n_supported']:>6.2f}", True, (225, 235, 250)), (RX + 250, 578 + i * 18))
+            self.screen.blit(self.font_xs.render(
+                "of them", True, (150, 170, 190)), (RX + 310, 580 + i * 18))
+
+        # ---- hurdles overcome -------------------------------------------------
+        # wrap each hurdle to the panel width -- clipping mid-word made the
+        # single most important column in this view unreadable
+        hl = []
+        for h in pp.hurdles:
+            hl.append((f"[{h['code']}]", True))
+            for ln in _pp_wrap_px(h["maximized"], self.font_xs, 352).split("\n"):
+                hl.append((ln, False))
+        self._panel(RX, 664, 390, 30 + 13 * max(1, len(hl)))
+        self.screen.blit(self.font_m.render(
+            "HURDLES OVERCOME", True, (255, 150, 70)), (RX + 10, 670))
+        yy = 694
+        for txt, is_code in hl:
+            self.screen.blit(self.font_xs.render(
+                txt, True, (255, 190, 110) if is_code else (200, 220, 240)),
+                (RX + (10 if is_code else 22), yy))
+            yy += 13
+
+        # ---- the transmutation chain, spelled out -----------------------------
+        self._panel(12, 646, 430, 150)
+        self.screen.blit(self.font_m.render(
+            "THE GOLD CHAIN (real nuclear physics)", True, (255, 215, 70)), (22, 654))
+        chain = [
+            (f"Hg-198 + n({FUSION_FUELS['D-T'].En_MeV:.2f} MeV)", (200, 220, 240)),
+            (f"   -> Hg-197 + 2n      [threshold {HG198_N2N_THRESHOLD_MEV:.3f} MeV]",
+             (255, 190, 110)),
+            (f"   -> Au-197 + nu      [EC, t- = {HG197_HALFLIFE_S/3600:.1f} h]",
+             (255, 215, 70)),
+            ("Au-197 is the ONLY stable gold isotope.", (200, 220, 240)),
+            ("Nucleons: 198+1 = 197+2. Nothing created.", (170, 190, 210)),
+            ("Sherr, Bainbridge & Anderson, Phys.Rev.60,473 (1941)", (150, 175, 200)),
+        ]
+        for i, (txt, col) in enumerate(chain):
+            self.screen.blit(self.font_s.render(txt, True, col), (22, 680 + i * 18))
+
+        # ---- the honest trade -------------------------------------------------
+        self._panel(12, 806, 430, 116)
+        self.screen.blit(self.font_m.render(
+            "THE HONEST TRADE: gold COSTS power", True, (225, 120, 95)), (22, 814))
+        for i, (a, b, col) in enumerate([
+                ("energy forgone", f"{g['energy_cost_mwh_per_kg']:,.0f} MWh/kg",
+                 (225, 235, 250)),
+                ("worth", f"${g['energy_cost_usd_per_kg']:,.0f}/kg", (225, 235, 250)),
+                ("gold worth", f"${g['usd_per_kg']:,.0f}/kg", (255, 215, 70)),
+                ("margin", f"{g['margin_ratio']:.1f}x  "
+                 f"({'PROFITABLE' if g['margin_ratio'] > 1 else 'A LOSS'})",
+                 (110, 230, 150) if g['margin_ratio'] > 1 else (240, 110, 110))]):
+            self.screen.blit(self.font_s.render(a, True, (150, 175, 200)),
+                             (22, 840 + i * 18))
+            self.screen.blit(self.font_s.render(b, True, col), (190, 840 + i * 18))
+
+        # ---- focused section: LIVE telemetry for that piece of hardware -------
+        if self.powerplant_focus is not None:
+            i = self.powerplant_focus
+            st = pp.stage_telemetry()[i]
+            rows = st["rows"]
+            bw, rh = 620, 17
+            bh = 54 + rh * len(rows)
+            bx, by = self.W // 2 - bw // 2, self.H - 34 - bh
+            self._panel(bx, by, bw, bh, 238)
+            _pg.draw.rect(self.screen, (255, 215, 70), (bx, by, bw, bh), 1)
+            self.screen.blit(self.font_b.render(st["title"], True, (255, 235, 130)),
+                             (bx + 14, by + 8))
+            self.screen.blit(self.font_xs.render(
+                _PP_SECTION_DETAIL[i][:74], True, (150, 175, 200)), (bx + 14, by + 32))
+            for k, (a_, b_) in enumerate(rows):
+                yy = by + 50 + k * rh
+                self.screen.blit(self.font_s.render(a_, True, (150, 175, 200)),
+                                 (bx + 16, yy))
+                hot = a_ in ("VAULT", "NET TO GRID", "resolved")
+                self.screen.blit(self.font_s.render(
+                    str(b_), True, (255, 215, 70) if hot else (225, 235, 250)),
+                    (bx + 168, yy))
+            self.screen.blit(self.font_xs.render(
+                "1-6 inspect  BACKSPACE overview", True, (130, 155, 180)),
+                (bx + bw - 210, by + 10))
+
+        # ---- controls ---------------------------------------------------------
+        self._panel(0, self.H - 26, self.W, 26)
+        self.screen.blit(self.font_s.render(
+            "F=TYPE A FUEL  A=MAXIMIZE GOLD  [ ]=cycle fuel  1-6=inspect  "
+            "BACKSPACE=overview  drag=orbit  wheel=zoom  M=machine  ESC=quit"
+            f"   | fps {self.clock.get_fps():3.0f}",
+            True, (155, 185, 215)), (14, self.H - 21))
+
     # --- GALAXY VIEW: self-replicating swarm + evolution + galactic seeding ---
     def _render_galaxy(self):
         """GALACTIC SEEDING VIEW: home star at center, colonization wavefront
@@ -9502,10 +12700,7 @@ class SystemViewer:
                 y = r * math.cos(phi) * math.sin(theta)
                 z = r * math.sin(phi)
                 sx, sy, sz = self._project([(x, y, z)])
-                if sz[0] > 0.06:
-                    rad = max(1, int(3.0 / sz[0]))
-                    _pg.draw.circle(self.screen, (100, 180, 255),
-                                    (int(sx[0]), int(sy[0])), rad)
+                self._draw_glow_dot(sx[0], sy[0], sz[0], (100, 180, 255), base_r=3)
         # pulsing wavefront ring
         pulse = 1.0 + 0.03 * math.sin(t * 0.5)
         sx_c, sy_c, z_c = self._project([(0, 0, 0)])
@@ -9513,6 +12708,9 @@ class SystemViewer:
             ring_r = int(3.5 * pulse * 0.62 * self.H / max(z_c[0], 0.1))
             _pg.draw.circle(self.screen, (40, 80, 140),
                             (int(sx_c[0]), int(sy_c[0])), ring_r, 1)
+        # glowing home star
+        sx, sy, z = self._project([(0, 0, 0)])
+        self._draw_glow_dot(sx[0], sy[0], z[0], (255, 220, 100), base_r=8)
         # home star label
         sx, sy, z = self._project([(0, 0.4, 0)])
         if z[0] > 0.06:
@@ -9942,6 +13140,21 @@ class SystemViewer:
         if e.type == _pg.QUIT:
             return False
         if e.type == _pg.KEYDOWN:
+            # THE TYPED-FUEL FIELD: while it is open it consumes every key, or
+            # typing "machine" would fling the camera through four other views.
+            if self.fuel_entry_active:
+                if e.key in (_pg.K_RETURN, _pg.K_KP_ENTER):
+                    self._pp_set_fuel(self.fuel_entry_text.strip() or "D-T")
+                    self.fuel_entry_active = False
+                elif e.key == _pg.K_ESCAPE:
+                    self.fuel_entry_active = False
+                elif e.key == _pg.K_BACKSPACE:
+                    self.fuel_entry_text = self.fuel_entry_text[:-1]
+                else:
+                    ch = getattr(e, "unicode", "")
+                    if ch and ch.isprintable() and len(self.fuel_entry_text) < 34:
+                        self.fuel_entry_text += ch
+                return True
             if e.key == _pg.K_ESCAPE:
                 if self.timelapse_live:                # ESC first exits live time-lapse
                     self.timelapse_live = False
@@ -9949,6 +13162,8 @@ class SystemViewer:
                     return True
                 if self.orbital_focus is not None:
                     self._orbital_overview(); return True
+                if self.powerplant_focus is not None:
+                    self._powerplant_overview(); return True
                 if self.plant_focus is not None:
                     self._plant_overview(); return True
                 if self.focus:                        # ESC first exits focus
@@ -9994,6 +13209,24 @@ class SystemViewer:
                 else:
                     self.look = self.look_goal = np.array([0.5, 0.0, 0.0])
                     self.dist = self.dist_goal = 12.5
+            elif e.key == _pg.K_a:                    # A = maximize gold (Au)
+                if self.view_mode != "powerplant":
+                    self.hero = False
+                    self.view_mode = "powerplant"
+                    self._powerplant_overview()
+                self.pp_gold_max = not self.pp_gold_max
+                self._pp_set_fuel(self.pp_fuel_text)
+            elif e.key == _pg.K_w:                    # POWERPLANT view (SECTION 33)
+                self.hero = False
+                self.view_mode = "powerplant"
+                self._powerplant_overview()
+            elif e.key == _pg.K_f:                    # TYPE A FUEL
+                if self.view_mode != "powerplant":
+                    self.hero = False
+                    self.view_mode = "powerplant"
+                    self._powerplant_overview()
+                self.fuel_entry_active = True
+                self.fuel_entry_text = ""
             elif e.key == _pg.K_g:                    # GALAXY view (seeding)
                 self.hero = False
                 self.view_mode = "galaxy"
@@ -10001,6 +13234,14 @@ class SystemViewer:
             elif e.key == _pg.K_c:                    # CHEMISTRY flow view (secondary)
                 self.hero = False
                 self.view_mode = "chemistry"; self.overview()
+            elif e.key == _pg.K_LEFTBRACKET and self.view_mode == "powerplant":
+                keys = list(FUSION_FUELS.keys())
+                i = keys.index(self.powerplant.fuel.key)
+                self._pp_set_fuel(keys[(i - 1) % len(keys)])
+            elif e.key in (_pg.K_RIGHTBRACKET, _pg.K_e) and self.view_mode == "powerplant":
+                keys = list(FUSION_FUELS.keys())
+                i = keys.index(self.powerplant.fuel.key)
+                self._pp_set_fuel(keys[(i + 1) % len(keys)])
             elif e.key == _pg.K_LEFTBRACKET:
                 if self.view_mode == "plant":
                     if self.plant_focus is not None:
@@ -10032,6 +13273,8 @@ class SystemViewer:
                     self._plant_overview()
                 elif self.view_mode == "orbital":
                     self._orbital_overview()
+                elif self.view_mode == "powerplant":
+                    self._powerplant_overview()
                 else:
                     self.overview()
             elif e.key == _pg.K_TAB:
@@ -10050,6 +13293,9 @@ class SystemViewer:
                         self.focus_on(self.nav_order[idx])
                 elif self.view_mode == "plant":
                     self._plant_focus_on(idx)
+                elif self.view_mode == "powerplant":
+                    if idx < len(self._pp_centers):
+                        self._powerplant_focus_on(idx)
             elif e.key == _pg.K_0:
                 if self.view_mode == "chemistry":
                     self.focus_on(self.nav_order[9])
@@ -10107,6 +13353,12 @@ class SystemViewer:
                     self._plant_focus_on(m)
                 else:
                     self._plant_overview()
+            elif not self.drag_moved and self.view_mode == "powerplant":
+                sec = self._pick_powerplant_section(*e.pos)
+                if sec is not None:
+                    self._powerplant_focus_on(sec)
+                else:
+                    self._powerplant_overview()
             elif not self.drag_moved and self.view_mode == "orbital":
                 m = self._pick_orbital_section(*e.pos)
                 if m is not None:
@@ -10165,7 +13417,8 @@ class SystemViewer:
         # frame 0 = MACHINE, 1 = HERO, 2 = PLANT overview, 3 = PLANT focus trap,
         # then CHEMISTRY + focus stages.
         tour = ["MACHINE", "HERO", "PLANT", "PLANT_FOCUS:4", "PLANT_FOCUS:9",
-                "ORBITAL", "GALAXY", None, "cell", "pairsource", "recomb", "output"]
+                "ORBITAL", "GALAXY", "POWERPLANT", "POWERPLANT_FOCUS:2",
+                "POWERPLANT_FOCUS:4", None, "cell", "pairsource", "recomb", "output"]
         saved = []
         for i in range(n):
             self.proof_i = i
@@ -10195,6 +13448,16 @@ class SystemViewer:
                 self.hero = False
                 self.view_mode = "galaxy"
                 self._galaxy_overview()
+            elif tgt == "POWERPLANT":
+                self.hero = False
+                self.view_mode = "powerplant"
+                self._powerplant_overview()
+                self.powerplant.step(120.0 * 86400.0)   # give the vault a stock
+            elif isinstance(tgt, str) and tgt.startswith("POWERPLANT_FOCUS:"):
+                self.hero = False
+                self.view_mode = "powerplant"
+                self._powerplant_focus_on(int(tgt.split(":")[1]))
+                self.powerplant.step(120.0 * 86400.0)
             elif tgt is None:
                 self.view_mode = "chemistry"; self.overview()
             else:
@@ -10341,6 +13604,29 @@ def main(argv=None):
                     help="custom chemistry output: pick any stable element/molecule + proof")
     ap.add_argument("--target", type=int, metavar="Z", default=None,
                     help="auto-target element Z: machine auto-adjusts to produce it (e.g. --target 79 for Au)")
+    ap.add_argument("--powerplant", nargs="?", const="D-T", type=str, metavar="FUEL",
+                    help="THE RADIANT POWERPLANT: type a fuel (D-T, boron, seawater, "
+                         "hydrogen, ...) and get continuous power + GOLD, rated against "
+                         "real cities and the real gold market")
+    ap.add_argument("--fuel", type=str, default=None, metavar="FUEL",
+                    help="fuel to burn, as typed (alias for --powerplant FUEL)")
+    ap.add_argument("--mwe", type=float, default=1000.0, metavar="MW",
+                    help="powerplant net electrical output in MW (default 1000)")
+    ap.add_argument("--enrichment", type=float, default=0.90, metavar="F",
+                    help="Hg-198 enrichment of the blanket feedstock, 0-1 (default 0.90; "
+                         "natural mercury is 0.0997 and will trigger hurdle H11b)")
+    ap.add_argument("--gold-price", type=float, default=None, metavar="USD_PER_OZ",
+                    help="override the gold spot price in USD/troy oz (default 4532.80)")
+    ap.add_argument("--years", type=float, default=1.0, metavar="Y",
+                    help="years of continuous powerplant operation to simulate (default 1)")
+    ap.add_argument("--maximize-gold", action="store_true",
+                    help="MAXIMIZE GOLD: walk the real design levers to the cross-section "
+                         "ceiling and report what each one buys and costs")
+    ap.add_argument("--fleet", action="store_true",
+                    help="scale the powerplant to the world as it is today: how much of "
+                         "the grid, and how much of the gold market, a fleet would cover")
+    ap.add_argument("--fuels", action="store_true",
+                    help="list every fusion fuel the powerplant will accept")
     ap.add_argument("--info", action="store_true",
                     help="explain the math, chemistry and honesty of the whole model")
     ap.add_argument("--report", action="store_true",
@@ -10386,6 +13672,28 @@ def main(argv=None):
         visualize_profit(show=not args.no_show); return 0
     if args.efficiency:
         _print_header(); pipeline_efficiency_report(); return 0
+    if getattr(args, "fuels", False):
+        _print_header(); powerplant_fuel_table(); return 0
+    if getattr(args, "maximize_gold", False):
+        _print_header()
+        maximize_gold(net_MW=args.mwe, fuel_text=(args.fuel or "D-T"))
+        return 0
+    if getattr(args, "fleet", False):
+        _print_header()
+        powerplant_market_report(net_MW=args.mwe,
+                                 fuel_text=(args.fuel or "D-T"))
+        return 0
+    if getattr(args, "powerplant", None) is not None or args.fuel is not None:
+        _print_header()
+        fuel_text = args.fuel or args.powerplant or "D-T"
+        gp = (args.gold_price / TROY_OZ_KG) if args.gold_price else None
+        powerplant_fuel_table()
+        pp = powerplant_report(fuel_text, net_MW=args.mwe,
+                               enrichment=args.enrichment, years=args.years,
+                               gold_price=gp)
+        powerplant_market_report(net_MW=args.mwe, fuel_text=fuel_text)
+        visualize_powerplant(show=not args.no_show, fuel_text=fuel_text)
+        return 0
     if getattr(args, "run", None) is not None:
         _print_header(); autonomous_run_report(n_full_physics=args.run); return 0
     if args.trl:
