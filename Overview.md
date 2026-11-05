@@ -1,6 +1,6 @@
 # RADIANT — Technical Overview
 
-Authoritative feature index for [`Radiant.py`](Radiant.py) (~12,550 lines, single file).
+Authoritative feature index for [`Radiant.py`](Radiant.py) (~22,600 lines, single file).
 Each entry names the **SECTION marker** (grep the text to jump), what it does, and the key
 functions/classes. Conventions: PascalCase classes, snake_case functions, UPPER_SNAKE
 constants, all physics in **SI units (CODATA 2018 / PDG 2024)**.
@@ -10,7 +10,7 @@ Every stage is measured against its theoretical‑max throughput; the bottleneck
 and auto‑tuned. The system is fully autonomous — self‑building, self‑seeding, self‑replicating,
 self‑repeating from void to galaxy.
 
-Run `python3 Radiant.py --selftest` (409 checks) to validate every subsystem.
+Run `python3 Radiant.py --selftest` (482 checks) to validate every subsystem.
 
 ---
 
@@ -30,7 +30,7 @@ Run `python3 Radiant.py --selftest` (409 checks) to validate every subsystem.
 | **9 — HONESTY LAYER** | conservation + Second‑Law audit (refuses magic) | `honesty_audit, extended_honesty_audit` |
 | **10 — QED REALITY CHECK** (`--qed`) | why the vacuum can't be mined | `qed_reality_check` |
 | **11 — FEASIBILITY REPORT** (`--feasibility`) | to‑scale engineering pass/fail | `feasibility_report` |
-| **12 — SELF‑TEST** (`--selftest`) | 409 physics/geometry/audit/nuclear/probe/closed‑loop/powerplant unit checks | `selftest` |
+| **12 — SELF‑TEST** (`--selftest`) | 482 physics/geometry/audit/nuclear/probe/closed‑loop/powerplant unit checks | `selftest` |
 | **13 — PARAMETER SWEEP** (`--sweep`) | build‑time → reach‑time scan | `sweep` |
 | **13b — HURDLE 2: galactic expansion** | von‑Neumann colonization wavefront | `galactic_expansion` |
 | **13c — HURDLE 3: eternal computation** | Dyson reversible‑compute bound | `eternal_computation` |
@@ -42,7 +42,7 @@ Run `python3 Radiant.py --selftest` (409 checks) to validate every subsystem.
 | **19 — HARVESTING / SEPARATION / TRAP** | Penning/Brillouin/mirror/lifetime physics | `cyclotron_frequency, brillouin_density_limit, magnetic_mirror_loss_cone, trap_annihilation_lifetime` |
 | **20 — CONDITIONING CHEMISTRY** (`--chemistry`) | Saha, recombination, nucleosynthesis net, bonds | `saha_ionization_fraction, radiative_recombination_rate, nucleosynthesis_network, bond_ionicity, binding_energy_curve, chemistry_report` |
 | **21 — THE SUBSYSTEM PLANT** (`--parts`) | 12 stages, each with `.step()` + telemetry | `Subsystem, EMHLPlant, parts_report` |
-| **22 — MATH PROOFS** (`--proofs`) | 22 verified theorems (P1–P22, incl. powerplant P17–P22) | `MathProof, _proofs, proofs_report` |
+| **22 — MATH PROOFS** (`--proofs`) | 25 verified theorems (P1–P25, incl. powerplant P17–P23) | `MathProof, _proofs, proofs_report` |
 | **23 — IN‑DEPTH REPORTS** | nuclear / info / validity report generators | `nuclear_report, info_report, validity_report` |
 | **24 — PARTICLE‑LEVEL TRAP MICRO‑SIM** (`--trap`) | Boris‑pusher e⁺/e⁻/p/γ sim; annihilation→2γ, recombination | `TrapConfig, PenningTrapSim, trap_report` |
 | **25 — HURDLE 4: BEYOND IRON** (`--rprocess`) | neutron capture → gold/uranium cost | `neutron_separation_energy_MeV, heavy_element_cost, rprocess_report` |
@@ -60,11 +60,13 @@ Run `python3 Radiant.py --selftest` (409 checks) to validate every subsystem.
 | **31d2b — PROBE PROPULSION & TRANSIT** | Tsiolkovsky rocket equation, ISM transit survival | `tsiolkovsky_mass_ratio, probe_propulsion_budget, probe_transit_physics, BootstrappingSequence` |
 | **31d2c — STELLAR TYPES** | real per‑type luminosity, lifetime, Kroupa‑IMF demographics | `StellarType, STELLAR_TYPES, sample_stellar_type` |
 | **31d3 — SYSTEM COLONIZER** | one colonized star system: swarm + riser + bootstrap + probes | `SystemColonizer, GalacticSeeding, autonomous_run_report` |
+| **31d5 — THE REPLICATION CYCLE** | the closed loop as real hardware: one von‑Neumann cycle at system scale (REPLICATION tab) | replication‑cycle mesh + renderer (`_repV/_repF/_repC`) |
 | **31e — AUTOMATED ELEMENT TARGETING** | machine auto‑adjusts parameters to produce target Z | `auto_target_element` |
 | **32 — CUSTOM CHEMISTRY OUTPUT** (`--output`) | pick a stable element/molecule + synthesis proof | `OUTPUT_ELEMENTS, OUTPUT_MOLECULES, element_synthesis_proof, molecule_synthesis_proof, chemistry_output_report` |
 | **9b — TECHNOLOGY READINESS LEVEL AUDIT** (`--trl`) | NASA 9‑level engineering maturity per subsystem | `TRL_AUDIT, trl_report` |
 | **27 / 27b — INTERACTIVE 3D VIEWERS** | pygame software renderer + live time‑lapse (T key) | `RadiantViewer, SystemViewer, run_viewer, _timelapse_reset, _timelapse_frame, _render_timelapse_paused_overlay` |
 | **33 — THE RADIANT POWERPLANT** (`--powerplant`, `--fuels`, `--fleet`) | typed‑fuel fusion plant: D‑T neutron economy, Hg‑198→Au‑197 transmutation, gold output, city/gold ratings, hurdles H8–H13 (incl. H11b/H11c) | `FusionFuel, FUSION_FUELS, resolve_fuel, neutron_economy, n2n_collisions_above_threshold, n2n_reaction_probability, gold_activation_state, RadiantPowerplant, powerplant_fuel_table, powerplant_report, powerplant_market_report, build_powerplant_complex_solid` |
+| **33b — POWERPLANT HARDWARE** | six real buildings as solid geometry (fuel → core → blanket → decay tank → vault → power island) | `_PP_SECTION_BUILDERS, _PP_SECTION_CENTERS, _PP_PART_LOCAL, _PP_PART_GROUPS, _PP_PART_ANCHORS` |
 | **15 — MAIN** | CLI dispatch; default = 3D viewer | `main, _print_header, _print_viewer_banner` |
 
 *(Section numbers reflect the file's build order; a few are out of numeric sequence — grep the
@@ -105,20 +107,27 @@ Each is stated, derived, and **verified in code** (wired into `--selftest`):
 | P10 | Bekenstein bound (max structure in a region) |
 | P11 | Sakharov conditions → net baryon creation is possible |
 | P12 | Fusion self‑power → profit outscales; matter must be replenished |
+| P13 | von Neumann replication → logistic swarm growth |
+| P14 | Elemental state rising: exothermic below Fe, endothermic above |
+| P15 | Swarm intelligence: compute cost negligible vs plant power |
+| P16 | Galactic seeding: subluminal wavefront, bounded by reachable cosmos |
 | P17 | Mercury → gold is a MEASURED transmutation (Hg‑198(n,2n)Hg‑197 → EC → Au‑197) |
-| P18 | D‑T neutron energy (14.06 MeV) exceeds the Hg‑198(n,2n) threshold (8.5286 MeV) |
-| P19 | Neutron economy: 1 + x ≥ TBR + parasitic (tritium self‑sufficiency) |
-| P20 | N2n multiplier ceiling: x ≤ σ(n,2n)/σ_total at enrichment (bounded by cross‑sections) |
-| P21 | The powerplant creates no mass or energy (conservation audit) |
+| P18 | The gold reaction pays its own neutron bill ((n,2n) is a multiplier) |
+| P19 | One neutron, at most one gold atom — kinematically capped, no runaway |
+| P20 | Gold costs power (the honest trade; heat ledger debits Q, not threshold) |
+| P21 | The powerplant creates no mass or energy (conservation audit — refinery, not source) |
+| P22 | The grid rating is arithmetic on measured demand, not marketing |
 | P23 | Gold conversion capped at σ(n,2n)/σ_nonelastic = 0.724; 27.6% unavailable |
-| P22 | Gold margin > 1: the gold is worth more than the electricity forgone to make it |
+| P24 | Ambient pairs alone: 1 kg takes longer than the universe's age |
+| P25 | Every natural element has a production route — graded honestly (MEAS/MODEL/*FTR) |
 
 ---
 
 ## The 3D viewer (SECTIONS 27 / 27b / 31)
 
-- **`SystemViewer`** — the main viewer. Modes: `machine` (default), `chemistry` (secondary),
-  `powerplant` (W key), plus the `hero` cell showcase (X). Renders **solid, flat‑shaded, depth‑sorted, backface‑culled
+- **`SystemViewer`** — the main viewer. Modes: `machine` (M, default), `chemistry` (C),
+  `plant` (P), `orbital` (O), `galaxy` (G), `replication` (R), `powerplant` (W), `charts`
+  (V — all 8 figures in‑app), plus the `hero` cell showcase (X). Renders **solid, flat‑shaded, depth‑sorted, backface‑culled
   polygons** (`_render_solid`) — the same software‑renderer approach as `Main.py` / `GmansRunV1.17.py`.
   **Live time‑lapse mode** (T key): a pausable, loopable cinematic playback of the full arc
   (seed craft → void → replicate → galaxy), reusing the same `_timelapse_frame` body as the
@@ -147,7 +156,9 @@ Each is stated, derived, and **verified in code** (wired into `--selftest`):
 frames) · `radiant_emhl.png` (twin) · `radiant_physics.png` (physics/chemistry) ·
 `radiant_galactic.png` (expansion) · `radiant_trap.png` (particle sim) ·
 `radiant_creation.png` (matter creation) · `radiant_profit.png` (efficiency/EROI) ·
-`radiant_powerplant.png` (powerplant: enrichment, neutron budget, assay cooldown, fleet ceiling).
+`radiant_powerplant.png` (powerplant: enrichment, neutron budget, assay cooldown, fleet ceiling) ·
+`gold.png` (`--gold-charts`: vault fill, per‑fuel feed, scaling, inventory, revenue, fleet vs
+world mine production).
 
 ---
 
@@ -278,8 +289,8 @@ of live physics, rendered by the POWERPLANT tab (keys **1–6**) and guarded by
 `stage telemetry covers all six plant sections` / `telemetry is LIVE`.
 
 
-CLI: `--powerplant [FUEL]`, `--fuel FUEL`, `--fuels`, `--maximize-gold`, `--fleet`, `--mwe`, `--enrichment`,
-`--gold-price`, `--years`.
+CLI: `--powerplant [FUEL]`, `--fuel FUEL`, `--fuels`, `--maximize-gold`, `--fleet`,
+`--gold-charts`, `--mwe`, `--enrichment`, `--gold-price`, `--years`.
 
 For the cited, end-to-end proof that this makes gold at mass scale, see [About.md](About.md).
 For the full project status and roadmap, see [narrative.md](narrative.md);

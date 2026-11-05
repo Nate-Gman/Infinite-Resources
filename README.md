@@ -18,7 +18,7 @@ self‑repeats the entire matter‑creation cycle from void to galaxy.
 > **engineering hurdle** and pushed to the ceiling real physics allows — and flagged clearly
 > where it crosses into frontier science.
 
-- **One file:** [`Radiant.py`](Radiant.py) — ~13,000 lines, 409‑check self‑test.
+- **One file:** [`Radiant.py`](Radiant.py) — ~22,600 lines, 482‑check self‑test.
 - **Dependencies:** `numpy`, `matplotlib`, `pygame` (scipy optional; pygame only for the 3D viewer).
 
 ---
@@ -28,7 +28,7 @@ self‑repeats the entire matter‑creation cycle from void to galaxy.
 ```bash
 python3 -m pip install numpy matplotlib pygame
 python3 Radiant.py            # opens the interactive 3D MACHINE viewer (default)
-python3 Radiant.py --selftest # 417 physics/geometry/powerplant unit checks + conservation audit
+python3 Radiant.py --selftest # 482 physics/geometry/powerplant unit checks + conservation audit
 python3 Radiant.py --run      # autonomous closed loop: seed -> galaxy (8 systems, ~2 sec)
 python3 Radiant.py --efficiency  # pipeline throughput: achieved vs theoretical-max per stage
 python3 Radiant.py --trl      # Technology Readiness Level audit (NASA 9-level scale)
@@ -63,14 +63,20 @@ The default view is **THE MACHINE** — real, solid, flat‑shaded hardware to s
 | **V** | STATS: all 8 analysis figures **inside the viewer** (twin, physics, galactic, trap, profit, powerplant, gold, creation) — 1‑8 / `[` `]` / click to switch |
 | **L** | toggle LOOP mode for the live time‑lapse (default ON — seamless cycle repeat) |
 | **SPACE** | pause/resume the live time‑lapse (or pause the normal viewer); while paused **RIGHT** single‑steps one frame (forward only — the sim has no rewind) |
-| **[** and **]** | pick the **output element** (spewed as a cloud) + its synthesis proof, or cycle fuels in POWERPLANT view |
+| **[** and **]** (or **E** for `]`) | pick the **output element** (spewed as a cloud) + its synthesis proof; cycle fuels in POWERPLANT, parts in PLANT, foci in ORBITAL, charts in STATS |
 | **I** | ABOUT / VALIDITY panel (argues the science from known physics) |
-| **P** | cycle the on‑screen **math proof** (verified live) |
-| **1–9, 0 / TAB / click** | in CHEMISTRY view, fly the camera **into** a stage's real mechanism |
-| **W** | POWERPLANT view: typed fuel → continuous power + GOLD (3D hardware, live telemetry) |
+| **P** | PLANT view — all 12 pipeline stages as solid hardware (SPEC/MEAS/FRONTIER‑tagged); once there, **P** cycles the on‑screen **math proof** (verified live) |
+| **1–9, 0 / TAB / click** | in CHEMISTRY view, fly the camera **into** a stage's real mechanism; elsewhere cycle the focused part/chart/section |
+| **O** | ORBITAL view: the replicating swarm + riser loop around its star |
+| **G** | GALAXY view: seeding wavefront in detail — probe propulsion (Tsiolkovsky), bootstrap phases, per‑system swarm/riser loops, IMF stellar types; click a star to inspect |
+| **R** | REPLICATION view: the closed loop as real hardware (one von‑Neumann cycle); in STATS view, **R** rebuilds charts against the current sim state |
+| **W** | POWERPLANT view: typed fuel → continuous power + GOLD (3D hardware, live telemetry; 1–6 inspect the sections) |
 | **F** | TYPE A FUEL: live typed‑fuel entry for the powerplant (resolves any alias) |
 | **A** | MAXIMIZE GOLD (Au): toggle the gold‑maximized blanket in the POWERPLANT tab |
-| **R** | reset view |
+| **B** | CUTAWAY cross‑section toggle; **−** / **=** slide the plane deeper/nearer |
+| **S** | in STATS view, export the current chart to `radiant_chart_<name>.png` |
+| **Z** | in STATS view, zoom the current chart (arrows pan) |
+| **HOME / BACKSPACE** | reset camera / return to the current view's overview |
 | **ESC** | exit mode / quit |
 
 The window opens at your desktop resolution (up to 1920×1080). Every panel — telemetry,
@@ -121,7 +127,7 @@ The full matter chain, each link grounded and each hard wall maximized:
    mercury → Be/Pb multiplier layer (H11b), unusable feedstock → forced enrichment (H11c),
    activated bullion → shielded decay + assay hold (H12), market saturation → fleet ceiling
    (H13). The invariant: **gold is the
-   product**, for any typed input. Proofs P17–P22 verify the physics live.
+   product**, for any typed input. Proofs P17–P23 verify the physics live.
    The POWER tab also meters the full **A=197 electron‑capture cascade** —
    Pb‑197 → Tl‑197 → Hg‑197 → Au‑197 (every link a real isotope, Z 82→79) —
    with live tank inventories, per‑stage decay heat (~38 MWth recovered), and
@@ -169,7 +175,7 @@ bills the plant for energy it never lost.
 
 The threshold is **derived** from |Q| (`E_th = |Q|·(mₙ+M)/M`), not stored separately, because
 two literals describing one reaction will eventually disagree — as these had, by 0.017 MeV.
-Ten self-test checks guard the relationship. *(Full account: [About.md §11b](About.md).)*
+Fourteen self-test checks guard the relationship. *(Full account: [About.md §11b](About.md).)*
 
 ### The books balance exactly
 
@@ -294,8 +300,8 @@ design; the reactor is the open problem. Nothing is over-unity — but it is not
 
 ```bash
 python3 Radiant.py --powerplant   # full derivation + radiant_powerplant.png
-python3 Radiant.py --proofs       # P17–P22 verify the gold chain live
-python3 Radiant.py --selftest     # 409 checks
+python3 Radiant.py --proofs       # P17–P23 verify the gold chain live
+python3 Radiant.py --selftest     # 482 checks
 python3 Radiant.py --trl          # the maturity audit above, unfiltered
 python3 Radiant.py --maximize-gold # push the blanket to its cross-section ceiling
 python3 Radiant.py --fleet        # scaled to world electricity + the gold market
@@ -356,9 +362,9 @@ a **dynamic equilibrium** — the machine must keep harvesting (it out‑paces d
 | Command | Does |
 |---|---|
 | `--report` | full twin run + audit + all reports + `radiant_emhl.png`, `radiant_physics.png` (the same sheets the **V STATS** tab renders inside the viewer — no detached windows there) |
-| `--selftest` | 409 physics/geometry/powerplant/audit unit checks + extended honesty audit |
+| `--selftest` | 482 physics/geometry/powerplant/audit unit checks + extended honesty audit |
 | `--info` | explain every part + the math/chemistry + a **validity** argument |
-| `--proofs` | print & verify the math proofs (P1–P12) |
+| `--proofs` | print & verify the math proofs (P1–P25) |
 | `--chemistry` | radiation → atoms → elements → solids (with real energies) |
 | `--output` | custom chemistry output: any stable element/molecule + synthesis proof |
 | `--target Z` | auto‑target element Z: machine auto‑adjusts to produce it (e.g. `--target 79` for Au) |
@@ -377,6 +383,7 @@ a **dynamic equilibrium** — the machine must keep harvesting (it out‑paces d
 | `--fuel FUEL` | alias for `--powerplant FUEL` (e.g. `--fuel boron`, `--fuel seawater`) |
 | `--fuels` | list every fusion fuel the powerplant accepts (keys, aliases, Q, neutron energy, difficulty) |
 | `--maximize-gold` | push the blanket to the cross-section ceiling; the full lever ladder with costs |
+| `--gold-charts` | gold production charts → `gold.png` (vault fill, fuels, scaling, inventory, revenue, fleet vs market) |
 | `--fleet` | scale the powerplant to the world today: grid coverage, gold output vs world mine supply, fleet ceiling |
 | `--mwe MW` | powerplant net electrical output in MW (default 1000) |
 | `--enrichment F` | Hg‑198 enrichment 0–1 (default 0.90; 0.0997 = natural mercury → triggers H11b) |
@@ -394,7 +401,7 @@ a **dynamic equilibrium** — the machine must keep harvesting (it out‑paces d
 
 Every run is checked by `honesty_audit()` (6 original checks) plus `extended_honesty_audit()`
 (21 additional checks covering swarm, riser, intelligence, galactic, probe, and closed‑loop
-conservation) and the 409‑check `--selftest` suite (covering powerplant physics, fuel catalog, neutron economy, transmutation blanket, viewer rendering, and conservation):
+conservation) and the 482‑check `--selftest` suite (covering powerplant physics, fuel catalog, neutron economy, transmutation blanket, viewer rendering, and conservation):
 
 - **No over‑unity:** created rest‑mass energy ≤ energy drawn (E=mc²).
 - **Reservoir respected:** energy drawn ≤ the free‑energy budget.

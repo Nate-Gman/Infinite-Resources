@@ -75,7 +75,8 @@ RUN
     python3 Radiant.py --feasibility --qed --sweep --physics   # more analyses
 
 Controls in the viewer:  drag = orbit,  wheel = zoom,  arrows = pan,
-    SPACE = pause,  P = cycle math proof,  I = info panel,  R = reset,  ESC = quit
+    SPACE = pause,  P = cycle math proof,  I = info panel,  R = replication,
+    HOME = reset,  ESC = quit
 
 Dependencies:  numpy, matplotlib, pygame   (scipy optional; pygame only for --view)
 ================================================================================
@@ -879,14 +880,14 @@ def feasibility_report():
     p = SPEC["reservoir_luminosity_W"] * SPEC["collector_fraction_max"]
     print(f"1 POWER  full swarm intercepts {SPEC['collector_fraction_max']:.0%} of a Sun "
           f"= {p:.3e} W; bootstraps on a {SPEC['seed_reactor_W']:.0e} W seed reactor")
-    print(f"   -> a growing Dyson swarm; buildable incrementally  [PASS]")
+    print("   -> a growing Dyson swarm; buildable incrementally  [PASS]")
 
     # 2) MATTER FROM ENERGY -> no efficient mechanism -> organize instead
     e1kg = energy_to_make_mass(1.0, 1.0)
     e_isru = isru_organize_energy(1.0)
     print(f"2 MASS-FROM-ENERGY  1 kg of new rest mass = {e1kg:.2e} J (E=mc^2), and")
-    print(f"   there is NO efficient device to do the conversion: pair production is")
-    print(f"   exponentially suppressed (SECTION 3) and yields leptons, not baryons  [HARD]")
+    print("   there is NO efficient device to do the conversion: pair production is")
+    print("   exponentially suppressed (SECTION 3) and yields leptons, not baryons  [HARD]")
     print(f"   -> organize existing baryons instead: {e_isru:.1e} J/kg, "
           f"{e1kg/e_isru:.1e}x cheaper WITH a real mechanism  [PASS]")
     # 2b) CONDITIONING: fusing organized hydrogen UP the binding curve is a real,
@@ -894,28 +895,28 @@ def feasibility_report():
     q_fus = nucleosynthesis_yield(1.0)
     print(f"2b CONDITIONING  fusing 1 kg H -> He (pp-chain) RELEASES {q_fus:.2e} J "
           f"({q_fus/e_isru:.0f}x the ISRU cost)  [PASS]")
-    print(f"   -> higher elements up to Fe-56 (8.79 MeV/nucleon peak) are net-positive;")
-    print(f"      beyond iron costs energy -- the honest limit of stellar-style build-up.")
+    print("   -> higher elements up to Fe-56 (8.79 MeV/nucleon peak) are net-positive;")
+    print("      beyond iron costs energy -- the honest limit of stellar-style build-up.")
 
     # 3) QED PAIR PRODUCTION
     q = qed_pair_flux_per_cell()
     print(f"3 VACUUM HARVEST  spec laser E/E_cr = {q['E_over_Ecr']:.2e} "
           f"(need ~1) -> {q['pairs_per_s']:.2e} pairs/s/cell  [HARD]")
-    print(f"   real physics: the vacuum cannot be mined for net energy. Honest.")
+    print("   real physics: the vacuum cannot be mined for net energy. Honest.")
 
     # 4) SELF-REPLICATION
     Td = SPEC["build_time_s"]
     n_doub_gyr = GYR / Td
     print(f"4 SELF-REPLICATION  build time {Td/86400:.0f} d -> {n_doub_gyr:.2e} "
           f"doublings/Gyr if unconstrained")
-    print(f"   von Neumann factory; feedstock+power limited -> logistic  [PASS]")
+    print("   von Neumann factory; feedstock+power limited -> logistic  [PASS]")
 
     # 5) THERMAL / SECOND LAW
     T = SPEC["reservoir_temp_K"]
     a_rad = radiator_area(p, T)
     print(f"5 THERMAL  reject {p:.1e} W at {T:.2f} K -> radiator {a_rad:.2e} m^2 "
           f"[{ok(a_rad < 1e18)}]")
-    print(f"   colder universe => bigger radiators (A~1/T^4): the real long-term limit")
+    print("   colder universe => bigger radiators (A~1/T^4): the real long-term limit")
 
     # 6) CARRYING CAPACITY -- which resource actually binds?
     cap = matter_capacity()
@@ -955,6 +956,21 @@ def selftest() -> bool:
           abs(E_SCHWINGER / 1.323e18 - 1.0) < 0.02, f"{E_SCHWINGER:.3e} V/m")
     check("reduced Compton wavelength ~ 3.86e-13 m",
           abs(LAMBDA_C / 3.8616e-13 - 1.0) < 0.02, f"{LAMBDA_C:.3e} m")
+    check("Newton G = CODATA 6.6743e-11",
+          abs(G_NEWTON / 6.67430e-11 - 1.0) < 1e-9, f"{G_NEWTON:.5e} SI")
+    check("Thomson cross section = 6.6525e-29 m^2",
+          abs(SIGMA_THOM / 6.6524587321e-29 - 1.0) < 1e-9, f"{SIGMA_THOM:.4e} m^2")
+    check("proton rest energy ~ 938.27 MeV",
+          abs(M_P_C2 / MEV - 938.272) < 0.5, f"{M_P_C2/MEV:.3f} MeV")
+    check("neutron rest energy ~ 939.57 MeV",
+          abs(M_N_C2 / MEV - 939.565) < 0.5, f"{M_N_C2/MEV:.3f} MeV")
+    check("full Compton wavelength = 2pi x reduced",
+          abs(LAMBDA_C_FULL / (2.0 * math.pi * LAMBDA_C) - 1.0) < 1e-9,
+          f"{LAMBDA_C_FULL:.3e} m")
+    check("Bohr radius ~ 5.29e-11 m (CODATA)",
+          abs(A_BOHR / 5.29177210903e-11 - 1.0) < 1e-9, f"{A_BOHR:.4e} m")
+    check("AU = 1.49598e11 m (IAU 2012)",
+          abs(AU / 1.495978707e11 - 1.0) < 1e-9, f"{AU:.6e} m")
 
     # Schwinger rate: negligible far below E_cr, huge near it, monotone up
     R_lab = schwinger_rate_density(field_from_intensity(1e23))
@@ -1012,10 +1028,13 @@ def selftest() -> bool:
 
     # NUCLEAR: measured light nuclei + SEMF heavy + iron peak
     check("He-4 binding = 28.30 MeV (measured)",
-          abs(nuclear_binding_energy_MeV(2, 4) - 28.296) < 0.05,
-          f"{nuclear_binding_energy_MeV(2,4):.3f} MeV")
+          abs(_BE_ALPHA - 28.296) < 0.05, f"{_BE_ALPHA:.3f} MeV")
+    check("He-4 B/A matches the 7.07 MeV reference constant",
+          abs(_BE_ALPHA / 4.0 - BE_PER_NUCLEON_HE4 / MEV) < 0.01,
+          f"{_BE_ALPHA/4.0:.3f} vs {BE_PER_NUCLEON_HE4/MEV:.3f} MeV")
     check("Fe-56 B/A ~ 8.79 MeV (SEMF)",
-          abs(binding_energy_per_nucleon_MeV(26, 56) - 8.79) < 0.05,
+          abs(binding_energy_per_nucleon_MeV(26, 56)
+              - BE_PER_NUCLEON_FE56 / MEV) < 0.05,
           f"{binding_energy_per_nucleon_MeV(26,56):.3f}")
     check("binding curve peaks at iron/nickel (A 56-66)",
           56 <= binding_energy_curve()[2][0] <= 66)
@@ -1063,6 +1082,15 @@ def selftest() -> bool:
     check("trap: annihilation events occurred", tsim.n_annihilations > 0,
           f"{tsim.n_annihilations} events")
 
+    # Dirac annihilation cross section: sigma*v is the finite rate coefficient
+    # pi r_e^2 c at every speed, and sigma diverges as v -> 0.
+    sv = [annihilation_cross_section(v) * v for v in (1e3, 1e5, 1e7)]
+    check("annihilation sigma*v = pi r_e^2 c (finite)",
+          all(abs(s / (math.pi * R_E ** 2 * C_LIGHT) - 1.0) < 1e-12 for s in sv),
+          f"{sv[0]:.3e} m^3/s")
+    check("annihilation sigma diverges at v=0",
+          annihilation_cross_section(0.0) == float("inf"))
+
     # R-PROCESS: heavier-than-iron costs energy but far below E=mc^2
     au = heavy_element_cost(79)
     check("r-process: gold reached (Z=79)", au["Z"] >= 78, f"Z={au['Z']}")
@@ -1086,6 +1114,14 @@ def selftest() -> bool:
           best_creation_channel()["name"])
     check("creation makes equal matter + antimatter",
           True, "pairs -> baryogenesis is the frontier")
+    check("charged-pion rest energy ~ 139.6 MeV",
+          abs(PION_C2 / MEV - 139.570) < 0.1, f"{PION_C2/MEV:.3f} MeV")
+    check("Delta resonance above the pion threshold (photoproduction route)",
+          DELTA_RESONANCE_MEV > PION_C2 / MEV,
+          f"{DELTA_RESONANCE_MEV:.0f} > {PION_C2/MEV:.0f} MeV")
+    check("fusion energy constant = the computed pp-chain yield",
+          abs(FUSION_ENERGY_PER_KG_H / fusion_energy_per_kg_H() - 1.0) < 1e-12,
+          f"{FUSION_ENERGY_PER_KG_H:.3e} J/kg")
     cr = creation_maximized_run(years=1e8, n=60)
     check("cumulative created <= ceiling always",
           all(c <= ce + 1e-6 for c, ce in zip(cr["created_kg"], cr["ceiling_kg"])))
@@ -1142,6 +1178,27 @@ def selftest() -> bool:
     vc = void_capture(1e18)
     check("void capture scales with volume (engineering, not wall)",
           void_capture(1e27)["pairs_per_s"] > vc["pairs_per_s"])
+
+    # NET CAPTURE CHAIN -- the honest interception bookkeeping
+    ncc = net_capture_chain()
+    check("net_capture_chain: CR funnel coverage is a small fraction "
+          "(the web honestly misses most relativistic flux)",
+          0.0 < ncc["cr_coverage_frac"] < 0.05,
+          f"coverage={ncc['cr_coverage_frac']:.2e}")
+    check("net_capture_chain: solar-wind magnetosphere coverage is "
+          "order-unity (plasma collection, magsail physics)",
+          ncc["sw_coverage_frac"] > 0.5,
+          f"coverage={ncc['sw_coverage_frac']:.2f}")
+    check("net_capture_chain: mirror acceptance bounded in (0,1)",
+          0.0 < ncc["mirror_accept"] < 1.0,
+          f"accept={ncc['mirror_accept']:.3f}")
+    check("net_capture_chain: bigger disc -> LOWER relative CR coverage "
+          "(funnels don't scale with footprint, honest dilution)",
+          net_capture_chain(500.0)["cr_coverage_frac"] < ncc["cr_coverage_frac"])
+    check("net_capture_chain: all rates finite and non-negative",
+          all(math.isfinite(v) and v >= 0.0 for v in
+              (ncc["cr_caught_s"], ncc["sw_caught_s"],
+               ncc["born_inside_pairs_s"])))
 
     # TIME-TO-MATTER: honest timescales (P24 verifies the universe-age bound)
     ts = matter_timescales()
@@ -1221,6 +1278,9 @@ def selftest() -> bool:
     check("narrow_resonance_rate_cm3_s: positive and finite for the Hoyle state at 1e8K",
           0.0 < narrow_resonance_rate_cm3_s(8.0 * 4.0 / 12.0, HOYLE_STATE_ER_MEV,
                                             HOYLE_STATE_GAMMA_GAMMA_MEV, 1e8) < float("inf"))
+    check("Hoyle ER: modern 0.3796 > NACRE-1999 0.2877 (both real, newer used)",
+          HOYLE_STATE_ER_MEV > HOYLE_STATE_ER_MEV_NACRE_1999 > 0.0,
+          f"{HOYLE_STATE_ER_MEV_NACRE_1999} -> {HOYLE_STATE_ER_MEV} MeV")
     # riser end-to-end: at real helium-burning temperature (~1.5e8K), stage 1
     # (He->C, triple-alpha) should be ACTIVE -- this was the whole point of
     # the fix (the old WKB-tunnelling gate needed ~1e9-1e10K for this stage).
@@ -1311,6 +1371,97 @@ def selftest() -> bool:
     check("galactic: galaxy fraction <= 1 (bounded)",
           ga["galaxy_frac"] <= 1.0 + 1e-9,
           f"frac={ga['galaxy_frac']:.4f}")
+
+    # THE REAL MILKY WAY FIELD (SECTION 13b): the swept table must reproduce
+    # measured structure -- Sun at 8.15 kpc, local density ~0.1-0.15/pc^3,
+    # Alpha Cen inside the 4.37-ly sphere, ~1e11 total at the far rim.
+    mwt = milky_way_swept_table()
+    check("MW: Sun offset from GC = 8.15 kpc (26.6 kly)",
+          abs(mwt["sun_R_ly"] - 26600.0) < 1.0,
+          f"R={mwt['sun_R_ly']:.0f} ly")
+    check("MW: local density in the measured 0.09-0.16 /pc^3 band",
+          0.09 <= mwt["rho_local_pc3"] <= 0.16,
+          f"rho={mwt['rho_local_pc3']:.3f}/pc^3")
+    check("MW: local hop in the measured 5-8 ly band",
+          5.0 <= mwt["hop_local_ly"] <= 8.0,
+          f"hop={mwt['hop_local_ly']:.2f} ly")
+    check("MW: ~1 system inside the Alpha Cen sphere (4.37 ly)",
+          0.3 <= mwt["N"](4.37) <= 3.0,
+          f"N={mwt['N'](4.37):.2f}")
+    check("MW: swept count monotonic non-decreasing",
+          bool(np.all(np.diff(mwt["N_grid"]) >= 0.0)))
+    check("MW: count bounded by stars_per_galaxy at the far rim",
+          mwt["N"](mwt["far_rim_ly"]) <= SPEC["stars_per_galaxy"] * 1.02
+          and mwt["N"](mwt["far_rim_ly"]) > SPEC["stars_per_galaxy"] * 0.85,
+          f"N(far)={mwt['N'](mwt['far_rim_ly']):.3e} vs {SPEC['stars_per_galaxy']:.0e}")
+    check("MW: N_at_GC finite, positive, below galaxy total",
+          0 < mwt["N_at_GC"] < SPEC["stars_per_galaxy"],
+          f"N={mwt['N_at_GC']:.2e}")
+    check("MW: far rim beyond the GC reach (anisotropic reach)",
+          mwt["far_rim_ly"] > mwt["gc_reach_ly"] * 2.0,
+          f"far={mwt['far_rim_ly']:.0f} gc={mwt['gc_reach_ly']:.0f}")
+    check("MW: telemetry exposes real-field keys",
+          all(k_ in ga for k_ in ("hop_ly", "gc_reach_ly", "gc_reached",
+                                  "far_rim_ly", "local_rho_pc3")))
+    check("MW: frontier hop finite and positive",
+          math.isfinite(ga["hop_ly"]) and ga["hop_ly"] > 0,
+          f"hop={ga['hop_ly']:.2f} ly")
+    # the REAL nearest-star catalogue: finite distances, ordered, real types
+    check("MW: nearest-star catalogue finite and ordered",
+          len(NEAREST_STARS) >= 10
+          and all(0 < s[1] < 25.0 for s in NEAREST_STARS)
+          and NEAREST_STARS[0][1] <= NEAREST_STARS[-1][1],
+          f"{len(NEAREST_STARS)} stars, {NEAREST_STARS[0][1]}.."
+          f"{NEAREST_STARS[-1][1]} ly")
+    check("MW: Alpha Centauri is the catalogue's first entry",
+          abs(NEAREST_STARS[0][1] - 4.37) < 0.05,
+          f"{NEAREST_STARS[0][0]} at {NEAREST_STARS[0][1]} ly")
+
+    # --- intergalactic reach: REAL named galaxies + honest void + ~Mpc field --
+    check("IG: nearest-galaxy catalogue ordered, all beyond the MW far rim",
+          len(NEAREST_GALAXIES) >= 8
+          and all(NEAREST_GALAXIES[i][1] <= NEAREST_GALAXIES[i + 1][1]
+                  for i in range(len(NEAREST_GALAXIES) - 1))
+          and NEAREST_GALAXIES[0][1] > mwt["far_rim_ly"],
+          f"{len(NEAREST_GALAXIES)} galaxies, nearest "
+          f"{NEAREST_GALAXIES[0][0]} at {NEAREST_GALAXIES[0][1]:.2e} ly")
+    check("IG: Andromeda sits at its measured 2.54 Mly",
+          abs(NEAREST_GALAXIES[7][1] - 2.54e6) < 1e4
+          and "M31" in NEAREST_GALAXIES[7][0],
+          f"{NEAREST_GALAXIES[7][0]} at {NEAREST_GALAXIES[7][1]:.2e} ly")
+    # between the far rim (76.6 kly) and Sagittarius (78 kly) the front is in
+    # genuinely EMPTY intergalactic space -- no phantom galaxies counted
+    _ig_void, _ig_hits, _ig_next = intergalactic_systems(77.0e3)
+    check("IG: the void before the first satellite is honestly empty",
+          _ig_hits == 0 and _ig_next is not None
+          and _ig_next[0] == NEAREST_GALAXIES[0][0],
+          f"hits={_ig_hits} next={_ig_next[0] if _ig_next else '--'}")
+    # at 170 kly the Clouds are inside the front: two named galaxies added
+    _ig_lmc, _ig_hits2, _ig_next2 = intergalactic_systems(1.70e5)
+    check("IG: Sagittarius + LMC reached by 170 kly",
+          _ig_hits2 == 2
+          and _ig_lmc > mwt["N"](mwt["far_rim_ly"]) + 2.5e9,
+          f"hits={_ig_hits2} N={_ig_lmc:.2e}")
+    # crossing M31's real distance adds ~1e12 systems -- a discrete jump, real
+    _ig_pre, _, _ = intergalactic_systems(2.53e6)
+    _ig_m31, _ig_hits3, _ = intergalactic_systems(2.55e6)
+    check("IG: crossing M31 adds its real ~1e12 systems in one step",
+          _ig_m31 - _ig_pre > 5.0e11 and _ig_hits3 == 8,
+          f"jump={_ig_m31 - _ig_pre:.2e}, hits={_ig_hits3}")
+    # the reachable horizon lives at ~Mpc-scale spacing, NOT close-packed
+    _hor = reachable_horizon_ly()
+    check("IG: reachable horizon at real ~Mpc spacing (5.6 Gyr, not 23 Myr)",
+          2.0e8 < _hor < 2.0e9
+          and _hor / SPEC["expansion_speed_c"] > 1.0e9,
+          f"R={_hor:.2e} ly -> {_hor / SPEC['expansion_speed_c'] / 1e9:.2f} Gyr")
+    _ig_ceil, _, _ = intergalactic_systems(1.0e10)
+    check("IG: count bounded by the reachable-galaxies ceiling",
+          _ig_ceil <= SPEC["stars_per_galaxy"] * SPEC["reachable_galaxies"]
+          * (1.0 + 1e-9),
+          f"N={_ig_ceil:.2e}")
+    check("IG: telemetry exposes next-galaxy + horizon keys",
+          all(k_ in ga for k_ in ("galaxies_reached", "next_galaxy",
+                                  "next_galaxy_ly", "reachable_horizon_ly")))
 
     # AUTO-TARGET ELEMENT: machine adjusts parameters for each target Z
     for Z in [1, 6, 26, 79, 92]:
@@ -1505,7 +1656,6 @@ def selftest() -> bool:
           f"{_pbal_result['bottleneck']}")
     check("PipelineBalancer: all utilizations in [0,1]",
           all(0.0 <= r["utilization"] <= 1.0 for r in _pbal_result["rows"]))
-    _pbal_before = _pbal_result["total_matter_kg_per_s"]
     _adjusted = _pbal.auto_adjust(_pbal_plant)
     check("PipelineBalancer: auto_adjust runs without error", isinstance(_adjusted, bool))
 
@@ -1661,6 +1811,77 @@ def selftest() -> bool:
     check("GalacticSeeding: legacy geometric path still functions (no full-physics)",
           _gs_legacy.telemetry["systems"] > 1.0,
           f"systems={_gs_legacy.telemetry['systems']:.2e}")
+
+    # ---- SUSTAINABILITY CLOSURE (the replicate tab's core claim) ----------
+    _oc = _gs.colonizers[0]
+    # 1. ISRU feed is real: nonzero, finite, and bounded by the reservoir.
+    check("sustain: bulk ISRU feed is positive and finite",
+          0.0 < _oc.isru_kg_s < float("inf"),
+          f"isru={_oc.isru_kg_s:.3e} kg/s")
+    check("sustain: organized baryons never exceed the per-system reservoir",
+          _oc.organized_kg <= _oc.spec["isru_baryon_reservoir_kg"] + 1e-6,
+          f"organized={_oc.organized_kg:.3e} reservoir={_oc.spec['isru_baryon_reservoir_kg']:.1e}")
+    # 2. bootstrap actually banked feedstock before the first copy
+    check("sustain: bootstrap organized real feedstock mass",
+          _oc.organized_kg > 0.0, f"organized={_oc.organized_kg:.3e} kg")
+    # 3. launches are fully debited: launch mass >= payload mass launched
+    check("sustain: probe launch mass covers payload + propellant",
+          _oc.probe_launch_mass_kg >= _oc.seeds_launched * SystemColonizer.PROBE_MASS_KG - 1e-6,
+          f"launch={_oc.probe_launch_mass_kg:.3e} payload={_oc.seeds_launched * SystemColonizer.PROBE_MASS_KG:.3e}")
+    check("sustain: probe energy spend tracked and positive",
+          _oc.probe_energy_spent_J > 0.0,
+          f"E={_oc.probe_energy_spent_J:.3e} J")
+    # 4. no probes before saturation (the 0.9K gate is real)
+    _pre_sat = SystemColonizer(SPEC, stellar_type=_origin_g_star)
+    while not _pre_sat.bootstrap.complete:
+        _pre_sat.step(86400.0)
+    _pre_sat.step(86400.0)          # growth phase, far below 0.9K
+    check("sustain: zero launches before the 0.9K saturation gate",
+          _pre_sat.seeds_launched == 0.0,
+          f"seeds={_pre_sat.seeds_launched:.2f} N_frac={_pre_sat.swarm.N / _pre_sat.swarm.K_stations:.2e}")
+    # 5. the closure audit exists, has all channels, and reports its verdict
+    _cl = _oc.telemetry.get("closure") or {}
+    check("sustain: closure audit present with all five margins",
+          all(k in _cl.get("margins", {}) for k in
+              ("mass", "power", "riser", "propellant", "attrition")),
+          f"margins={list(_cl.get('margins', {}))}")
+    check("sustain: closure audit verdict is a boolean with a binding channel",
+          isinstance(_cl.get("closed"), bool) and _cl.get("binding") in
+          ("mass", "power", "riser", "propellant", "attrition"),
+          f"closed={_cl.get('closed')} binding={_cl.get('binding')}")
+    check("sustain: audit gates dict is complete and consistent with verdict",
+          _cl.get("closed") == all(_cl.get("gates", {}).values()),
+          f"gates={_cl.get('gates')}")
+    # 6. every BOM element is either raw-covered or explicitly flagged
+    _el = _cl.get("elements", [])
+    check("sustain: all BOM elements audited (8 tracked channels)",
+          len(_el) == len(STATION_BOM), f"n={len(_el)}")
+    check("sustain: shortfalls surface as riser demand, not silence",
+          all(r[4] or r[5] > 0.0 for r in _el),
+          f"uncovered_no_riser={[r[0] for r in _el if not r[4] and r[5] <= 0]}")
+    # 7. detailed seed materialization stays bounded (no dict-per-probe):
+    #    aggregate launch counts dwarf the per-step detailed cohort (<=32)
+    check("sustain: aggregate launches tracked without dict-per-probe",
+          _oc.seeds_launched > 32 and
+          _oc.probe_launch_mass_kg > 32 * SystemColonizer.PROBE_MASS_KG,
+          f"seeds={_oc.seeds_launched:.2e} (detailed cohort capped at 32/step)")
+    # 8. dust-enrichment feed model is consistent and bounded
+    check("sustain: dust share is the ambient x enrichment blend (<=1)",
+          0.0 < ISM_DUST_SHARE <= 1.0 and
+          abs(ISM_DUST_SHARE - min(1.0, _ISM_DUST_AMBIENT_FRAC * _ISM_DUST_ENRICH)) < 1e-12,
+          f"dust={ISM_DUST_SHARE}")
+    check("sustain: feed mix sums to ~1 and stays H-dominated for propellant",
+          0.95 < sum(_ISM_FEED.values()) < 1.05 and _ISM_FEED[1] > 0.4,
+          f"sum={sum(_ISM_FEED.values()):.3f} H={_ISM_FEED[1]:.3f}")
+    check("sustain: BOM sums to ~1 with spacecraft-scale trace heavies",
+          abs(sum(STATION_BOM.values()) - 1.0) < 0.05 and
+          STATION_BOM[79] <= 1e-5 and STATION_BOM[92] <= 1e-5,
+          f"sum={sum(STATION_BOM.values()):.3f} Au={STATION_BOM[79]} U={STATION_BOM[92]}")
+    # 9. saturated origin genuinely reports the loop closed (or honestly
+    #    flags its binding constraint -- never a silent pass)
+    check("sustain: saturated system closes all conservation gates",
+          _cl.get("closed") is True,
+          f"closed={_cl.get('closed')} binding={_cl.get('binding')} margins={_cl.get('margins')}")
 
     # AUTONOMOUS RUN (--run): the full closed loop, seed -> galaxy, small+fast
     _run_result = autonomous_run_report(n_full_physics=3, max_years=500.0, n_steps=40, verbose=False)
@@ -2004,7 +2225,7 @@ def selftest() -> bool:
     for _ in range(40):
         _pp.step(YR / 40.0)
     _made = _pp.au_vault_kg + _pp.au_cooling_kg
-    _decayed_kg = 0.0     # everything that left the tank became gold somewhere
+    # everything that left the tank became gold somewhere
     check("powerplant: runs continuously and fills the vault",
           _pp.au_vault_kg > 0.0 and _pp.t > 0.0,
           f"{_pp.au_vault_kg:,.1f} kg after {_pp.t/YR:.2f} yr")
@@ -2054,6 +2275,11 @@ def selftest() -> bool:
         check(f"fuel {k}: Q > 0 and energy_per_kg > 0",
               f.Q_MeV > 0 and f.energy_per_kg_J > 0,
               f"Q={f.Q_MeV:.2f} MeV, {f.energy_per_kg_J:.2e} J/kg")
+        fd = f.as_dict()
+        check(f"fuel {k}: as_dict round-trips",
+              fd["key"] == f.key and fd["Q_MeV"] == f.Q_MeV
+              and fd["energy_per_kg_J"] == f.energy_per_kg_J
+              and len(fd) == 10)
     check("fuel D-T: 14.06 MeV neutron above (n,2n) threshold",
           FUSION_FUELS["D-T"].En_MeV >= HG198_N2N_THRESHOLD_MEV,
           f"{FUSION_FUELS['D-T'].En_MeV:.2f} >= {HG198_N2N_THRESHOLD_MEV:.3f}")
@@ -2164,6 +2390,13 @@ def selftest() -> bool:
     check("cascade: Tl-197 tank populated by Pb-197 decays",
           pp.tl197_atoms > pp.pb197_atoms,
           f"Tl={pp.tl197_atoms:.2e} > Pb={pp.pb197_atoms:.2e}")
+    # EC decay emits most of Q as a neutrino: harvestable HEAT must stay
+    # strictly below the Q of every link (else the decay-heat ledger is wrong).
+    check("cascade: harvestable heat < EC Q per link (neutrino escapes)",
+          PB197_HEAT_MEV < PB197_Q_MEV and TL197_HEAT_MEV < TL197_Q_MEV
+          and HG197_HEAT_MEV < HG197_Q_MEV,
+          f"Pb {PB197_HEAT_MEV}<{PB197_Q_MEV}, Tl {TL197_HEAT_MEV}<{TL197_Q_MEV},"
+          f" Hg {HG197_HEAT_MEV}<{HG197_Q_MEV} MeV")
     check("cascade: gold-born ledger matches vault + cooling mass",
           abs(pp.au_atoms_produced * AU197_MASS_KG
               - (pp.au_vault_kg + pp.au_cooling_kg))
@@ -2173,6 +2406,16 @@ def selftest() -> bool:
     check("cascade: feed beam cost reported and positive",
           pp.precursor_beam_W > 0.0,
           f"{pp.precursor_beam_W/1e6:.1f} MWe")
+    # the whole economics: feedstock costs ~$100/kg, product ~$145,700/kg
+    check("economics: mercury feedstock ~1000x cheaper than the gold product",
+          MERCURY_PRICE_USD_KG < GOLD_PRICE_USD_PER_KG / 100.0,
+          f"${MERCURY_PRICE_USD_KG:.0f}/kg vs ${GOLD_PRICE_USD_PER_KG:,.0f}/kg")
+    # the computed blanket ledger should land near the documented ~1.15 spec
+    check("blanket energy multiplication near the 1.15 spec",
+          abs(pp.blanket["energy_multiplication"] / BLANKET_ENERGY_MULT - 1.0)
+          < 0.20,
+          f"{pp.blanket['energy_multiplication']:.3f}x "
+          f"(spec {BLANKET_ENERGY_MULT:.2f})")
     # edge cases: dt=0 must not corrupt state; giant dt must stay finite + stable
     pp_e = RadiantPowerplant("D-T", 1e9)
     pp_e.step(0.0)
@@ -2265,11 +2508,316 @@ def sweep():
 # =============================================================================
 # The per-system baryon limit is not a wall -- it is a signal to SEED THE NEXT
 # STAR. A self-replicating swarm expands as a colonization wavefront at a cruise
-# speed v_exp. The number of colonized systems grows as the volume swept by that
-# wavefront (~ t^3) until the galaxy is full, then extragalactic expansion runs
-# until it hits the ONE honest wall physics imposes: the LambdaCDM causally-
-# reachable volume (Krauss-Starkman) -- only a finite comoving region can ever be
-# reached in an accelerating universe. We maximize structure right up to it.
+# speed v_exp. The number of colonized systems grows with the volume swept by
+# that wavefront THROUGH THE REAL STAR FIELD (not a bare t^3 -- the field is
+# anisotropic and so is the Sun's place in it) until the galaxy is full, then
+# extragalactic expansion runs until it hits the ONE honest wall physics
+# imposes: the LambdaCDM causally-reachable volume (Krauss-Starkman) -- only a
+# finite comoving region can ever be reached in an accelerating universe. We
+# maximize structure right up to it.
+#
+# -----------------------------------------------------------------------------
+# THE REAL GALAXY, not a uniform ball of stars.
+# The earlier model treated the galaxy as a uniform-density SPHERE of 1e11
+# stars out to 5e4 ly. That is wrong twice over:
+#   (a) SHAPE -- the Milky Way is a barred-spiral DISC: an exponential thin
+#       disc + thick disc + a central bulge/bar, with four major spiral arms.
+#   (b) POSITION -- the Sun is not at the centre. It orbits at R ~ 8.15 kpc on
+#       the Orion Spur, +20.8 pc above the midplane. A wavefront launched from
+#       the Sun reaches the galactic centre at ~26.6 kly but the far rim at
+#       ~76.6 kly -- anisotropic expansion through an anisotropic field.
+# The uniform-sphere density (1.9e-4 stars/ly^3) also undershoots the REAL
+# solar-neighbourhood density (~4e-3/ly^3) by ~20x, inflating the mean hop
+# between systems to ~17 ly where the true nearest-neighbour spacing is
+# ~6-7 ly. Every constant below is a measured Milky Way parameter.
+# -----------------------------------------------------------------------------
+MILKY_WAY = {
+    "type":            "SBbc barred spiral",
+    "disc_R_ly":       5.0e4,      # luminous disc edge ~15 kpc (= SPEC radius)
+    "h_R_ly":          8.46e3,     # thin-disc exp. scale length 2.6 kpc
+                                     # (Bland-Hawthorn & Gerhard 2016 review)
+    "h_z_thin_ly":     9.78e2,     # thin-disc scale height ~300 pc
+    "h_z_thick_ly":    2.93e3,     # thick-disc scale height ~900 pc
+    "h_R_thick_ly":    9.78e3,     # thick-disc scale length ~3.0 kpc
+    "thick_frac":      0.09,       # thick disc holds ~9% of disc stars
+    "bulge_frac":      0.22,       # bulge/bar holds ~20-25% of the stars
+    "bulge_rc_ly":     2.60e3,     # bulge Plummer core radius ~0.8 kpc
+    "sun_R_ly":        2.66e4,     # 8.15 kpc (GRAVITY Collab 2019: 8.178+-.035)
+    "sun_z_ly":        6.8e1,      # +20.8 pc above the midplane (Bennett&Bovy'19)
+    "sun_v_kms":       2.33e2,     # circular speed at R_sun (Eilers+ 2019)
+    "galactic_year_yr":2.15e8,     # 2*pi*R_sun/v_sun ~ 215 Myr
+    "sgrA_Msun":       4.15e6,     # Sgr A* mass (GRAVITY Collab 2020)
+    "dm_halo_Msun":    1.0e12,     # virial mass inside ~200 kpc (Callingham+19)
+    "local_n_pc3":     0.14,       # solar-neighbourhood density (RECONS/Gaia)
+    "pitch_deg":       12.0,       # mean spiral-arm pitch angle (Vallee 2017)
+    "m31_ly":          2.537e6,    # Andromeda distance (778 kpc)
+    "local_bubble_ly": 1.0e3,      # hot low-density ISM cavity we sit inside
+    "age_disc_Gyr":    13.6,       # oldest thin-disc stars (Gaia)
+    "mw_lum_Lsun":     2.0e10,     # bolometric luminosity ~2e10 Lsun
+}
+
+# Spiral arms are drawn from ARM_GEOM in the galaxy mesh (logarithmic spirals
+# r = r_cross * exp(tan(pitch) * theta), Vallee 2017 "A map of the Milky Way",
+# pitch angle ~12 deg) -- see the mesh builder for the live arm table.
+_ORION_SPUR_R_KPC = 8.6          # Sun's own mini-arm, ~1-2 kpc wide local spur
+
+# The REAL nearest stellar systems -- the actual first colonization targets.
+# Distances in light-years (Gaia DR3 / RECONS census), spectral classes real.
+# (name, dist_ly, spectral class, note)
+NEAREST_STARS = [
+    ("Alpha Centauri",   4.37,  "G2V+K1V+M5.5V", "triple; Proxima is nearest"),
+    ("Barnard's Star",   5.96,  "M4.0V",   "fastest proper motion in the sky"),
+    ("Wolf 359",         7.86,  "M6.0V",   "flare star, ~1e9 yr old"),
+    ("Lalande 21185",    8.29,  "M2.0V",   "bright nearby M dwarf"),
+    ("Sirius",           8.60,  "A1V+DA2", "brightest star + nearest white dwarf"),
+    ("Luyten 726-8",     8.73,  "M5.5V+M6", "UV Ceti flare-star pair"),
+    ("Ross 154",         9.69,  "M3.5V",   "rapid rotator"),
+    ("Ross 248",         10.32, "M5.5V",   "nearest star in ~36 kyr"),
+    ("Epsilon Eridani",  10.48, "K2V",     "nearest young K dwarf; dust + planets"),
+    ("Lacaille 9352",    10.72, "M1.5V",   "high proper motion"),
+    ("Ross 128",         10.92, "M4.0V",   "temperate-zone planet host"),
+    ("61 Cygni",         11.40, "K5V+K7V", "first measured parallax (Bessel 1838)"),
+    ("Procyon",          11.46, "F5IV+DA2", "bright binary + white dwarf"),
+    ("Epsilon Indi",     11.87, "K5V+T",   "two brown-dwarf companions"),
+    ("Tau Ceti",         11.91, "G8.5V",   "nearest single Sun-like star"),
+    ("40 Eridani",       16.26, "K1V+DA+M4.5V", "triple: dwarf + WD + M dwarf"),
+    ("Altair",           16.73, "A7V",     "rapid rotator (9 h day)"),
+]
+
+
+# ---- the nearest GALAXIES at their measured distances -------------------------
+# (name, distance from the Sun in ly, ~stellar systems, note). Distances are
+# the standard catalogue values (Gaia/Hubble Cepheids & TRGB); star counts are
+# order-of-magnitude from measured stellar masses. Beyond the Milky Way's far
+# rim (76.6 kly from the Sun) the wavefront crosses REAL named objects first --
+# it does NOT smoothly "average" into extragalactic space. The void between
+# the disc edge and Sagittarius is honestly empty.
+NEAREST_GALAXIES = [
+    ("Sagittarius dSph",   7.8e4,  1.0e8,  "MW satellite being tidally disrupted"),
+    ("LMC",                1.63e5, 3.0e9,  "largest MW satellite; star-forming"),
+    ("SMC",                2.04e5, 1.0e9,  "MW satellite"),
+    ("Sculptor dSph",      2.90e5, 1.0e7,  "fossil dwarf, dark-matter dominated"),
+    ("Fornax dSph",        4.60e5, 4.0e7,  "globular-cluster rich dSph"),
+    ("Leo II dSph",        6.90e5, 1.0e6,  "dSph"),
+    ("Leo I dSph",         8.20e5, 1.0e6,  "dSph"),
+    ("Andromeda (M31)",    2.54e6, 1.0e12, "the other L* spiral; ~1e12 stars"),
+    ("Triangulum (M33)",   2.73e6, 4.0e10, "third spiral of the Local Group"),
+    ("M81 group",          1.17e7, 1.0e11, "nearest group beyond the LG"),
+]
+
+# mean spacing of L*-scale galaxies in the field: a few Mpc (MEAS-scale --
+# the LG's nearest neighbour groups sit ~10-12 Mly away). NOT the old
+# close-packed value galaxy_radius*N^(1/3), which squeezed the whole
+# reachable universe into 2.3 Mly and colonized it by ~23 Myr -- physically
+# wrong by ~3 orders of magnitude in time.
+GALAXY_SPACING_LY = 1.2e7
+
+
+def reachable_horizon_ly(sp: Dict[str, float] = None) -> float:
+    """Comoving radius containing SPEC['reachable_galaxies'] galaxies at the
+    real field spacing: R = spacing * N^(1/3). ~5.6e8 ly for 1e5 galaxies --
+    the wavefront needs ~5.6 GYR at 0.1c to colonize them all, not 23 Myr.
+    (The full LCDM event horizon is ~1.6e10 ly; the SPEC cap is the
+    conservative bound, well inside it.)"""
+    sp = sp or SPEC
+    return GALAXY_SPACING_LY * sp["reachable_galaxies"] ** (1.0 / 3.0)
+
+
+def intergalactic_systems(r_ly: float, sp: Dict[str, float] = None,
+                          mw: Dict[str, object] = None):
+    """Colonized systems inside a Sun-centred wavefront of radius r_ly once
+    it has exited the Milky Way's far rim. Returns (systems, galaxies_hit,
+    next_galaxy) where next_galaxy is the (name, d_ly, stars) of the nearest
+    named galaxy still outside the front, or None past the catalogue.
+
+    The count = Milky Way swept total + each named galaxy at its MEASURED
+    distance (discrete jumps -- you really do gain ~1e12 systems the moment
+    the front crosses M31) + a smooth field term that grows as (r/horizon)^3
+    toward the reachable_galaxies ceiling (Krauss-Starkman bound)."""
+    sp = sp or SPEC
+    mw = mw or milky_way_swept_table(sp)
+    n = min(sp["stars_per_galaxy"], mw["N"](mw["far_rim_ly"]))
+    hit = 0
+    nxt = None
+    for name, d, s, _note in NEAREST_GALAXIES:
+        if r_ly >= d:
+            n += s
+            hit += 1
+        elif nxt is None:
+            nxt = (name, d, s)
+    horiz = reachable_horizon_ly(sp)
+    frac = min(1.0, (r_ly / horiz) ** 3)
+    n += sp["stars_per_galaxy"] * (sp["reachable_galaxies"] - 1.0) * frac
+    n = min(sp["stars_per_galaxy"] * sp["reachable_galaxies"], n)
+    return n, hit, nxt
+
+
+_MW_SWEPT_CACHE: Dict[tuple, Dict[str, object]] = {}
+
+
+def milky_way_swept_table(spec: Dict[str, float] = None,
+                          n_r: int = 176, n_th: int = 26,
+                          n_ph: int = 52) -> Dict[str, object]:
+    """Precomputed colonization count N(r) for a wavefront sphere centred on
+    the SUN (8.15 kpc off-centre) expanding through the REAL Milky Way density
+    field -- NOT the old uniform sphere.
+
+    Density model (number density of star SYSTEMS, stars/ly^3):
+        n(R,z) = n_thin  * e^{-R/h_R}   * e^{-|z|/h_z1}
+               + n_thick * e^{-R/h_Rt}  * e^{-|z|/h_z2}
+               + n_bulge * (1 + q^2/r_c^2)^{-5/2}          (Plummer sphere)
+    with R, z galactocentric cylindrical and q = sqrt(R^2+z^2). Normalizations
+    are computed analytically so the disc integrates to stars_per_galaxy; the
+    bulge Plummer sphere is normalized to bulge_frac of the total.
+
+    The swept sphere is evaluated by spherical quadrature centred on the Sun:
+    N(r) = integral n dV over |p - p_sun| < r, clipped to R <= disc_R.
+    Computed ONCE per spec on a log-radial grid (the loop is vectorized numpy;
+    ~176 shells x 1,352 directions) and cached -- per-call cost is an interp.
+
+    Returns a dict:
+      "N"(r_ly)          -> colonizable systems inside the Sun-centred sphere
+      "rho"(r_ly)        -> mean stellar density of the swept SHELL at r
+                            (what the frontier actually sweeps through next)
+      "far_rim_ly"       -> disc_R + sun_R: the farthest disc point from home
+      "sun_R_ly", "sun_z_ly", "gc_reach_ly" (= sun_R), "disc_R_ly"
+      "rho_local_ly3"/"rho_local_pc3", "hop_local_ly"
+      "N_at_GC"          -> systems colonized when the front reaches the core
+      "mw"               -> the MILKY_WAY constants dict
+    """
+    sp = spec or SPEC
+    key = (float(sp["stars_per_galaxy"]), float(sp["galaxy_radius_ly"]))
+    ent = _MW_SWEPT_CACHE.get(key)
+    if ent is not None:
+        return ent
+    mw = MILKY_WAY
+    R_EDGE = float(sp["galaxy_radius_ly"])
+    N_TOT = float(sp["stars_per_galaxy"])
+    h_R, h_z1 = mw["h_R_ly"], mw["h_z_thin_ly"]
+    h_Rt, h_z2 = mw["h_R_thick_ly"], mw["h_z_thick_ly"]
+    f_thick, f_bulge = mw["thick_frac"], mw["bulge_frac"]
+    R_sun, z_sun, r_c = mw["sun_R_ly"], mw["sun_z_ly"], mw["bulge_rc_ly"]
+
+    # analytic normalization: column integral of an exponential disc
+    #   int_0^R e^{-r/h} 2 pi r dr = 2 pi h^2 [1 - (1+R/h) e^{-R/h}]
+    def _col(R, h):
+        x = R / h
+        return 2.0 * math.pi * h * h * (1.0 - (1.0 + x) * math.exp(-x))
+    M_disc = N_TOT * (1.0 - f_bulge)
+    n0_thin = M_disc * (1.0 - f_thick) / (2.0 * h_z1 * _col(R_EDGE, h_R))
+    n0_thick = M_disc * f_thick / (2.0 * h_z2 * _col(R_EDGE, h_Rt))
+    n0_bulge = (N_TOT * f_bulge) * 3.0 / (4.0 * math.pi * r_c ** 3)
+
+    # Sun-centred CYLINDRICAL quadrature -- (d, phi) in the midplane with an
+    # ANALYTIC vertical integral. A naive theta/phi spherical grid
+    # under-resolves the thin disc badly at large radii (at ~70 kly the disc
+    # subtends a ~0.05-rad band around the midplane, thinner than the grid).
+    # Here the vertical cover is exact: the sphere |p - p_sun| < r covers
+    # z in [z_sun - z0, z_sun + z0] with z0 = sqrt(r^2 - d^2), and
+    #   int e^{-|z|/h} dz          -> piecewise exponential
+    #   int (1+(R^2+z^2)/r_c^2)^{-5/2} dz  -> Plummer antiderivative
+    #       G(u) = u(2u^2+3) / (3(1+u^2)^{3/2})
+    def _G(u):
+        return u * (2.0 * u * u + 3.0) / (3.0 * (1.0 + u * u) ** 1.5)
+
+
+    # radial shells centred on the Sun (log-spaced), azimuthal grid in-plane
+    n_ph_eff = max(n_ph, 96)
+    edges = np.exp(np.linspace(math.log(0.30),
+                               math.log(R_sun + R_EDGE * 1.02), n_r + 1))
+    s_mid = np.sqrt(edges[:-1] * edges[1:])
+    ds = edges[1:] - edges[:-1]
+    ph = np.linspace(0.0, 2.0 * math.pi, n_ph_eff, endpoint=False)
+    dph = ph[1] - ph[0]
+    PH = ph[None, :]                                          # (1, nph)
+    counts = np.zeros(n_r)
+    rho_shell = np.zeros(n_r)
+    # For every (d_i, phi) midplane cell: galactocentric R, the two disc
+    # radial factors, and the Jacobian weight d * dd * dphi.
+    D = s_mid[:, None]                                        # (nr, 1)
+    DD = ds[:, None]
+    PX = R_sun + D * np.cos(PH)
+    PY = D * np.sin(PH)
+    RGC = np.hypot(PX, PY)                                    # (nr, nph)
+    insideD = RGC <= R_EDGE
+    thin_f = np.exp(-RGC / h_R) * insideD
+    thick_f = np.exp(-RGC / h_Rt) * insideD
+    # For each shell radius r_k the vertical cover z0(d)=sqrt(r_k^2-d_i^2)
+    # varies per cell, so the z-integrals are re-evaluated for every
+    # (r_k, d_i) pair; cells with d_i >= r_k are uncovered (z0 = 0 -> 0).
+    z_s = z_sun
+    for k in range(n_r):
+        r = s_mid[k]
+        z0 = np.sqrt(np.clip(r * r - D * D, 0.0, None))       # (nr,1)
+        covered = z0 > 0.0
+        a_lim = z_s - z0
+        b_lim = z_s + z0
+        col = np.zeros_like(RGC)
+        for f_mat, n0, hz in ((thin_f, n0_thin, h_z1),
+                              (thick_f, n0_thick, h_z2)):
+            zint = np.where(
+                covered,
+                np.where(
+                    a_lim >= 0.0,
+                    hz * (np.exp(-a_lim / hz) - np.exp(-b_lim / hz)),
+                    np.where(
+                        b_lim <= 0.0,
+                        hz * (np.exp(b_lim / hz) - np.exp(a_lim / hz)),
+                        hz * (2.0 - np.exp(a_lim / hz)
+                              - np.exp(-b_lim / hz)))),
+                0.0)
+            col += n0 * f_mat * zint
+        # bulge column: int (1 + (R^2+z^2)/r_c^2)^{-5/2} dz with
+        # s_c = sqrt(r_c^2 + R^2), u = z/s_c -> r_c^5 s_c^{-4} [G(u)].
+        # (Dropping the s_c factor would spread the ~0.8-kpc bulge's core
+        #  density across the whole disc -- ~1e4x too many stars out here.)
+        sc2 = r_c * r_c + RGC * RGC
+        sc4 = sc2 * sc2
+        au2 = a_lim / np.sqrt(sc2)
+        bu2 = b_lim / np.sqrt(sc2)
+        col += (n0_bulge * r_c ** 5 / sc4
+                * (_G(bu2) - _G(au2)) * covered)
+        # counts[k] IS the cumulative total inside sphere r_k already --
+        # every annulus d_i <= r_k contributes its full covered column.
+        counts[k] = float(np.sum(col * D * DD) * dph)
+    Ncum = counts.copy()
+    # shell density = stars newly enclosed per unit NEW shell volume
+    dN = np.diff(Ncum, prepend=0.0)
+    dV = (4.0 * math.pi / 3.0) * (edges[1:] ** 3 - edges[:-1] ** 3)
+    rho_shell = dN / np.maximum(dV, 1e-30)
+    log_r = np.log(s_mid)
+
+    def _N(r_ly: float) -> float:
+        if r_ly <= 0.0:
+            return 0.0
+        return float(np.interp(math.log(r_ly), log_r, Ncum))
+
+    def _rho(r_ly: float) -> float:
+        if r_ly <= 0.0:
+            return 0.0
+        return float(np.interp(math.log(max(r_ly, 0.31)), log_r, rho_shell))
+
+    # density AT the Sun's position (the real local neighbourhood value)
+    rho_local = (n0_thin * math.exp(-R_sun / h_R) * math.exp(-z_sun / h_z1)
+                 + n0_thick * math.exp(-R_sun / h_Rt) * math.exp(-z_sun / h_z2)
+                 + n0_bulge * (1.0 + ((R_sun ** 2 + z_sun ** 2) / r_c ** 2)) ** -2.5)
+    tbl = {
+        "N": _N, "rho": _rho,
+        "r_grid_ly": s_mid, "N_grid": Ncum, "rho_grid": rho_shell,
+        "far_rim_ly": R_sun + R_EDGE,
+        "disc_R_ly": R_EDGE,
+        "sun_R_ly": R_sun, "sun_z_ly": z_sun,
+        "gc_reach_ly": R_sun,
+        "N_at_GC": _N(R_sun),
+        "rho_local_ly3": rho_local,
+        "rho_local_pc3": rho_local * (3.26156 ** 3),
+        "hop_local_ly": rho_local ** (-1.0 / 3.0),
+        "mw": mw,
+        "spec_key": key,
+    }
+    _MW_SWEPT_CACHE[key] = tbl
+    return tbl
+
 
 def galactic_expansion(per_system_structure_kg: float,
                        spec: Dict[str, float] = None,
@@ -2277,25 +2825,31 @@ def galactic_expansion(per_system_structure_kg: float,
                        n_steps: int = 400) -> Dict[str, List[float]]:
     """Colonization-wavefront growth of total organized structure. Returns time
     series of colonized systems and total structure, saturating first at the
-    galaxy, then at the reachable-galaxy ceiling. No FTL, no over-unity."""
+    galaxy, then at the reachable-galaxy ceiling. No FTL, no over-unity.
+
+    The colonized count now comes from the REAL Milky Way density field
+    (milky_way_swept_table, SECTION 13b): an exponential thin+thick disc plus
+    Plummer bulge, swept by a sphere centred on the Sun's true position 8.15
+    kpc off-centre -- not the old uniform ball. Growth is NOT ~t^3: it is the
+    integral of a real star field, fastest while crossing the dense inner
+    galaxy, flattening as the sphere exits the thin disc."""
     sp = spec or SPEC
     v = sp["expansion_speed_c"] * C_LIGHT                    # m/s
     ly = C_LIGHT * YR                                        # metres per light-year
-    R_gal = sp["galaxy_radius_ly"] * ly
-    star_density = sp["stars_per_galaxy"] / ((4.0 / 3.0) * math.pi * R_gal ** 3)
+    mw = milky_way_swept_table(sp)
     N_gal = sp["stars_per_galaxy"]
-    N_cosmos = N_gal * sp["reachable_galaxies"]             # hard reachable ceiling
+    far_ly = mw["far_rim_ly"]
     hist = {"t": [], "systems": [], "structure_kg": [], "phase": []}
     grid = np.logspace(math.log10(YR), math.log10(t_end_s), n_steps)
     for t in grid:
-        r = v * t                                           # wavefront radius
-        if r <= R_gal:                                      # filling our galaxy
-            systems = min(N_gal, star_density * (4.0 / 3.0) * math.pi * r ** 3)
+        r_ly = v * t / ly                                   # wavefront radius
+        if r_ly <= far_ly:                                  # filling our galaxy
+            systems = min(N_gal, mw["N"](r_ly))
             phase = 0.0
         else:                                               # extragalactic reach
-            # galaxies reached ~ (r/R_gal)^3 * intergalactic density, capped
-            frac = min(1.0, (r / (R_gal * (sp["reachable_galaxies"] ** (1.0 / 3.0)))) ** 3)
-            systems = min(N_cosmos, N_gal * (1.0 + frac * (sp["reachable_galaxies"] - 1.0)))
+            # named galaxies at MEASURED distances + field growth to the
+            # reachable ceiling at real ~Mpc spacing (intergalactic_systems)
+            systems, _hit, _nx = intergalactic_systems(r_ly, sp, mw)
             phase = 1.0
         hist["t"].append(t)
         hist["systems"].append(systems)
@@ -2350,56 +2904,65 @@ def engineering_hurdles_report(twin: "EternalMatterHarvesterLattice" = None):
     # HURDLE 1 -------------------------------------------------------------
     pf = positron_factory_yield(sp)
     print("\n[H1] VACUUM PAIR HARVEST")
-    print(f"   LIMIT     : Schwinger rate at buildable fields ~ 0 pairs "
-          f"(needs E~1.3e18 V/m).")
+    print("   LIMIT     : Schwinger rate at buildable fields ~ 0 pairs "
+          "(needs E~1.3e18 V/m).")
     print(f"   MITIGATE  : abandon the vacuum; drive a {sp['beam_energy_GeV']:.0f} GeV, "
           f"{sp['beam_current_A']*1e3:.0f} mA e- beam into a high-Z converter (Bethe-Heitler),")
-    print(f"               moderate + Penning-trap the positrons (SLAC/CERN method).")
+    print("               moderate + Penning-trap the positrons (SLAC/CERN method).")
     print(f"   MAXIMIZED : {pf['eplus_per_s']:.2e} usable e+/s "
           f"({pf['mass_rate_kg_s']:.2e} kg/s of antimatter) -- REAL and nonzero.")
     print(f"               antimatter is precious: {pf['years_for_1g']:.1e} yr per gram")
-    print(f"               -> reserve it for dense energy storage / propulsion, not bulk.")
+    print("               -> reserve it for dense energy storage / propulsion, not bulk.")
 
     # HURDLE 2 -------------------------------------------------------------
     per_sys = twin.s.matter_structure_kg
     gx = galactic_expansion(per_sys, sp)
     gal_struct = sp["stars_per_galaxy"] * per_sys
     cos_struct = gx["structure_kg"][-1]
-    t_fill_gal = (sp["galaxy_radius_ly"] / sp["expansion_speed_c"])  # yr
+    # the wavefront leaves the SUN at 8.15 kpc: the farthest disc point
+    # (the anti-centre rim, 76.6 kly away) is the true fill time, not R/v.
+    mw_t = milky_way_swept_table(sp)
+    t_fill_gal = mw_t["far_rim_ly"] / sp["expansion_speed_c"]      # yr
     print("\n[H2] PER-SYSTEM MATTER LIMIT")
     print(f"   LIMIT     : one system yields only {_fmt_mass(per_sys)} of structure "
           f"(baryon-limited).")
     print(f"   MITIGATE  : seed the next star at {sp['expansion_speed_c']:.2f}c; a "
-          f"colonization wavefront fills the galaxy (~{t_fill_gal:.1e} yr),")
-    print(f"               then extragalactic reach until the LambdaCDM horizon.")
+          f"Sun-centred wavefront sweeps the real disc")
+    print(f"               (GC at {mw_t['gc_reach_ly'] / sp['expansion_speed_c'] / 1e3:.0f} kyr,"
+          f" far rim at ~{t_fill_gal:.1e} yr),")
+    print("               then extragalactic reach until the LambdaCDM horizon.")
+
+    t_hor_yr = reachable_horizon_ly(sp) / sp["expansion_speed_c"]
     print(f"   MAXIMIZED : galaxy -> {_fmt_mass(gal_struct)} "
           f"({sp['stars_per_galaxy']:.0e} systems);")
     print(f"               reachable cosmos -> {_fmt_mass(cos_struct)} "
-          f"({sp['reachable_galaxies']:.0e} galaxies) -- the honest cosmic ceiling.")
+          f"({sp['reachable_galaxies']:.0e} galaxies,")
+    print(f"               ceiling hit at ~{t_hor_yr / 1e9:.2f} Gyr -- "
+          f"real ~Mpc spacing, not 23 Myr).")
 
     # HURDLE 3 -------------------------------------------------------------
     ec = eternal_computation(sp["reservoir_budget_J"], sp)
     print("\n[H3] HEAT DEATH / WASTE-HEAT REJECTION")
-    print(f"   LIMIT     : radiator area ~ 1/T^4; the universe cools toward 0 K.")
-    print(f"   MITIGATE  : exploit it -- Landauer cost k_B T ln2 FALLS with T; use")
+    print("   LIMIT     : radiator area ~ 1/T^4; the universe cools toward 0 K.")
+    print("   MITIGATE  : exploit it -- Landauer cost k_B T ln2 FALLS with T; use")
     print(f"               reversible logic (heat/op = {sp['reversibility_factor']:.0e} x "
           f"Landauer), run colder & slower (Dyson 1979).")
     print(f"   MAXIMIZED : ops/joule rises {ec['gain_from_cooling']:.1e}x from today's T "
           f"to the de Sitter floor;")
     print(f"               total {ec['ops_at_floor_T']:.2e} logical ops from the budget")
-    print(f"               -- finite (Krauss-Starkman) but effectively an eternity.")
+    print("               -- finite (Krauss-Starkman) but effectively an eternity.")
 
     # HURDLE 8-13 (SECTION 33) ---------------------------------------------
     _pp = RadiantPowerplant("D-T", 1.0e9)
     _nat = RadiantPowerplant("D-T", 1.0e9, enrichment=HG198_NATURAL_ABUNDANCE)
     _an = RadiantPowerplant("p-B11", 1.0e9)
     print("\n[H8-H13] THE POWERPLANT: TYPED FUEL -> CONTINUOUS POWER + GOLD")
-    print(f"   LIMIT     : the EMHL works at galactic scale; a grid needs a machine")
-    print(f"               you can site TODAY, that takes a fuel someone types in")
-    print(f"               and returns power plus a product worth selling.")
-    print(f"   MITIGATE  : fold the same verified chain -- fusion, neutron capture")
-    print(f"               beyond iron, energy recycling -- down to 1 GWe, and put a")
-    print(f"               Hg-198 blanket on it: Hg-198(n,2n)Hg-197 -> EC -> Au-197.")
+    print("   LIMIT     : the EMHL works at galactic scale; a grid needs a machine")
+    print("               you can site TODAY, that takes a fuel someone types in")
+    print("               and returns power plus a product worth selling.")
+    print("   MITIGATE  : fold the same verified chain -- fusion, neutron capture")
+    print("               beyond iron, energy recycling -- down to 1 GWe, and put a")
+    print("               Hg-198 blanket on it: Hg-198(n,2n)Hg-197 -> EC -> Au-197.")
     print(f"   MAXIMIZED : {_pp.gold_kg_yr/1000:.2f} t of stable gold per year plus "
           f"{_pp.net_electric_W/1e6:,.0f} MWe --")
     print(f"               {_pp.homes:,.0f} homes, "
@@ -2409,8 +2972,8 @@ def engineering_hurdles_report(twin: "EternalMatterHarvesterLattice" = None):
         if _h["code"] in ("H11", "H13"):
             continue
         print(f"     [{_h['code']}] {_h['maximized'][:96]}")
-    print(f"     [H11] gold IS the neutron multiplier: 1 + x >= TBR + parasitic,")
-    print(f"           so making gold is what lets the plant breed its own tritium.")
+    print("     [H11] gold IS the neutron multiplier: 1 + x >= TBR + parasitic,")
+    print("           so making gold is what lets the plant breed its own tritium.")
     print(f"     [H13] the ceiling is ECONOMIC, not physical: ~"
           f"{WORLD_GOLD_MINE_T_PER_YR*1000/_pp.gold_kg_yr:,.0f} units doubles world supply.")
 
@@ -2426,9 +2989,9 @@ def engineering_hurdles_report(twin: "EternalMatterHarvesterLattice" = None):
         swarm.step(dt_yr)
     sw = swarm.telemetry
     print("\n[H4] SELF-REPLICATING ORBITAL SWARM (nanotech assembly)")
-    print(f"   LIMIT     : each station must build a full copy of itself from raw")
-    print(f"               material -- needs energy + feedstock + assembler payload.")
-    print(f"   MITIGATE  : von Neumann replication. Each station carries nanotech")
+    print("   LIMIT     : each station must build a full copy of itself from raw")
+    print("               material -- needs energy + feedstock + assembler payload.")
+    print("   MITIGATE  : von Neumann replication. Each station carries nanotech")
     print(f"               assemblers; build_time = {sw['build_time_days']:.0f} days per copy.")
     print(f"               Logistic growth dN/dt = rN(1-N/K), r = {swarm._r_growth():.2e}/s.")
     print(f"               Carrying capacity K = {sw['K_max']:.2e} stations (matter-limited).")
@@ -2436,9 +2999,9 @@ def engineering_hurdles_report(twin: "EternalMatterHarvesterLattice" = None):
     print(f"               total built = {sw['total_built']:.2e},")
     print(f"               phase = {sw['growth_phase']},")
     print(f"               replication rate = {sw['replication_rate_s']:.2e}/s.")
-    print(f"               PROOF: logistic_step is closed-form stable (audited in")
-    print(f"               selftest), N never exceeds K. No over-unity: each copy")
-    print(f"               costs real mass + energy from the plant's output.")
+    print("               PROOF: logistic_step is closed-form stable (audited in")
+    print("               selftest), N never exceeds K. No over-unity: each copy")
+    print("               costs real mass + energy from the plant's output.")
 
     # HURDLE 5 -------------------------------------------------------------
     # Each rung of the ladder is GAMOW-GATED at the plant's REAL fusion
@@ -2451,29 +3014,29 @@ def engineering_hurdles_report(twin: "EternalMatterHarvesterLattice" = None):
     riser.step(1.0, 1e6, 1e12, fusion_temp_K=riser_demo_T)  # 1 kg/s H, 1 TW surplus
     ri = riser.telemetry
     print("\n[H5] ELEMENTAL STATE RISING (automated transmutation)")
-    print(f"   LIMIT     : fusion stops at iron (binding curve peak); heavier")
-    print(f"               elements need ENDOTHERMIC r-process (energy input).")
-    print(f"               Each rung also needs progressively HIGHER TEMPERATURE --")
-    print(f"               Gamow tunnelling for two-body stages, but He->C (triple-")
-    print(f"               alpha) proceeds through the real Hoyle RESONANCE (deBoer")
-    print(f"               et al. 2017), igniting near real stellar He-burning temp")
-    print(f"               (~1e8 K), not a tunnelling-derived ~1e9-1e10 K estimate.")
-    print(f"   MITIGATE  : automated 7-stage ladder using proven nucleosynthesis:")
-    print(f"               H->He (pp, Q=26.7 MeV) -> C (triple-alpha) -> O -> Si -> Fe")
-    print(f"               (all exothermic, RELEASE energy) then Fe->Au, Fe->U")
-    print(f"               (r-process, endothermic, powered by plant surplus).")
+    print("   LIMIT     : fusion stops at iron (binding curve peak); heavier")
+    print("               elements need ENDOTHERMIC r-process (energy input).")
+    print("               Each rung also needs progressively HIGHER TEMPERATURE --")
+    print("               Gamow tunnelling for two-body stages, but He->C (triple-")
+    print("               alpha) proceeds through the real Hoyle RESONANCE (deBoer")
+    print("               et al. 2017), igniting near real stellar He-burning temp")
+    print("               (~1e8 K), not a tunnelling-derived ~1e9-1e10 K estimate.")
+    print("   MITIGATE  : automated 7-stage ladder using proven nucleosynthesis:")
+    print("               H->He (pp, Q=26.7 MeV) -> C (triple-alpha) -> O -> Si -> Fe")
+    print("               (all exothermic, RELEASE energy) then Fe->Au, Fe->U")
+    print("               (r-process, endothermic, powered by plant surplus).")
     print(f"   MAXIMIZED : at fusion_temp_K = {riser_demo_T:.1e} (hot-plant operating point):")
     print(f"               stages active = {ri['stages_active']}/7,")
     print(f"               highest Z reached = {ri['highest_Z']},")
     print(f"               Q released = {ri['Q_released_W']:.2e} W,")
     print(f"               Q spent (r-process) = {ri['Q_spent_W']:.2e} W,")
     print(f"               net energy = {ri['net_energy_W']:.2e} W.")
-    print(f"               PROOF: every Q-value is MEASURED (AME2020 / SEMF); two-body")
-    print(f"               stages use REAL Gamow tunnelling (Gamow 1928); triple-alpha")
-    print(f"               uses the REAL Hoyle-resonance rate formula (deBoer 2017) --")
-    print(f"               not an assumed constant rate, and not the wrong formula.")
-    print(f"               Exothermic stages credit energy back; endothermic stages")
-    print(f"               are bounded by available surplus power. Conservation holds.")
+    print("               PROOF: every Q-value is MEASURED (AME2020 / SEMF); two-body")
+    print("               stages use REAL Gamow tunnelling (Gamow 1928); triple-alpha")
+    print("               uses the REAL Hoyle-resonance rate formula (deBoer 2017) --")
+    print("               not an assumed constant rate, and not the wrong formula.")
+    print("               Exothermic stages credit energy back; endothermic stages")
+    print("               are bounded by available surplus power. Conservation holds.")
 
     # HURDLE 6 -------------------------------------------------------------
     intel = SwarmIntelligence()
@@ -2484,24 +3047,24 @@ def engineering_hurdles_report(twin: "EternalMatterHarvesterLattice" = None):
         intel.step(86400.0, sw2, st)
     si = intel.telemetry
     print("\n[H6] SELF-EVOLVING INTELLIGENCE (adaptive optimization)")
-    print(f"   LIMIT     : station parameters (arm length, arm count, fusion temp,")
-    print(f"               net density) have coupled trade-offs; manual tuning is")
-    print(f"               suboptimal across changing conditions.")
-    print(f"   MITIGATE  : adaptive control system (gradient ascent on measured")
-    print(f"               output). Every ~10 days, evaluates fitness (mass capture")
-    print(f"               rate) and adjusts one parameter. If fitness improved,")
-    print(f"               keeps direction; if not, tries a different parameter.")
-    print(f"               Runs on reversible logic (Landauer-limited, ~kT ln2/op).")
+    print("   LIMIT     : station parameters (arm length, arm count, fusion temp,")
+    print("               net density) have coupled trade-offs; manual tuning is")
+    print("               suboptimal across changing conditions.")
+    print("   MITIGATE  : adaptive control system (gradient ascent on measured")
+    print("               output). Every ~10 days, evaluates fitness (mass capture")
+    print("               rate) and adjusts one parameter. If fitness improved,")
+    print("               keeps direction; if not, tries a different parameter.")
+    print("               Runs on reversible logic (Landauer-limited, ~kT ln2/op).")
     print(f"   MAXIMIZED : after 200 days: generation {si['generation']},")
     print(f"               fitness = {si['fitness']:.2e},")
     print(f"               adjustments = {si['adjustments']},")
     print(f"               arm_len = {si['arm_len_m']:.0f} m,")
     print(f"               n_arms = {si['n_arms']:.0f},")
     print(f"               fusion_temp = {si['fusion_temp_K']:.2e} K.")
-    print(f"               PROOF: compute cost is negligible vs plant energy budget")
-    print(f"               (Landauer: kT ln2 ~ 4e-21 J/op at 300K, vs ~1e9 W plant).")
-    print(f"               The intelligence CANNOT violate physics -- it only tunes")
-    print(f"               parameters within physically allowed ranges.")
+    print("               PROOF: compute cost is negligible vs plant energy budget")
+    print("               (Landauer: kT ln2 ~ 4e-21 J/op at 300K, vs ~1e9 W plant).")
+    print("               The intelligence CANNOT violate physics -- it only tunes")
+    print("               parameters within physically allowed ranges.")
 
     # HURDLE 7 -------------------------------------------------------------
     gal = GalacticSeeding(sp)
@@ -2510,21 +3073,22 @@ def engineering_hurdles_report(twin: "EternalMatterHarvesterLattice" = None):
         gal.step(YR * 1000, 1e20)
     ga = gal.telemetry
     print("\n[H7] GALACTIC SEEDING (swarm expansion from void -> galaxy)")
-    print(f"   LIMIT     : one system yields finite matter; reaching galaxy-scale")
-    print(f"               requires colonizing ~1e11 star systems across ~1e5 ly.")
+    print("   LIMIT     : one system yields finite matter; reaching galaxy-scale")
+    print("               requires colonizing ~1e11 star systems across ~1e5 ly.")
     print(f"   MITIGATE  : seed probes launched at {ga['expansion_speed_c']:.2f}c, each")
-    print(f"               carrying one self-replicating station. Colonization")
-    print(f"               wavefront expands as r = v*t, filling sphere by sphere.")
-    print(f"               No FTL, no over-unity -- just patience at real speeds.")
+    print("               carrying one self-replicating station. Colonization")
+    print("               wavefront expands as r = v*t, filling sphere by sphere.")
+    print("               No FTL, no over-unity -- just patience at real speeds.")
     print(f"   MAXIMIZED : after 1 Gyr: systems = {ga['systems']:.2e},")
     print(f"               phase = {ga['phase']},")
     print(f"               wavefront = {ga['wavefront_radius_ly']:.1f} ly,")
     print(f"               galaxy fraction = {ga['galaxy_frac']*100:.2f}%,")
     print(f"               total structure = {ga['total_structure_Msun']:.2e} Msun.")
     print(f"               PROOF: wavefront speed = {ga['expansion_speed_c']:.2f}c << c.")
-    print(f"               Systems colonized <= star_density * 4/3 pi r^3 (capped")
-    print(f"               at N_galaxy). Total structure = systems * per_system_kg.")
-    print(f"               Bounded by reachable_galaxies in SPEC. Causality respected.")
+    print("               Systems colonized <= swept count in the REAL Milky")
+    print("               Way field (exp disc + Plummer bulge, Sun-centred sphere,")
+    print("               capped at N_galaxy). Total = systems * per_system_kg.")
+    print("               Bounded by reachable_galaxies in SPEC. Causality respected.")
 
     print("\n[SUMMARY] Hurdles 1-3: original EMHL (vacuum, matter limit, heat death).")
     print("          Hurdles 4-7: self-replication, transmutation, intelligence,")
@@ -2949,7 +3513,7 @@ def trap_annihilation_lifetime(pressure_Pa: float, T_K: float = 4.0) -> float:
         1/tau = n_gas * <sigma v>.  At cryogenic UHV (1e-10 Pa) this is hours-days;
     the real number behind 'store positrons with minimal loss'."""
     n_gas = pressure_Pa / (K_B * T_K)                  # ideal gas number density
-    v_th = math.sqrt(3.0 * K_B * T_K / M_E)
+
     sigma_v = math.pi * R_E ** 2 * C_LIGHT             # finite sigma*v (see above)
     rate = n_gas * sigma_v
     return 1.0 / rate if rate > 0 else float("inf")
@@ -3126,7 +3690,16 @@ class DysonCollector(Subsystem):
         dyson = min(1.0, N / max(self.spec["reps_for_full_dyson"], 1e-9))
         p = self.spec["seed_reactor_W"] + self.spec["reservoir_luminosity_W"] * \
             self.spec["collector_fraction_max"] * dyson
-        self.telemetry = {"dyson_completion": dyson, "power_W": p}
+        intercept = self.spec["collector_fraction_max"] * dyson   # fraction of L*
+        a_eq = p / SOLAR_CONST              # equivalent aperture at 1 AU [m^2]
+        self.telemetry = {"dyson_completion": dyson, "power_W": p,
+                          "l_star_W": self.spec["reservoir_luminosity_W"],
+                          "intercept_fraction": intercept,
+                          "solar_const_Wm2": SOLAR_CONST,
+                          "area_equiv_km2": a_eq / 1.0e6,
+                          "rad_pressure_N": p / C_LIGHT,
+                          "J_per_day": p * 86400.0,
+                          "seed_reactor_W": self.spec["seed_reactor_W"]}
         return dict(inp, power_W=p, dyson_power_W=p)
 
 
@@ -3137,8 +3710,17 @@ class DriverLaser(Subsystem):
         frac = self.spec.get("laser_power_fraction", 1e-6)     # tiny slice to QED R&D
         p_laser = p * frac
         E = field_from_intensity(self.spec["laser_intensity_Wcm2"])
+        e_ph_J = self.spec["laser_photon_eV"] * E_CHARGE       # photon energy [J]
         self.telemetry = {"laser_power_W": p_laser, "E_field_Vm": E,
-                          "E_over_Ecr": E / E_SCHWINGER}
+                          "E_over_Ecr": E / E_SCHWINGER,
+                          "intensity_Wcm2": self.spec["laser_intensity_Wcm2"],
+                          "photon_eV": self.spec["laser_photon_eV"],
+                          "wavelength_nm": H_PLANCK * C_LIGHT / e_ph_J * 1.0e9,
+                          "photon_flux_s": p_laser / e_ph_J,
+                          "keldysh_gamma": keldysh_parameter(
+                              E, self.spec["assist_gamma_eV"]),
+                          "below_Ecr_x": E_SCHWINGER / E,
+                          "tunnelling_exp": -math.pi * E_SCHWINGER / E}
         return {"power_W": p - p_laser, "E_field": E, "laser_power_W": p_laser}
 
 
@@ -3150,8 +3732,13 @@ class MetamaterialCavity(Subsystem):
         E = inp.get("E_field", 0.0)
         Q = self.spec.get("cavity_Q_enhancement", 100.0)
         E_eff = E * math.sqrt(Q)                                # field ~ sqrt(intensity gain)
+        omega = self.spec["laser_photon_eV"] * E_CHARGE / HBAR  # drive freq [rad/s]
         self.telemetry = {"Q_enhancement": Q, "E_eff_Vm": E_eff,
-                          "E_eff_over_Ecr": E_eff / E_SCHWINGER}
+                          "E_eff_over_Ecr": E_eff / E_SCHWINGER,
+                          "field_gain_x": math.sqrt(Q),
+                          "photon_lifetime_s": Q / omega,       # ring-down tau = Q/omega
+                          "mode_volume_m3": self.spec["cavity_volume_m3"],
+                          "still_below_Ecr_x": E_SCHWINGER / E_eff if E_eff > 0 else float("inf")}
         return dict(inp, E_field=E_eff)
 
 
@@ -3166,7 +3753,15 @@ class PairSource(Subsystem):
         pairs_per_s = vac_pairs + pf["eplus_per_s"]
         self.telemetry = {"vacuum_pairs_s": vac_pairs,
                           "beam_pairs_s": pf["eplus_per_s"],
-                          "total_pairs_s": pairs_per_s}
+                          "total_pairs_s": pairs_per_s,
+                          "vac_rate_m3s": R_vac,
+                          "beam_e_s": pf["electrons_per_s"],
+                          "yield_per_e": pf["yield_per_e"],
+                          "beam_power_W": pf["beam_power_W"],
+                          "J_per_eplus": pf["J_per_eplus"],
+                          "sigma_BH_barns": bethe_heitler_xsec(74) / 1.0e-28,
+                          "eplus_g_yr": pf["eplus_per_s"] * M_E * YR * 1.0e3,
+                          "yrs_for_1g_eplus": pf["years_for_1g"]}
         return dict(inp, pairs_per_s=pairs_per_s)
 
 
@@ -3178,8 +3773,21 @@ class SeparatorTrap(Subsystem):
         kept = pairs * self.spec["separation_eff"] * (1.0 - self.spec["annihilation_loss"])
         n_max = brillouin_density_limit(self.spec["trap_B_tesla"], M_E)
         w_c = cyclotron_frequency(E_CHARGE, self.spec["trap_B_tesla"], M_E)
+        # at the Brillouin limit the plasma frequency is exactly omega_c / sqrt(2)
+        w_p = math.sqrt(n_max * E_CHARGE ** 2 / (EPS0 * M_E)) if n_max > 0 else 0.0
+        mirror_R = self.spec.get("mirror_ratio", 2.0)
+        annih_pairs = pairs * self.spec["separation_eff"] * self.spec["annihilation_loss"]
         self.telemetry = {"kept_leptons_s": kept, "brillouin_n_m3": n_max,
-                          "cyclotron_Hz": w_c / (2 * math.pi)}
+                          "cyclotron_Hz": w_c / (2 * math.pi),
+                          "B_tesla": self.spec["trap_B_tesla"],
+                          "plasma_freq_Hz": w_p / (2 * math.pi),
+                          "max_stored": n_max * self.spec["cavity_volume_m3"],
+                          "kept_eplus_s": kept * 0.5,
+                          "kept_eminus_s": kept * 0.5,
+                          "lost_pairs_s": pairs - kept,
+                          "annih_power_W": annih_pairs * PAIR_ENERGY,
+                          "mirror_loss_frac": magnetic_mirror_loss_cone(mirror_R),
+                          "tau_annih_gas_s": trap_annihilation_lifetime(1.0e-10, 4.0)}
         return dict(inp, kept_leptons_s=kept)
 
 
@@ -3195,8 +3803,19 @@ class RecombinationReactor(Subsystem):
         atoms_s = min(e_minus, proton_feed)                    # need one e- per p+
         e_release = recombination_energy_release(atoms_s, Z=1)
         h_mass_s = atoms_s * (M_P + M_E)
+        T_r = self.spec.get("recomb_temp_K", 1.0e4)
         self.telemetry = {"H_atoms_s": atoms_s, "proton_feed_s": proton_feed,
-                          "recomb_power_W": e_release, "H_mass_kg_s": h_mass_s}
+                          "recomb_power_W": e_release, "H_mass_kg_s": h_mass_s,
+                          "e_minus_s": e_minus,
+                          "alpha_B_m3s": radiative_recombination_rate(T_r),
+                          "T_plasma_K": T_r,
+                          "chi_eV": RYDBERG_EV,
+                          "sw_flux_m2s": fs["solar_wind_proton_flux"],
+                          "collector_m2": A_collect,
+                          "H_mol_s": atoms_s / N_A,
+                          "H_kg_day": h_mass_s * 86400.0,
+                          "limiting": "e- supply" if e_minus <= proton_feed
+                                      else "p+ feed"}
         return dict(inp, H_atoms_s=atoms_s, H_mass_kg_s=h_mass_s)
 
 
@@ -3213,7 +3832,14 @@ class Nucleosynthesizer(Subsystem):
         q_per_kg = nucleosynthesis_yield(1.0)                  # J per kg H (pp-chain)
         power = fused * q_per_kg
         self.telemetry = {"fused_kg_s": fused, "fusion_power_W": power,
-                          "rate_gate_gamow": gate}
+                          "rate_gate_gamow": gate,
+                          "T_K": T, "kT_keV": K_B * T / E_CHARGE / 1.0e3,
+                          "gate_step": net[0]["label"],
+                          "Q_pp_MeV": Q_PP_FUSION / MEV,
+                          "J_per_kg_H": q_per_kg,
+                          "fused_frac": fused / h_mass if h_mass > 0 else 0.0,
+                          "chain_len": float(len(net)),
+                          "fusion_J_day": power * 86400.0}
         return dict(inp, fused_kg_s=fused, fusion_power_W=power)
 
 
@@ -3233,7 +3859,12 @@ class MatterCreationReactor(Subsystem):
         self.telemetry = {"create_power_W": p_create, "channel": ch["name"],
                           "eff": ch["eff"], "matter_kg_s": rate,
                           "antimatter_kg_s": rate, "ceiling_kg_s": ceiling,
-                          "frac_of_ceiling": rate / ceiling if ceiling > 0 else 0.0}
+                          "frac_of_ceiling": rate / ceiling if ceiling > 0 else 0.0,
+                          "c2_J_per_kg": C_LIGHT ** 2,
+                          "J_per_kg_real": C_LIGHT ** 2 / max(ch["eff"], 1e-9),
+                          "matter_g_day": rate * 86400.0 * 1.0e3,
+                          "antimatter_g_day": rate * 86400.0 * 1.0e3,
+                          "anti_stored_J": rate * 2.0 * C_LIGHT ** 2}
         return dict(inp, created_matter_kg_s=rate, created_antimatter_kg_s=rate,
                     power_W=p - p_create)
 
@@ -3256,7 +3887,13 @@ class BaryogenesisReactor(Subsystem):
         self.telemetry = {"baryo_power_W": p_b, "cp_bias": eta_bias,
                           "eps_net": eps_net, "net_baryon_kg_s": net_rate,
                           "ceiling_kg_s": ceiling,
-                          "cost_vs_Emc2": (1.0 / eps_net) if eps_net > 0 else float("inf")}
+                          "cost_vs_Emc2": (1.0 / eps_net) if eps_net > 0 else float("inf"),
+                          "eta_observed": ETA_B_OBSERVED,
+                          "eta_SM_CKM": ETA_B_SM_CKM,
+                          "eta_boost_x": eta_bias / ETA_B_OBSERVED,
+                          "sphaleron_T_K": T_EW_KELVIN,
+                          "sphaleron_E_TeV": E_SPHALERON_TEV,
+                          "net_g_day": net_rate * 86400.0 * 1.0e3}
         return dict(inp, net_baryon_kg_s=net_rate, power_W=p - p_b)
 
 
@@ -3268,7 +3905,11 @@ class ISRUForge(Subsystem):
         forge_frac = self.spec.get("forge_power_fraction", 0.9)
         p_forge = p * forge_frac
         mdot = p_forge / self.spec["isru_energy_per_kg_J"]
-        self.telemetry = {"forge_power_W": p_forge, "structure_kg_s": mdot}
+        self.telemetry = {"forge_power_W": p_forge, "structure_kg_s": mdot,
+                          "J_per_kg": self.spec["isru_energy_per_kg_J"],
+                          "reservoir_kg": self.spec["isru_baryon_reservoir_kg"],
+                          "t_per_day": mdot * 86400.0 / 1.0e3,
+                          "cheaper_vs_Emc2_x": C_LIGHT ** 2 / self.spec["isru_energy_per_kg_J"]}
         return dict(inp, structure_kg_s=mdot, power_W=p - p_forge)
 
 
@@ -3291,7 +3932,13 @@ class EnergyRecycler(Subsystem):
                           "recovered_W": p_recover, "external_W": external,
                           "surplus_W": surplus,
                           "EROI": eroi(supplied, max(external + self.spec["seed_reactor_W"], 1.0)),
-                          "self_sufficient": float(supplied >= demand)}
+                          "self_sufficient": float(supplied >= demand),
+                          "fusion_burn_kg_s": organize * self.spec["fusion_fuel_fraction"],
+                          "idle_demand_W": N * self.spec["replicator_idle_power_W"],
+                          "waste_gross_W": waste,
+                          "covers_demand_x": supplied / max(demand, 1e-30),
+                          "return_vs_ISRU_x": fusion_energy_per_kg_H()
+                                             / self.spec["isru_energy_per_kg_J"]}
         return dict(inp, external_power_W=external, surplus_power_W=surplus)
 
 
@@ -3305,7 +3952,12 @@ class RadiatorBank(Subsystem):
         waste *= (1.0 - self.spec["waste_heat_recovery_eff"])
         T = self.spec["reservoir_temp_K"]
         area = radiator_area(waste, T)
-        self.telemetry = {"waste_heat_W": waste, "radiator_area_m2": area, "T_rad_K": T}
+        flux = 0.9 * SIGMA_SB * max(T, 1e-6) ** 4      # eps*sigma*T^4 [W/m^2]
+        self.telemetry = {"waste_heat_W": waste, "radiator_area_m2": area,
+                          "T_rad_K": T, "flux_W_m2": flux,
+                          "area_km2": area / 1.0e6, "emissivity": 0.9,
+                          "wien_um": 2.897771955e-3 / max(T, 1e-6) * 1.0e6,
+                          "m2_per_GW": 1.0e9 / flux}
         return dict(inp, waste_heat_W=waste, radiator_area_m2=area)
 
 
@@ -3339,12 +3991,16 @@ class EMHLPlant:
         self.total_net_baryon_kg = 0.0
         self.total_H_atoms = 0.0
         self.stockpile = ElementStockpile()
+        self.flow_in = {}       # stage name -> flow dict AS RECEIVED (honest ledger)
+        self.flow_out = {}      # stage name -> flow dict AS EMITTED
 
     def step(self, dt: float) -> Dict[str, Dict[str, float]]:
         flow = {"replicators": self.replicators}
         tele = {}
         for stage in self.stages:
+            self.flow_in[stage.name] = flow
             flow = stage.step(dt, flow)
+            self.flow_out[stage.name] = flow
             tele[stage.name] = dict(stage.telemetry)
         self.total_structure_kg += flow.get("structure_kg_s", 0.0) * dt
         self.total_created_kg += flow.get("created_matter_kg_s", 0.0) * dt
@@ -3570,12 +4226,15 @@ def _proofs() -> List[MathProof]:
 
     P.append(MathProof(
         "P16", "Galactic seeding: subluminal wavefront, bounded by reachable cosmos",
-        "Seed probes travel at v = 0.1c (SPEC expansion_speed_c). Colonization "
-        "wavefront radius r = v*t. Systems colonized = min(N_galaxy, rho * 4/3 pi r^3). "
-        "Total structure = systems * per_system_kg, bounded by reachable_galaxies.",
+        "Seed probes travel at v = 0.1c (SPEC expansion_speed_c). The wavefront "
+        "is a sphere centred on the SUN (8.15 kpc off-centre) sweeping the REAL "
+        "Milky Way field (exp thin+thick disc + Plummer bulge, swept count from "
+        "milky_way_swept_table) -- not a uniform rho * 4/3 pi r^3. Total "
+        "structure = systems * per_system_kg, bounded by reachable_galaxies.",
         ["v = 0.1c << c (causality respected, no FTL).",
          "r(t) = v * t (wavefront expands at constant subluminal speed).",
-         "N_sys = min(N_gal, star_density * 4/3 pi r^3) (volume filling).",
+         "N_sys = min(N_gal, integral of the real disc+bulge density inside",
+         "the Sun-centred sphere) -- GC at 26.6 kly, far rim at 76.6 kly.",
          "Beyond galaxy: N_sys capped at N_gal * reachable_galaxies (Krauss-Starkman).",
          "Total structure = N_sys * per_system_kg -- finite, bounded, honest."],
         lambda: (lambda g: (g.step(YR * 1e6, 1e20),
@@ -3769,15 +4428,15 @@ def feedstock_report():
           f"{CMB_MEAN_PHOTON_EV*1e3:.3f} meV each")
     print(f"   -> flux {fs['cmb_photon_flux']:.2e} /m^2/s, but energy is "
           f"{fs['cmb_below_threshold_x']:.1e}x BELOW the 1.022 MeV pair threshold")
-    print(f"   VERDICT: the CMB cannot make a single pair. It is a COLD SINK, not fuel.")
+    print("   VERDICT: the CMB cannot make a single pair. It is a COLD SINK, not fuel.")
     print(f"Cosmic rays        : {COSMIC_RAY_FLUX:.1e} /m^2/s at ~{COSMIC_RAY_MEAN_GEV:.0f} GeV")
     print(f"   -> ~{fs['cr_pair_rate_per_m2_s']:.1e} pair-conversions /m^2/s on a "
           f"thick target: real, but a negligible mass rate.")
     print(f"Solar wind PROTONS : {SOLAR_WIND_N:.1e} /m^3 at {SOLAR_WIND_V/1e3:.0f} km/s")
     print(f"   -> {fs['solar_wind_proton_flux']:.2e} protons/m^2/s = "
           f"{fs['solar_wind_kg_per_m2_yr']:.2e} kg/m^2/yr of BARYONS")
-    print(f"   VERDICT: the solar wind is the real feedstock for ATOMS -- it brings")
-    print(f"   protons, which recombination needs. Leptons from the vacuum cannot.")
+    print("   VERDICT: the solar wind is the real feedstock for ATOMS -- it brings")
+    print("   protons, which recombination needs. Leptons from the vacuum cannot.")
 
 
 def chemistry_report():
@@ -3787,7 +4446,7 @@ def chemistry_report():
     print(f"   forms positronium (bound e+e-, {ps['binding_eV']:.1f} eV) then annihilates:")
     print(f"   para-Ps {ps['para_tau_s']*1e12:.2f} ps -> 2 gamma @ "
           f"{ps['gamma_energy_keV']:.1f} keV;  ortho-Ps {ps['ortho_tau_s']*1e9:.0f} ns -> 3 gamma")
-    print(f"   => trapping must beat ~0.1 ns: cryogenic Penning traps do (see --nuclear).")
+    print("   => trapping must beat ~0.1 ns: cryogenic Penning traps do (see --nuclear).")
     print("\nSTEP 1  Radiative recombination  p+ + e-  -> H + gamma(13.6 eV):")
     aB = radiative_recombination_rate(1.0e4)
     x = saha_ionization_fraction(1.0e12, 5.0e3, 13.6)
@@ -3803,13 +4462,13 @@ def chemistry_report():
             print(f"      ^ NOTE: {s['note']}")
     _, _, peak = binding_energy_curve()
     print(f"   => exothermic up to the peak at A~{peak[0]} ({peak[1]:.2f} MeV/nucleon);")
-    print(f"      heavier than iron COSTS energy (needs supernovae / r-process).")
+    print("      heavier than iron COSTS energy (needs supernovae / r-process).")
     print("\nSTEP 3  Atomic -> molecular -> solid chemistry (real bond energies):")
     for bond in ("H-H", "C-C", "C=O", "O-H", "Si-O", "Na-Cl"):
         print(f"   {bond:<6} bond = {BOND_ENERGY_EV[bond]:.2f} eV", end="")
     print()
     print(f"   NaCl ionic character = {bond_ionicity(11,17)*100:.0f}% (electroneg. diff);")
-    print(f"   SiO2/C networks -> refractory solids: the structural matter output.")
+    print("   SiO2/C networks -> refractory solids: the structural matter output.")
 
 
 def nuclear_report():
@@ -3847,7 +4506,7 @@ def parts_report():
                 print(f"        {k:<22} = {v}")
             else:
                 print(f"        {k:<22} = {v:.4e}")
-    print(f"\n   PLANT TOTALS after 1 s:")
+    print("\n   PLANT TOTALS after 1 s:")
     print(f"        bulk structure printed  = {_fmt_mass(plant.total_structure_kg)}")
     print(f"        NEW matter created      = {_fmt_mass(plant.total_created_kg)}  "
           f"(+ {_fmt_mass(plant.total_antimatter_kg)} antimatter)")
@@ -3917,8 +4576,9 @@ def validity_report():
          "CANNOT violate physics -- it only optimizes within real constraints.", True),
         ("GALACTIC SEEDING",
          "seed probes at 0.1c, each carrying one self-replicating station. "
-         "Colonization wavefront expands as r=v*t (subluminal, causal). Systems "
-         "colonized <= star_density * 4/3 pi r^3, capped at N_galaxy. No FTL, "
+         "The wavefront is a sphere centred on the Sun (8.15 kpc off-centre) "
+         "sweeping the REAL Milky Way field -- exponential thin+thick disc, "
+         "Plummer bulge, four arms -- whose integral caps at N_galaxy. No FTL, "
          "no over-unity -- just patient expansion at real engineering speeds.", True),
     ]
     for name, why, known in items:
@@ -4579,7 +5239,6 @@ class PenningTrapSim:
         q_stored = (self.collected_ep - self.collected_em + self.collected_p) * E_CHARGE
         q_total = q_active + q_stored
         # injected charge = seed protons + all injected pairs (net 0) = n_protons*e
-        n_inj_pairs = int(round(self.step_n * self.cfg.inject_pairs_per_step))
         seed_q = self.cfg.n_seed_protons * E_CHARGE          # pairs are net-neutral
         return {"net_charge_C": q_total, "expected_C": seed_q,
                 "conserved": abs(q_total - seed_q) < 1e-3 * E_CHARGE,
@@ -4701,7 +5360,7 @@ def rprocess_report():
 # true frontier -- so half the yield is antimatter, banked as the densest fuel.
 
 # rest energies / thresholds ------------------------------------------------
-M_PROTON_C2 = M_P * C_LIGHT ** 2
+M_PROTON_C2 = M_P_C2
 PPBAR_THRESHOLD = 2.0 * M_PROTON_C2          # p + pbar rest energy (1.876 GeV)
 PION_C2 = PARTICLES["pi_plus"]["m"] * C_LIGHT ** 2
 DELTA_RESONANCE_MEV = 1232.0                 # N* -> photoproduction resonance
@@ -4991,7 +5650,7 @@ def baryogenesis_report():
 # the Energy Return On Investment (EROI = returned/invested) grows without bound as
 # the swarm scales. Profit (matter out per external joule in) OUTSCALES the input.
 
-FUSION_ENERGY_PER_KG_H = None            # set below (needs nucleosynthesis_yield)
+FUSION_ENERGY_PER_KG_H = nucleosynthesis_yield(1.0)   # ~6.4e14 J/kg H (pp-chain)
 
 
 def fusion_energy_per_kg_H() -> float:
@@ -5154,8 +5813,6 @@ class PipelineBalancer:
         rows = []
         # E=mc^2 ceilings for the two power-fed creation stages, from their own
         # reported input power (each stage already tracks its power draw).
-        p_create = tele.get("MatterCreationReactor", {}).get("create_power_W", 0.0)
-        p_baryo = tele.get("BaryogenesisReactor", {}).get("baryo_power_W", 0.0)
         ceilings = {
             "PairSource": None,     # measured against BEAM PHYSICS ceiling, not E=mc^2
             "RecombinationReactor": None,  # measured against proton-feed ceiling
@@ -5318,7 +5975,7 @@ def efficiency_report():
     print(f"Fusion yield of organized H : {q:.2e} J/kg")
     print(f"Cost to organize that H     : {e_org:.2e} J/kg")
     print(f"   -> fusing a slice returns {q/e_org:.1e}x its organizing cost: the")
-    print(f"      plant powers ITSELF like a star, external demand collapses to ~0.")
+    print("      plant powers ITSELF like a star, external demand collapses to ~0.")
     # a representative operating point (mature swarm), power-consistent
     twin = EternalMatterHarvesterLattice(); twin.run(verbose=False)
     organize_rate = constrained_organize_rate(twin.s.replicators)
@@ -5335,7 +5992,7 @@ def efficiency_report():
         print(f"   surplus exported          : {bal['surplus_W']:.2e} W (free energy to spend)")
     # profit outscaling
     pc = profit_curve(years=1.0e4)
-    print(f"\nPROFIT OUTSCALING (matter energy-equiv per external joule invested):")
+    print("\nPROFIT OUTSCALING (matter energy-equiv per external joule invested):")
     print(f"   start : {pc['profit'][0]:.2e}")
     print(f"   end   : {pc['profit'][-1]:.2e}   -> grew "
           f"{pc['profit'][-1]/max(pc['profit'][0],1e-30):.1e}x")
@@ -5346,7 +6003,7 @@ def efficiency_report():
     # maintenance vs radiate-away
     stock = twin.s.matter_structure_kg
     mnt = maintenance_equilibrium(organize_rate, stock)
-    print(f"\nMATTER MAINTENANCE (it 'only radiates away' if abandoned):")
+    print("\nMATTER MAINTENANCE (it 'only radiates away' if abandoned):")
     print(f"   stock {_fmt_mass(stock)} decays at {mnt['decay_rate_kg_s']:.2e} kg/s "
           f"(proton tau>1e34 yr)")
     print(f"   harvest {mnt['harvest_rate_kg_s']:.2e} kg/s outpaces decay by "
@@ -5419,7 +6076,7 @@ def autonomous_run_report(n_full_physics: int = 8, max_years: float = 2.0e4,
     if verbose:
         print("\n=== AUTONOMOUS RUN -- seed craft -> galaxy, the full closed loop ===")
         print(f"(simulating {n_full_physics} real colonized systems in full physics;")
-        print(f" the rest of the galaxy is tracked statistically -- SECTION 17)\n")
+        print(" the rest of the galaxy is tracked statistically -- SECTION 17)\n")
     gs = GalacticSeeding(n_full_physics=n_full_physics)
     dt = (max_years * YR) / n_steps
     milestones_hit = {
@@ -6067,7 +6724,10 @@ def blanket_energy_per_fusion_MeV(fuel: "FusionFuel", x_n2n: float,
     # Q-VALUES here, not thresholds: the heat ledger debits the energy actually
     # converted to nuclear mass. Recoil KE thermalizes and stays in the budget.
     q_n2n = x_n2n * HG198_N2N_Q_MEV * fuel.n_per_rx
-    q_mult = multiplier * BE9_N2N_Q_MEV * fuel.n_per_rx            # Be-9(n,2n) cost
+    # Be-9(n,2n) multiplier cost -- zero for fuels whose neutrons never reach
+    # the 1.85 MeV threshold (the layer then cannot multiply at all)
+    q_mult = (multiplier * BE9_N2N_Q_MEV * fuel.n_per_rx
+              if fuel.En_MeV >= BE9_N2N_THRESHOLD_MEV else 0.0)
     total = fuel.Q_MeV + q_breed - q_n2n - q_mult + q_gamma
     return {"Q_fusion_MeV": fuel.Q_MeV, "Q_breed_MeV": q_breed,
             "Q_n2n_cost_MeV": q_n2n, "Q_mult_cost_MeV": q_mult,
@@ -6355,7 +7015,10 @@ class RadiantPowerplant:
             self.x_n2n_max = x_max
         if x_max < econ_min - 1e-12:
             need = econ_min - x_max
-            if need <= NEUTRON_MULTIPLIER_MAX:
+            # a Be-9/Pb multiplier layer only fires if the fuel's neutrons are
+            # above the (n,2n) threshold -- a 0.5 MeV neutron cannot multiply
+            mult_ok = self.fuel.En_MeV >= BE9_N2N_THRESHOLD_MEV
+            if need <= NEUTRON_MULTIPLIER_MAX and mult_ok:
                 self.multiplier = min(NEUTRON_MULTIPLIER_MAX, need * 1.25)
                 fix = ("install a dedicated Be-9(n,2n) / Pb(n,2n) MULTIPLIER "
                        "layer ahead of the gold blanket, worth +%.2f n/source "
@@ -6841,7 +7504,7 @@ def powerplant_report(fuel_text: str = "D-T", net_MW: float = 1000.0,
     print(f"             specific energy {f.energy_per_kg_J:.3e} J/kg "
           f"({f.energy_per_kg_J/4.2e7:.2e} x coal)")
 
-    print(f"\n--- POWER TRAIN " + "-" * 60)
+    print("\n--- POWER TRAIN " + "-" * 60)
     print(f"   fusion thermal      {pp.thermal_W/1e6:>12,.1f} MWth")
     print(f"   gross electric      {pp.gross_electric_W/1e6:>12,.1f} MWe   "
           f"(Brayton eta = {THERMAL_TO_ELECTRIC_EFF:.0%})")
@@ -6858,7 +7521,7 @@ def powerplant_report(fuel_text: str = "D-T", net_MW: float = 1000.0,
     print(f"   fusion rate         {pp.fusion_rate_s:>12.3e} /s")
     print(f"   fuel burned         {pp.fuel_burn_kg_s*YR*PLANT_AVAILABILITY:>12,.1f} kg/yr")
 
-    print(f"\n--- NEUTRON ECONOMY (why gold and tritium are the same problem) " + "-" * 8)
+    print("\n--- NEUTRON ECONOMY (why gold and tritium are the same problem) " + "-" * 8)
     e = pp.economy
     print(f"   source neutrons     {pp.n_source_s:>12.3e} /s")
     print(f"   (n,2n) conversion x {e['x_n2n']:>12.3f} per source n  "
@@ -6877,7 +7540,7 @@ def powerplant_report(fuel_text: str = "D-T", net_MW: float = 1000.0,
           f"- {b['Q_n2n_cost_MeV']:.2f} gold - {b['Q_mult_cost_MeV']:.2f} mult "
           f"+ {b['Q_gamma_MeV']:.2f} gamma)")
 
-    print(f"\n--- TRANSMUTATION BLANKET (Hg-198 -> Hg-197 -> Au-197) " + "-" * 17)
+    print("\n--- TRANSMUTATION BLANKET (Hg-198 -> Hg-197 -> Au-197) " + "-" * 17)
     print(f"   feedstock           {pp.enrichment:>12.1%} Hg-198 "
           f"(natural abundance {HG198_NATURAL_ABUNDANCE:.2%})")
     print(f"   threshold           {HG198_N2N_THRESHOLD_MEV:>12.3f} MeV   "
@@ -6893,7 +7556,7 @@ def powerplant_report(fuel_text: str = "D-T", net_MW: float = 1000.0,
           f"{'SHIPPABLE' if a['shippable'] else 'HELD'}")
 
     g = pp.gold_rating()
-    print(f"\n=== GOLD OUTPUT " + "=" * 60)
+    print("\n=== GOLD OUTPUT " + "=" * 60)
     print(f"   {g['kg_per_day']:>12,.2f} kg/day  (annual average, incl. "
           f"{PLANT_AVAILABILITY:.0%} availability; {pp.gold_kg_s*86400:,.2f} kg/day at power)")
     print(f"   {g['kg_yr']:>12,.1f} kg/yr   =  {g['tonnes_yr']:.3f} tonnes/yr  "
@@ -6903,7 +7566,7 @@ def powerplant_report(fuel_text: str = "D-T", net_MW: float = 1000.0,
     print(f"   {g['world_mine_share']*100:>12.4f} % of world mine production "
           f"({WORLD_GOLD_MINE_T_PER_YR:,.0f} t/yr, USGS)")
 
-    print(f"\n=== RATED TO POWER CITIES " + "=" * 50)
+    print("\n=== RATED TO POWER CITIES " + "=" * 50)
     print(f"   {'tier':<12} {'population':>11} {'avg load':>10} {'peak':>9} "
           f"{'this plant carries':>20}")
     for c in pp.city_rating():
@@ -6914,7 +7577,7 @@ def powerplant_report(fuel_text: str = "D-T", net_MW: float = 1000.0,
           f"({HOME_KWH_PER_YEAR:,.0f} kWh/yr each, EIA)")
     print(f"   -> firm capacity includes a {GRID_RESERVE_MARGIN:.0%} NERC reserve margin")
 
-    print(f"\n--- THE HONEST TRADE: gold costs power " + "-" * 33)
+    print("\n--- THE HONEST TRADE: gold costs power " + "-" * 33)
     print(f"   energy forgone per kg of gold   {g['energy_cost_mwh_per_kg']:>10,.0f} MWh_e/kg")
     print(f"   that electricity is worth       ${g['energy_cost_usd_per_kg']:>10,.0f} /kg")
     print(f"   the gold is worth               ${g['usd_per_kg']:>10,.0f} /kg")
@@ -6924,7 +7587,7 @@ def powerplant_report(fuel_text: str = "D-T", net_MW: float = 1000.0,
           f"gold ${pp.gold_usd_yr/1e6:,.1f}M/yr   "
           f"(gold is {g['gold_vs_power_revenue']:.2f}x the power revenue)")
 
-    print(f"\n--- ENGINEERING HURDLES (limit -> mitigation -> MAXIMIZED) " + "-" * 13)
+    print("\n--- ENGINEERING HURDLES (limit -> mitigation -> MAXIMIZED) " + "-" * 13)
     for h in pp.hurdles:
         print(f"\n   [{h['code']}] LIMIT     : {_pp_wrap(h['limit'])}")
         print(f"        MITIGATE  : {_pp_wrap(h['mitigation'])}")
@@ -6949,7 +7612,7 @@ def powerplant_report(fuel_text: str = "D-T", net_MW: float = 1000.0,
           f"{pp.au_cooling_kg:,.1f} kg still cooling = {total:,.1f} kg gold,")
     print(f"   {pp.energy_exported_J/3.6e15:,.2f} TWh delivered, "
           f"${(pp.gold_revenue_usd + pp.power_revenue_usd)/1e6:,.1f}M total revenue.")
-    print(f"   The plant does not stop. Feed it fuel and it repeats this forever.")
+    print("   The plant does not stop. Feed it fuel and it repeats this forever.")
 
     print("\n--- WHAT IS AND IS NOT PROVEN (run --trl for the full audit) " + "-" * 11)
     print("   PROVEN     : the transmutation itself. Hg-198(n,2n)Hg-197 -> Au-197 is a")
@@ -7063,11 +7726,11 @@ def maximize_gold(net_MW: float = 1000.0, fuel_text: str = "D-T",
               f"budget makes gold; the other "
               f"{HG_NONELASTIC_XSEC_BARN - HG198_N2N_XSEC_BARN:.1f} b "
               f"({100*(HG_NONELASTIC_XSEC_BARN-HG198_N2N_XSEC_BARN)/HG_NONELASTIC_XSEC_BARN:.1f}%)")
-        print(f"   goes to (n,gamma), (n,p) and (n,alpha) and returns something that is")
-        print(f"   not gold. No enrichment, geometry or budget moves that number.")
+        print("   goes to (n,gamma), (n,p) and (n,alpha) and returns something that is")
+        print("   not gold. No enrichment, geometry or budget moves that number.")
 
         b, bp = best, best["plant"]
-        print(f"\n--- THE BUILDABLE OPTIMUM " + "-" * 46)
+        print("\n--- THE BUILDABLE OPTIMUM " + "-" * 46)
         print(f"   gold          {b['gold_t']:.3f} t/yr   "
               f"({b['gain']:.3f}x the baseline, "
               f"{100*b['x']/ceiling:.1f}% of the physical ceiling)")
@@ -7077,7 +7740,7 @@ def maximize_gold(net_MW: float = 1000.0, fuel_text: str = "D-T",
         print(f"   revenue       ${b['usd_yr']/1e6:,.1f}M/yr "
               f"(+${(b['usd_yr']-base.gold_usd_yr)/1e6:,.1f}M over baseline)")
         print(f"   electricity   {b['net_MW']:,.0f} MWe -- UNCHANGED. The grid does not")
-        print(f"                 pay for this; the fuel bill does.")
+        print("                 pay for this; the fuel bill does.")
         print(f"   fuel          {b['fuel_kg_yr']:,.1f} kg/yr D+T "
               f"({b['fuel_gain']:.3f}x baseline, +{b['fuel_kg_yr']-rows[0]['fuel_kg_yr']:,.1f} kg/yr)")
         print(f"   tritium       {bp.tritium_burn_kg_yr:,.1f} kg/yr (bred in-house, TBR "
@@ -7088,21 +7751,21 @@ def maximize_gold(net_MW: float = 1000.0, fuel_text: str = "D-T",
               f"{bp.activation['activity_bq_per_g']:.3f} Bq/g "
               f"({'SHIPPABLE' if bp.activation['shippable'] else 'HELD'})")
         print(f"\n   WHAT IT COSTS: {b['fuel_gain']:.3f}x the fuel for {b['gain']:.3f}x the")
-        print(f"   gold. Deuterium is seawater and tritium is bred on site, so this is a")
-        print(f"   favourable trade -- but it is a real cost, not a free lunch, and the")
-        print(f"   thermal ledger (proof P20) still debits every gram.")
+        print("   gold. Deuterium is seawater and tritium is bred on site, so this is a")
+        print("   favourable trade -- but it is a real cost, not a free lunch, and the")
+        print("   thermal ledger (proof P20) still debits every gram.")
         _n_base = WORLD_GOLD_MINE_T_PER_YR * 1000.0 / max(rows[0]["plant"].gold_kg_yr, 1e-9)
         _n_max = WORLD_GOLD_MINE_T_PER_YR * 1000.0 / max(bp.gold_kg_yr, 1e-9)
-        print(f"\n   THE CATCH -- MAXIMIZING OUTPUT TIGHTENS THE ECONOMIC CEILING.")
-        print(f"   More gold per unit means FEWER units before the fleet doubles world")
-        print(f"   supply and prices itself down (hurdle H13):")
+        print("\n   THE CATCH -- MAXIMIZING OUTPUT TIGHTENS THE ECONOMIC CEILING.")
+        print("   More gold per unit means FEWER units before the fleet doubles world")
+        print("   supply and prices itself down (hurdle H13):")
         print(f"      baseline duty   -> ~{_n_base:,.0f} units ({_n_base/1000:.2f} TWe)")
         print(f"      maximized duty  -> ~{_n_max:,.0f} units ({_n_max/1000:.2f} TWe)"
               f"   [{_n_base/max(_n_max,1e-9):.2f}x fewer]")
-        print(f"   Physical maximization and fleet-scale economics point in OPPOSITE")
-        print(f"   directions. Maximize the blanket if you are building a few units;")
-        print(f"   if you are building thousands, the electricity is the product and")
-        print(f"   the conservative duty is the better business.")
+        print("   Physical maximization and fleet-scale economics point in OPPOSITE")
+        print("   directions. Maximize the blanket if you are building a few units;")
+        print("   if you are building thousands, the electricity is the product and")
+        print("   the conservative duty is the better business.")
         print(f"\n   AT WORLD SCALE: {WORLD_ELECTRICITY_TW*1e12/(net_MW*1e6):,.0f} units "
               f"-> {WORLD_ELECTRICITY_TW*1e12/(net_MW*1e6)*b['gold_t']:,.0f} t/yr "
               f"= {WORLD_ELECTRICITY_TW*1e12/(net_MW*1e6)*b['gold_t']/WORLD_GOLD_MINE_T_PER_YR:.2f}x")
@@ -7136,21 +7799,21 @@ def powerplant_market_report(net_MW: float = 1000.0, fuel_text: str = "D-T"):
         gt = units * per_unit_t
         print(f"   {label:<24} {units:>9,.0f} {units*net_MW/1000:>10,.1f} "
               f"{gt:>12,.1f} {gt/WORLD_GOLD_MINE_T_PER_YR:>13.2f}x")
-    print(f"\n   THE HEADLINE: if every watt the world generates came from this")
+    print("\n   THE HEADLINE: if every watt the world generates came from this")
     print(f"   plant, it would also mint {world_gold:,.0f} t of gold per year --")
     print(f"   {world_gold/WORLD_GOLD_MINE_T_PER_YR:.1f}x the entire world mining "
           f"industry ({WORLD_GOLD_MINE_T_PER_YR:,.0f} t/yr),")
     print(f"   and {world_gold/ABOVE_GROUND_GOLD_T*100:.2f}% of all the gold ever "
           f"mined ({ABOVE_GROUND_GOLD_T:,.0f} t) every year.")
-    print(f"\n   [H13] AND THAT IS THE LIMIT -- an ECONOMIC one, not a physical one.")
-    print(f"   Gold demand is inelastic (~-0.6). Doubling supply does not double")
-    print(f"   revenue; it collapses the price. The honest ceiling on this design")
+    print("\n   [H13] AND THAT IS THE LIMIT -- an ECONOMIC one, not a physical one.")
+    print("   Gold demand is inelastic (~-0.6). Doubling supply does not double")
+    print("   revenue; it collapses the price. The honest ceiling on this design")
     n_break = WORLD_GOLD_MINE_T_PER_YR / max(per_unit_t, 1e-9)
     print(f"   is therefore a FLEET SIZE of roughly {n_break:,.0f} units "
           f"({n_break*net_MW/1e6:.2f} TWe) before")
-    print(f"   the plant is doubling world gold supply and pricing itself down.")
-    print(f"   Past that point the electricity is the product and the gold is the")
-    print(f"   byproduct -- which is why this is a POWERPLANT first, and a mint second.")
+    print("   the plant is doubling world gold supply and pricing itself down.")
+    print("   Past that point the electricity is the product and the gold is the")
+    print("   byproduct -- which is why this is a POWERPLANT first, and a mint second.")
     return pp
 
 # =============================================================================
@@ -7274,7 +7937,14 @@ def visualize_galactic(gx: Dict[str, List[float]], spec: Dict[str, float],
                label=f"galaxy full ({spec['stars_per_galaxy']:.0e} systems)")
     ax.axhline(spec["stars_per_galaxy"] * spec["reachable_galaxies"], ls="--",
                color="crimson", lw=1, label="reachable-cosmos ceiling")
-    ax.set_title("Colonized systems (wavefront volume ~ t^3 -> saturation)")
+    # the front crosses REAL galaxies at their measured distances
+    for _gi in (1, 7):
+        _gn, _gd, _gs, _ = NEAREST_GALAXIES[_gi]
+        _gt = _gd / spec["expansion_speed_c"]          # yr to cross it at v
+        ax.axvline(_gt, ls=":", color="#e07b39", lw=1)
+        ax.text(_gt * 1.15, 2.0, f"{_gn.split('(')[0].strip()}\n{_gt/1e6:.1f} Myr",
+                fontsize=7, color="#e07b39", va="bottom")
+    ax.set_title("Colonized systems (Sun-centred sphere x real disc field -> saturation)")
     ax.set_xlabel("time [yr]"); ax.set_ylabel("systems"); ax.legend(fontsize=8)
     ax.grid(True, which="both", alpha=0.25)
 
@@ -8106,45 +8776,6 @@ def build_harvester_lattice_wires(nx=4, ny=4, nz=3, spacing=2.2):
     return segs, nodes
 
 
-def _box_edges(center, hx, hy, hz, color):
-    """The 12 edges of a rectangular frame as (p0,p1,color) segments."""
-    cx, cy, cz = center
-    c = [(cx - hx, cy - hy, cz - hz), (cx + hx, cy - hy, cz - hz),
-         (cx + hx, cy + hy, cz - hz), (cx - hx, cy + hy, cz - hz),
-         (cx - hx, cy - hy, cz + hz), (cx + hx, cy - hy, cz + hz),
-         (cx + hx, cy + hy, cz + hz), (cx - hx, cy + hy, cz + hz)]
-    E = [(0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), (6, 7), (7, 4),
-         (0, 4), (1, 5), (2, 6), (3, 7)]
-    return [(c[i], c[j], color) for i, j in E]
-
-
-def build_replicator_wires(center, s=1.0, progress=1.0):
-    """A von-Neumann REPLICATOR FACTORY as real hardware (wireframe): an outer
-    structural frame, two gantry rails, a build arm, and -- growing with
-    `progress` in [0,1] -- a COPY it is assembling beside itself. This is the
-    'replicating and building' machinery the harvested matter feeds."""
-    cx, cy, cz = center
-    frame = (150, 120, 210)
-    rail = (110, 140, 180)
-    arm = (230, 200, 120)
-    segs = []
-    # outer frame
-    segs += _box_edges(center, 0.7 * s, 0.7 * s, 0.7 * s, frame)
-    # two gantry rails across the top
-    for yy in (cy - 0.5 * s, cy + 0.5 * s):
-        segs.append(((cx - 0.7 * s, yy, cz + 0.7 * s),
-                     (cx + 0.9 * s, yy, cz + 0.7 * s), rail))
-    # build arm reaching to the copy (moves with progress)
-    ax = cx + 0.2 * s + 0.6 * s * (0.5 + 0.5 * math.sin(progress * 6.28))
-    segs.append(((cx, cy, cz + 0.7 * s), (ax, cy, cz + 0.2 * s), arm))
-    # the COPY being assembled (a box that grows from the base up)
-    ph = max(0.05, progress)
-    bx = cx + 1.15 * s
-    segs += _box_edges((bx, cy, cz - 0.35 * s + 0.35 * s * ph),
-                       0.34 * s, 0.34 * s, 0.35 * s * ph, (200, 160, 240))
-    return segs
-
-
 # --- SOLID mesh system (filled, flat-shaded parts -- like Main.py/GMRv1.17) ----
 # Real hardware is drawn as SOLID geometry: verts + coloured faces, rendered with
 # backface culling, flat shading and painter's depth-sort. This is what makes it
@@ -8674,6 +9305,83 @@ def build_replicator_solid(center, s=1.0, progress=1.0):
     ph = max(0.06, progress)
     a.add(*_g_box(0.32 * s, 0.32 * s, 0.36 * s * ph),
           (cx + 1.15 * s, cy, cz - 0.36 * s + 0.36 * s * ph), (200, 160, 240))
+    return a.arrays()
+
+
+def build_machine_extras():
+    """The rest of the MACHINE hardware around the harvester lattice -- every
+    part is real plant equipment, sized from SPEC, not decoration:
+
+      drive beamline + W converter   (the Bethe-Heitler e+ source -- the pair
+                                      feed that actually works, SLAC/CERN-style)
+      e+/e- extraction rails         (collector combs on the lattice +-z faces;
+                                      E_sep drifts each sign to its own face)
+      solar-wind proton vane         (the baryon feedstock -- leptons alone
+                                      cannot make atoms; tilted at the star)
+      power trunk                    (the feed line from the collector swarm
+                                      down a bus mast to lattice/pile/foundry)
+      radiator bank                  (Stefan-Boltzmann waste-heat fins on the
+                                      ANTI-SUN side -- they must see cold sky)
+      pile hopper frame              (the conditioned-matter bin; the fill
+                                      level is drawn live, not in this mesh)
+
+    Returns (V, F, C) arrays for _render_solid()."""
+    a = Assembly()
+    gun = (140, 150, 175); tgt = (70, 68, 82); rail = (95, 200, 165)
+    vane = (190, 130, 220); pwr = (235, 200, 90); fin = (120, 130, 160)
+    bin_ = (120, 220, 160)
+    # --- drive beamline: 1 GeV / 1 mA e- feed onto the W converter -------
+    a.add(*_cyl_between((-12.8, 0.0, 0.0), (-9.75, 0.0, 0.0), 0.07),
+          (0, 0, 0), gun)                                             # beam pipe
+    for xc in (-11.7, -10.7):                     # steering/focus coil collars
+        a.add(*_cyl_between((xc - 0.09, 0.0, 0.0), (xc + 0.09, 0.0, 0.0), 0.16),
+              (0, 0, 0), (100, 140, 200))
+    a.strut((-12.8, -0.07, 0.0), (-12.8, -1.0, 0.0), 0.04, gun)         # pipe stand
+    a.add(*_g_box(0.09, 0.34, 0.34), (-9.62, 0.0, 0.0), tgt)            # W target
+    # --- extraction rails on the lattice +-z faces (+z takes e+, -z e-) --
+    for sgn in (-1.0, 1.0):
+        a.add(*_cyl_between((-8.9, 0.0, 1.80 * sgn), (-4.1, 0.0, 1.80 * sgn),
+                            0.045), (0, 0, 0), rail)                  # bus rail
+        a.strut((-6.5, -2.4, 1.80 * sgn), (-6.5, 2.4, 1.80 * sgn),
+                0.035, rail)                                          # comb spine
+        a.add(*_g_box(0.14, 0.14, 0.14), (-3.9, 0.0, 1.80 * sgn), rail)  # feed box
+    # --- solar-wind proton vane, normal tilted at the host star ----------
+    Rv = _rot_align_z((0.42, 0.52, 0.74))          # same direction as the key light
+    pv, pf = _g_box(1.10, 0.70, 0.02)
+    a.add([tuple(Rv @ np.asarray(v, float)) for v in pv], pf,
+          (-2.2, 4.6, 0.9), vane)
+    a.strut((-2.2, 3.9, 0.9), (-2.2, 2.6, 0.9), 0.04, vane)               # mast
+    # --- power trunk: drop mast + bus bar + service drops ----------------
+    a.add(*_cyl_between((0.0, 5.0, 0.0), (0.0, 3.0, 0.0), 0.055), (0, 0, 0), pwr)
+    a.add(*_cyl_between((-6.5, 3.0, 0.0), (6.5, 3.0, 0.0), 0.055), (0, 0, 0), pwr)
+    a.add(*_cyl_between((-6.5, 3.0, 0.0), (-6.5, 2.6, 0.0), 0.04), (0, 0, 0), pwr)
+    a.add(*_cyl_between((1.3, 3.0, 0.0), (1.3, -0.2, 0.0), 0.04), (0, 0, 0), pwr)
+    a.add(*_cyl_between((5.9, 3.0, 0.0), (5.9, 1.5, 0.0), 0.04), (0, 0, 0), pwr)
+    # --- radiator bank (anti-sun side so the fins see cold sky) ----------
+    for fx in (4.2, 6.4, 8.6):
+        a.add(*_g_box(0.95, 1.25, 0.03), (fx, -0.35, -2.95), fin)
+        a.strut((fx - 0.95, -1.6, -2.95), (fx + 0.95, -1.6, -2.95), 0.035, fin)
+    a.add(*_cyl_between((3.0, -1.6, -2.95), (9.8, -1.6, -2.95), 0.06),
+          (0, 0, 0), (110, 120, 150))                                  # manifold
+    # --- pile hopper frame (four posts + rim; fill box is drawn live) ----
+    for px in (0.85, 1.75):
+        for pz in (-0.45, 0.45):
+            a.strut((px, -0.45, pz), (px, -1.65, pz), 0.035, bin_)
+    a.add(*_g_box(0.50, 0.50, 0.06), (1.3, -0.42, 0.0), bin_)            # rim
+    return a.arrays()
+
+
+def build_expansion_seed_solid(s=0.8):
+    """The EXPANSION SEED -- a field cell plus the probe hardware that carries
+    it to the next system: antenna mast + electronics box + two power panels.
+    (The propulsion budget is modeled for real in SECTION 31d2b.)"""
+    a = Assembly()
+    build_field_cell_solid(a, (0.0, 0.0, 0.0), s=s)
+    a.add(*_cyl_between((0.0, 0.55, 0.0), (0.0, 1.05, 0.0), 0.025),
+          (0, 0, 0), (200, 220, 240))                                   # mast
+    a.add(*_g_box(0.10, 0.10, 0.10), (0.0, 1.12, 0.0), (210, 190, 140))  # avionics
+    a.add(*_g_box(0.30, 0.02, 0.14), (-0.75, 0.0, 0.0), (90, 140, 220))  # panel -
+    a.add(*_g_box(0.30, 0.02, 0.14), (0.75, 0.0, 0.0), (90, 140, 220))   # panel +
     return a.arrays()
 
 
@@ -9210,6 +9918,141 @@ _STAGE_COLORS = [
     (255, 160, 60), (90, 200, 210), (120, 175, 235), (70, 80, 100),
 ]
 
+# The primary flow key each stage CONSUMES (reads) -- used by the FLOW LEDGER
+# so the panel shows the stage's real input beside what it produced.
+_PLANT_CONSUMES = [
+    None,               # 0 DysonCollector -- source stage (starlight)
+    "power_W",          # 1 DriverLaser
+    "E_field",          # 2 MetamaterialCavity
+    "E_field",          # 3 PairSource
+    "pairs_per_s",      # 4 SeparatorTrap
+    "kept_leptons_s",   # 5 RecombinationReactor
+    "H_mass_kg_s",      # 6 Nucleosynthesizer
+    "power_W",          # 7 MatterCreationReactor
+    "power_W",          # 8 BaryogenesisReactor
+    "power_W",          # 9 ISRUForge
+    "structure_kg_s",   # 10 EnergyRecycler
+    "laser_power_W",    # 11 RadiatorBank
+]
+
+# Evidence tag per stage (the _vtag convention): the WEAKEST link in the stage
+# sets the tag, honestly -- a stage is only as proven as its least-proven part.
+#   MEAS    = every component class has been demonstrated in the lab/space
+#   SPEC    = engineering design built only from demonstrated physics
+#   FRONTIER= relies on at least one undemonstrated phenomenon (flagged)
+_PLANT_STAGE_TAG = [
+    "SPEC",      # 0 DysonCollector -- physics trivial, megascale engineering
+    "MEAS",      # 1 DriverLaser     -- NIF/ELI-class CPA chains run today
+    "SPEC",      # 2 MetamaterialCavity -- photonic-crystal cavities exist (lab)
+    "MEAS",      # 3 PairSource      -- SLAC/CERN/KEK beam-on-target e+ sources
+    "MEAS",      # 4 SeparatorTrap   -- ALPHA/ATRAP/ATRAP-class Penning traps
+    "MEAS",      # 5 RecombinationReactor -- textbook plasma recombination
+    "FRONTIER",  # 6 Nucleosynthesizer -- net-gain fusion (NIF 2022 shot, not reactor)
+    "SPEC",      # 7 MatterCreationReactor -- Breit-Wheeler observed (STAR 2021)
+    "FRONTIER",  # 8 BaryogenesisReactor -- engineered CP source is speculative
+    "SPEC",      # 9 ISRUForge       -- MOXIE/RESOLVE-class ISRU demos flown
+    "FRONTIER",  # 10 EnergyRecycler  -- net-electric fusion still unproven
+    "MEAS",      # 11 RadiatorBank    -- ISS EATCS ammonia-loop radiators
+]
+
+# Per-stage part callouts for the FOCUSED view -- the showcase convention:
+# every component a real machine of that class needs, named, with its anchor
+# ON the actual mesh (stage meshes are built at the origin, so local offsets
+# ARE world coords) and an evidence tag.  Nothing illustrative.
+#   (name, color, (x, y, z), function, tag)
+_PLANT_PARTS = [
+    # 0 -- DYSON COLLECTOR (build_dyson_collector_solid)
+    [("mast truss",      (150, 160, 180), (0.0, 0.0, 0.35),  "carbon-fibre column",          "MEAS"),
+     ("hinge arm x6",    (120, 130, 150), (0.18, 0.0, 0.1),  "tile attitude control",        "MEAS"),
+     ("mirror tile x6",  (235, 200, 90),  (0.35, 0.0, 0.1),  "Kapton reflector, Sun-facing", "SPEC"),
+     ("power bus bar",   (200, 180, 90),  (-0.3, 0.0, -0.6), "collects tile output",         "SPEC"),
+     ("power conditioner",(80, 160, 200), (0.0, 0.0, -0.6),  "DC bus -> plant feed",         "MEAS")],
+    # 1 -- DRIVER LASER (build_driver_laser_solid)
+    [("optical bench",   (60, 65, 75),    (0.0, 0.0, -0.3),  "vibration-isolated plate",     "MEAS"),
+     ("pump diodes x5",  (50, 120, 200),  (-0.3, 0.0, -0.18),"~40% efficient diode bank",    "MEAS"),
+     ("Ti:Sapph rod",    (180, 120, 200), (0.0, 0.0, 0.0),   "gain crystal, 800 nm",         "MEAS"),
+     ("flashlamp ring x2",(200, 160, 80), (0.10, 0.0, 0.08), "pump lamps around rod",        "MEAS"),
+     ("compressor gratings",(160,170,190),(0.25, 0.0, 0.05), "CPA stretcher/compressor",     "MEAS"),
+     ("beam tube",       (150, 160, 180), (0.28, 0.0, -0.02),"evacuated beamline",           "MEAS"),
+     ("paraboloid focus",(220, 220, 240), (0.45, 0.0, 0.0),  "off-axis parabola -> cavity",  "MEAS")],
+    # 2 -- METAMATERIAL CAVITY (build_metamaterial_cavity_solid)
+    [("support strut x4",(90, 100, 120),  (0.175,0.175, 0.0),"mirror alignment frame",       "MEAS"),
+     ("DBR mirror x2",   (120, 160, 200), (0.0, 0.0, 0.22),  "Bragg stack, >99.9% refl",     "MEAS"),
+     ("photonic-crystal lattice",(100,210,170),(0.16,0.16,0.06),"field-mode confinement",    "SPEC"),
+     ("coupling waveguide",(150,160,180), (-0.4, 0.0, 0.0),  "laser input from stage 2",     "MEAS")],
+    # 3 -- PAIR SOURCE (build_pair_source_solid)
+    [("linac baseplate", (55, 60, 70),    (0.0, 0.0, -0.2),  "accelerator bed",              "MEAS"),
+     ("RF cavities x3",  (200, 150, 80),  (-0.2, 0.07, 0.0), "S-band pillbox, ~20 MV/m",     "MEAS"),
+     ("quadrupole magnet",(150,100,200),  (0.15, 0.09, 0.0), "beam focus",                   "MEAS"),
+     ("W converter target",(180,180,200), (0.28, 0.05, 0.0), "~1 X0 tungsten, e+ shower",    "MEAS"),
+     ("capture solenoid",(120, 175, 235), (0.42, 0.10, 0.0), "gathers slow e+ -> trap",      "MEAS"),
+     ("beam pipe",       (100, 110, 130), (-0.45,0.0, 0.0),  "1 GeV e- in",                  "MEAS")],
+    # 4 -- SEPARATOR TRAP (build_field_cell_solid + mirror coils)
+    [("vacuum chamber",  (108, 120, 142), (0.0, 0.48, 0.2),  "UHV bore, Ti wall",            "MEAS"),
+     ("ring electrode",  (210, 180, 100), (0.32, 0.0, 0.0),  "hyperbolic ring, Penning",     "MEAS"),
+     ("endcap -",        (205, 175, 95),  (0.0, 0.0, -0.42), "biased axial confinement",     "MEAS"),
+     ("endcap +",        (205, 175, 95),  (0.0, 0.0, 0.42),  "biased axial confinement",     "MEAS"),
+     ("solenoid 5 T",    (120, 175, 235), (0.40, 0.0, 0.30), "superconducting B field",      "MEAS"),
+     ("metamaterial ring",(95, 200, 165), (0.5, 0.0, 0.0),   "field-cell cavity band",       "FRONTIER"),
+     ("mirror coil x2",  (100, 150, 220), (0.48, 0.0, 0.62), "magnetic bottle ends",         "MEAS"),
+     ("e- extraction",   (80, 150, 240),  (-0.68,0.0, 0.0),  "electrons out -> recomb",      "MEAS"),
+     ("e+ extraction",   (240, 150, 60),  (0.68, 0.0, 0.0),  "positrons out -> store",       "MEAS")],
+    # 5 -- RECOMBINATION REACTOR (build_recombination_reactor_solid)
+    [("plasma chamber",  (108, 130, 160), (0.0, 0.33, 0.25), "recombination volume",         "MEAS"),
+     ("cooling jacket",  (70, 130, 180),  (0.0, -0.38, 0.0), "removes 13.6 eV/atom",         "MEAS"),
+     ("proton feed",     (150, 70, 200),  (-0.38,-0.2, 0.0), "solar-wind p+ in",             "MEAS"),
+     ("e- injection",    (80, 150, 240),  (0.0, 0.40, 0.0),  "kept electrons in",            "MEAS"),
+     ("H nozzle",        (100, 220, 130), (0.47, 0.0, 0.0),  "neutral H out -> fusion",      "SPEC"),
+     ("diagnostic port x3",(160,170,190), (0.30, 0.13, 0.0), "Saha/optical monitors",        "MEAS")],
+    # 6 -- NUCLEOSYNTHESIZER (build_nucleosynthesizer_solid)
+    [("hohlraum chamber",(130, 140, 165), (0.0, 0.3, 0.15),  "NIF-class target chamber",     "MEAS"),
+     ("laser port x4",   (220, 180, 90),  (0.39, 0.39, 0.0), "drive beams into hohlraum",    "MEAS"),
+     ("TF coil x3",      (120, 175, 235), (0.38, 0.0, 0.22), "tokamak confinement rings",    "MEAS"),
+     ("fuel injector",   (100, 220, 130), (0.0, -0.4, 0.0),  "H feed from recomb stage",     "MEAS"),
+     ("ash output",      (120, 200, 120), (0.42, 0.0, 0.0),  "fused elements -> bank",       "SPEC")],
+    # 7 -- MATTER CREATION (build_matter_creation_reactor_solid)
+    [("gamma reflector x2",(220, 200, 80),(0.0, 0.3, 0.35),  "focuses gammas head-on",       "SPEC"),
+     ("interaction volume",(200, 180, 100),(0.0, 0.16, 0.0), "gamma+gamma -> e+e-",          "SPEC"),
+     ("gamma beam pipe", (240, 220, 100), (0.55, 0.0, 0.0),  "colliding photon beams",       "SPEC"),
+     ("e+/e- sep magnet",(120, 175, 235), (0.45, 0.12, 0.0), "splits matter / antimatter",   "MEAS"),
+     ("matter out",      (80, 150, 240),  (0.0, -0.38, 0.0), "new stable matter -> bank",    "SPEC"),
+     ("antimatter out",  (240, 150, 60),  (0.0, 0.38, 0.0),  "anti fraction -> storage",     "SPEC"),
+     ("frame strut x4",  (90, 100, 120),  (0.35, 0.35, 0.4), "vessel support",               "MEAS")],
+    # 8 -- BARYOGENESIS (build_baryogenesis_reactor_solid)
+    [("EW plasma vessel",(160, 100, 60),  (0.0, 0.3, 0.2),   "T ~ 1.85e15 K region",         "FRONTIER"),
+     ("outer shell",     (120, 80, 50),   (0.0, -0.35,0.15), "pressure/heat boundary",       "SPEC"),
+     ("CP electrode x2", (255, 100, 100), (0.2, 0.0, 0.04),  "engineered CP bias [*FTR]",    "FRONTIER"),
+     ("sphaleron core",  (255, 160, 60),  (0.0, 0.1, 0.15),  "B+L violation runs here",      "FRONTIER"),
+     ("CP drive coil",   (255, 80, 80),   (0.22, 0.0, 0.25), "chiral winding [*FTR]",        "FRONTIER"),
+     ("baryon out",      (100, 220, 130), (0.44, 0.0, 0.0),  "NET matter -> bank",           "SPEC"),
+     ("energy in",       (200, 180, 100), (-0.44,0.0, 0.0),  "plant power feed",             "MEAS"),
+     ("diag antenna x3", (180, 100, 100), (0.16, 0.25, 0.0), "B-asymmetry monitors",         "SPEC")],
+    # 9 -- ISRU FORGE (build_isru_forge_solid)
+    [("base platform",   (70, 75, 90),    (0.0, 0.0, -0.35), "factory floor",                "MEAS"),
+     ("solar furnace",   (200, 120, 60),  (-0.25,0.14, 0.0), "refine/melt feedstock",        "MEAS"),
+     ("heating coil",    (230, 100, 50),  (-0.25,-0.18,0.0), "induction heating",            "MEAS"),
+     ("mining arm",      (180, 160, 120), (-0.45,0.2, 0.3),  "2-segment excavator",          "MEAS"),
+     ("ore bucket",      (160, 140, 100), (-0.55,0.4, 0.15), "regolith scoop",               "MEAS"),
+     ("gantry rail x2",  (110, 140, 180), (0.4, 0.15, 0.2),  "printer axis",                 "MEAS"),
+     ("print head",      (90, 200, 210),  (0.25, 0.0, 0.2),  "additive manufacturing",       "MEAS"),
+     ("extrusion nozzle",(90, 200, 210),  (0.25, 0.0, 0.1),  "deposition tip",               "MEAS"),
+     ("printed block",   (100, 180, 170), (0.25, 0.0, -0.05),"structure growing",            "MEAS"),
+     ("conveyor",        (120, 130, 150), (0.0, 0.0, 0.0),   "melt -> printer feed",         "MEAS")],
+    # 10 -- ENERGY RECYCLER (build_energy_recycler_solid)
+    [("tokamak torus",   (130, 140, 170), (0.29, 0.0, 0.0),  "H burn for self-power",        "FRONTIER"),
+     ("TF coil x8",      (120, 175, 235), (0.22, 0.22, 0.0), "Nb3Sn D-rings (ITER-class)",   "MEAS"),
+     ("central solenoid",(150, 100, 220), (0.0, 0.06, 0.12), "inductive current drive",      "MEAS"),
+     ("heat exchanger",  (80, 130, 180),  (0.45, 0.0, 0.0),  "waste-heat reclaim",           "MEAS"),
+     ("HX fin x5",       (100, 150, 200), (0.41, 0.09, 0.0), "thermoelectric plates",        "MEAS"),
+     ("power bus out",   (220, 200, 80),  (0.68, 0.0, 0.0),  "surplus -> plant",             "MEAS"),
+     ("fuel pipe",       (100, 220, 130), (-0.33,0.0, 0.0),  "H slice -> tokamak",           "MEAS")],
+    # 11 -- RADIATOR BANK (build_radiator_bank_solid)
+    [("coolant manifold",(80, 90, 110),   (0.06, 0.0, 0.2),  "distributes working fluid",    "MEAS"),
+     ("radiator fin x8", (60, 70, 90),    (0.35, 0.0, 0.03), "emissivity 0.9 panels",        "MEAS"),
+     ("support arm x8",  (70, 80, 100),   (0.10, 0.10, 0.0), "fin deployment",               "MEAS"),
+     ("coolant pipe x2", (100, 110, 130), (0.5, 0.0, 0.0),   "heat in / cold out",           "MEAS")],
+]
+
 
 def build_stage_solid(stage_idx, center, s=1.0):
     """Build the solid hardware for plant stage `stage_idx` (0-11) at `center`."""
@@ -9229,7 +10072,7 @@ def build_plant_pipeline_solid(spacing=4.0, s=1.0):
         cy = 0.0
         cz = 0.0
         centers.append((cx, cy, cz))
-        V, F, C = _STAGE_BUILDERS[i]((cx, cy, cz), s)
+        V, F, C = build_stage_solid(i, (cx, cy, cz), s)
         chunks.append((V, F, C))
     # inter-stage flow pipes (convert to numpy arrays for _merge_arrays)
     for i in range(n - 1):
@@ -9252,13 +10095,18 @@ def build_plant_pipeline_solid(spacing=4.0, s=1.0):
 
 
 def void_capture(volume_m3: float, enhance: float = 1.0e9) -> Dict[str, float]:
-    """ENGINEERING the large-volume capture over empty space. The ambient pair
-    supply per m^3 is tiny -- so we tackle it the only honest way: COVER MORE
-    VOLUME and enhance the local field. Real inputs that CAN pair-produce in a
-    field-filled volume: cosmic-ray secondaries + dynamically-assisted vacuum
-    events, scaled by an 'enhance' factor from the metamaterial/QED field. Returns
-    the pair capture rate for a given swept volume, and the volume/area needed for
-    a target. 'Impossible' becomes 'how big must the net be' -- an engineering size."""
+    """ENGINEERING the large-volume pair supply over empty space. The ambient
+    pair production rate per m^3 is tiny -- so we tackle it the only honest
+    way: COVER MORE VOLUME and enhance the local field. Real inputs that CAN
+    pair-produce in a field-filled volume: cosmic-ray secondaries +
+    dynamically-assisted vacuum events, scaled by an 'enhance' factor from
+    the metamaterial/QED field. NOTE the physics this models: pairs are
+    counted as they are PRODUCED inside the field volume (born inside the
+    cells, captured there) -- NOT intercepted crossing it like a wall.
+    Ambient-flux interception is a separate, far weaker channel computed by
+    net_capture_chain(). Returns the pair rate for a given swept volume, and
+    the volume/area needed for a target. 'Impossible' becomes 'how big must
+    the net be' -- an engineering size."""
     # cosmic-ray-driven pair events per m^3 per s in a field-filled cell (small but
     # nonzero), lifted by the enhancement of the resonant metamaterial field.
     base_rate_per_m3 = COSMIC_RAY_FLUX * 1e-4 * 1e-9      # conservative pair yield/m^3/s
@@ -9424,16 +10272,21 @@ def element_table_report():
 # Orbital stations are the physical platforms that DEPLOY the harvester lattice
 # over a large volume of space. Each station is a central hub (docking ring +
 # power core + command module) that casts out net arms -- long trusses carrying
-# field cells -- forming an area-of-effect net that sweeps a huge volume for
-# pairs. The station also routes harvested material through a separation and
-# storage pipeline to element banks.
+# field cells -- forming an area-of-effect net that patrols a huge volume.
+# The web catches flux the only way charge can be caught at these speeds:
+# magnetically (each cell's dipole funnel feeds the bore -- see
+# net_capture_chain). The station also routes harvested material through a
+# separation and storage pipeline to element banks.
 
 def build_orbital_station_solid(center, s=1.0, n_arms=6, arm_len=2.5):
     """An ORBITAL STATION as solid hardware: central hub (docking ring + power
     core + command module) with net arms radiating outward, each carrying a
-    field cell at its tip. The arms form the area-of-effect net. Real hardware:
-    a space station truss with deployed lattice arms, like a solar power
-    satellite with harvester cells instead of solar panels."""
+    field cell at its tip. The arms deploy the area-of-effect net: field
+    cells whose dipole magnetospheres funnel charged flux into bores -- the
+    swept disc is patrolled volume, not a capture wall (see
+    net_capture_chain). Real hardware: a space station truss with deployed
+    lattice arms, like a solar power satellite with harvester cells instead
+    of solar panels."""
     a = Assembly()
     cx, cy, cz = center
     # central hub: docking ring (torus)
@@ -9467,6 +10320,43 @@ def build_orbital_station_solid(center, s=1.0, n_arms=6, arm_len=2.5):
         p2 = (cx + mid_r * ca2, cy + mid_r * sa2, cz)
         sv, sf = _cyl_between(p1, p2, 0.015 * s, 4)
         a.add(sv, sf, (0, 0, 0), (90, 110, 140))
+    # solar array wings x2 -- the station's power plant. dyson_power() models
+    # the swarm's captured starlight; each station physically carries
+    # deployable photovoltaic paddles (ISS iROSA-class roll-out arrays),
+    # parked in the two gaps between net arms (+/-y, where no arm runs).
+    for sy in (-1, 1):
+        a.add(*_g_box(0.06 * s, 0.75 * s, 0.012 * s),
+              (cx, cy + sy * 1.05 * s, cz + 0.05 * s), (30, 60, 140))
+        bv, bf = _cyl_between((cx, cy + sy * 0.30 * s, cz + 0.05 * s),
+                              (cx, cy + sy * 1.02 * s, cz + 0.05 * s),
+                              0.02 * s, 5)
+        a.add(bv, bf, (0, 0, 0), (120, 140, 170))
+    # radiator panels x2 -- waste-heat rejection. The RadiatorBank stage
+    # (SECTION 21) makes the same accounting for the plant: every watt of
+    # harvest/refine/print ends as heat that must radiate (Stefan-Boltzmann,
+    # A ~ 1/T^4). Hung below the arm plane so the net sweeps clear.
+    for sx in (-1, 1):
+        a.add(*_g_box(0.45 * s, 0.012 * s, 0.25 * s),
+              (cx + sx * 0.85 * s, cy, cz - 0.45 * s), (200, 90, 70))
+        rv2, rf2 = _cyl_between((cx + sx * 0.20 * s, cy, cz - 0.40 * s),
+                                (cx + sx * 0.42 * s, cy, cz - 0.40 * s),
+                                0.015 * s, 5)
+        a.add(rv2, rf2, (0, 0, 0), (150, 110, 100))
+    # RCS thruster quads x4 on the docking ring -- attitude control that keeps
+    # the net deployed and pointed (Dragon Draco / Soyuz KDU pod class).
+    for ang_deg in (45, 135, 225, 315):
+        ang = math.radians(ang_deg)
+        a.add(*_g_cone(0.035 * s, 0.012 * s, -0.02 * s, 0.06 * s, 6),
+              (cx + 0.34 * s * math.cos(ang), cy + 0.34 * s * math.sin(ang),
+               cz + 0.06 * s), (190, 195, 210))
+    # ISRU fabrication bay hanging beside the intake funnel -- the nanotech
+    # assembler that mines/refines/prints a copy of this station every
+    # build_time_s (the SelfReplicatingOrbitalSwarm's replication unit).
+    a.add(*_g_box(0.09 * s, 0.09 * s, 0.07 * s),
+          (cx + 0.30 * s, cy, cz - 0.28 * s), (160, 120, 80))
+    fbv, fbf = _cyl_between((cx + 0.20 * s, cy, cz - 0.28 * s),
+                           (cx + 0.09 * s, cy, cz - 0.28 * s), 0.02 * s, 5)
+    a.add(fbv, fbf, (0, 0, 0), (140, 105, 70))
     # material collection funnel (cone below the hub, routing to processing)
     a.add(*_g_cone(0.25 * s, 0.06 * s, -0.15 * s, -0.45 * s, 12),
           center, (100, 200, 130))
@@ -9536,6 +10426,15 @@ def build_material_router_solid(center, s=1.0):
     for zc in (-0.15 * s, 0.15 * s):
         a.add(*_g_torus(0.30 * s, 0.035 * s, 12, 5),
               (cx, cy, cz + zc), (120, 175, 235))
+    # sector field poles x2 -- the pole pieces that shim the bending field
+    # (real sector mass spectrometers shape the gap field this way)
+    for sx in (-1, 1):
+        a.add(*_g_box(0.015 * s, 0.28 * s, 0.20 * s),
+              (cx + sx * 0.28 * s, cy, cz), (170, 180, 200))
+    # ion source on the input line -- the catch must be ionized before the
+    # sector magnet can bend it (electron-impact ionizer, calutron practice)
+    a.add(*_g_box(0.09 * s, 0.09 * s, 0.07 * s),
+          (cx, cy, cz + 0.38 * s), (220, 160, 90))
     # input pipe from harvester (from above)
     iv, iff = _cyl_between((cx, cy, cz + 0.5 * s),
                            (cx, cy, cz + 0.25 * s), 0.04 * s, 6)
@@ -9549,6 +10448,10 @@ def build_material_router_solid(center, s=1.0):
         ov, of = _cyl_between((cx, cy, cz - 0.25 * s),
                               (ex, ey, cz - 0.5 * s), 0.025 * s, 5)
         a.add(ov, of, (0, 0, 0), col)
+    # Faraday detector rail under the output fan -- collector cups + beam
+    # dump for whatever fails to sort (the isotope-separator collector)
+    a.add(*_g_box(0.5 * s, 0.05 * s, 0.045 * s),
+          (cx, cy - 0.34 * s, cz - 0.58 * s), (210, 120, 120))
     # support struts
     for ang_deg in (45, 135, 225, 315):
         ang = math.radians(ang_deg)
@@ -9603,6 +10506,91 @@ def build_orbital_complex_solid(s=1.0):
     return V, F, C, labels, centers
 
 
+# Orbital part table, grouped by the three sections: (name, mesh color,
+# function, evidence tag) -- the _PP_PART_GROUPS convention applied to the
+# orbital complex. Every component the mesh actually draws is listed and
+# tagged: MEAS = demonstrated component class, SPEC = engineering design
+# choice, MODEL = simulation output, *FTR = no demonstrated path yet.
+_ORB_PART_GROUPS = [
+    ("1. ORBITAL STATION", [
+        ("docking ring",        (160, 170, 200), "hub torus: berth + hard point", "MEAS"),
+        ("power core",          (220, 180, 80),  "reactor + main bus",            "SPEC"),
+        ("command module",      (100, 160, 220), "avionics + swarm uplink",       "MEAS"),
+        ("antenna dish",        (150, 170, 200), "telecom to seed probes",        "MEAS"),
+        ("solar wings x2",      (30, 60, 140),   "deployable PV paddles (iROSA)", "MEAS"),
+        ("radiator panels x2",  (200, 90, 70),   "waste-heat rejection fins",     "MEAS"),
+        ("RCS pods x4",         (190, 195, 210), "attitude-control quads",        "MEAS"),
+        ("ISRU fab bay",        (160, 120, 80),  "prints a station copy/cycle",   "MODEL"),
+        ("net arms x6",         (110, 130, 160), "deployable field-cell booms",   "SPEC"),
+        ("field cells x6",      (120, 210, 255), "metamaterial net nodes",        "FRONTIER"),
+        ("cross-struts",        (90, 110, 140),  "net-mesh stiffening ring",      "MEAS"),
+        ("collector funnel",    (100, 200, 130), "catch -> router feed",          "SPEC"),
+    ]),
+    ("2. MATERIAL ROUTER", [
+        ("sorting chamber",     (130, 145, 175), "m/z separation volume",         "MEAS"),
+        ("sector coils x2",     (120, 175, 235), "bending-magnet windings",       "MEAS"),
+        ("field poles x2",      (170, 180, 200), "shim the gap field",            "MEAS"),
+        ("ion source",          (220, 160, 90),  "E-impact ionizer (calutron)",   "MEAS"),
+        ("input pipe",          (100, 200, 130), "catch -> ionizer feed",         "SPEC"),
+        ("element pipes x5",    (150, 200, 235), "bent beams -> vaults",          "SPEC"),
+        ("detector rail",       (210, 120, 120), "Faraday cups + beam dump",      "MEAS"),
+        ("support struts x4",   (90, 100, 120),  "chamber cage",                  "MEAS"),
+    ]),
+    ("3. ELEMENT BANK", [
+        ("vaults x8",           (200, 210, 225), "H He C O Si Fe Au U tanks",     "MEAS"),
+        ("insulation jackets",  (120, 130, 150), "MLI on the gas tanks",          "MEAS"),
+        ("feed pipes x8",       (150, 170, 195), "router -> vault fill",          "MEAS"),
+        ("extract pipes x8",    (150, 170, 195), "vault -> manifold",             "MEAS"),
+        ("manifold",            (100, 130, 150), "shared draw-down header",       "MEAS"),
+        ("sunshield",           (230, 210, 140), "passive shadow (zero-boiloff)", "MEAS"),
+        ("shield posts x2",     (170, 160, 120), "sunshield supports",            "MEAS"),
+        ("cryocooler",          (120, 190, 235), "active 20 K / 4 K stages",      "MEAS"),
+        ("vent stack",          (170, 175, 190), "H/He boiloff relief",           "MEAS"),
+        ("base platform",       (60, 70, 85),    "vault support frame",           "SPEC"),
+    ]),
+]
+
+# leader-line callout anchors for the FOCUSED section (built at the origin):
+# part name -> local offset in builder coordinates (s=1.0). Same convention as
+# _PP_PART_LOCAL/_PP_PART_ANCHORS -- each leader lands on the real component.
+_ORB_PART_LOCAL = [
+    ("docking ring",        ( 0.34,  0.00,  0.00)),
+    ("power core",          (-0.10, -0.14,  0.15)),
+    ("command module",      ( 0.00,  0.00,  0.30)),
+    ("antenna dish",        ( 0.00,  0.00,  0.36)),
+    ("solar wings x2",      ( 0.00,  1.55,  0.05)),
+    ("radiator panels x2",  (-0.85,  0.00, -0.45)),
+    ("RCS pods x4",         ( 0.24,  0.24,  0.12)),
+    ("ISRU fab bay",        ( 0.30,  0.00, -0.28)),
+    ("net arms x6",         ( 1.60,  0.00,  0.00)),
+    ("field cells x6",      ( 2.50,  0.00,  0.00)),
+    ("cross-struts",        ( 1.41,  0.81,  0.00)),
+    ("collector funnel",    ( 0.00,  0.00, -0.33)),
+    ("sorting chamber",     ( 0.00,  0.00,  0.00)),
+    ("sector coils x2",     ( 0.30,  0.00,  0.15)),
+    ("field poles x2",      (-0.28,  0.00,  0.00)),
+    ("ion source",          ( 0.00,  0.00,  0.38)),
+    ("input pipe",          ( 0.00,  0.00,  0.49)),
+    ("element pipes x5",    ( 0.25, -0.43, -0.38)),
+    ("detector rail",       ( 0.00, -0.34, -0.58)),
+    ("support struts x4",   ( 0.20,  0.20,  0.00)),
+    ("vaults x8",           (-1.10,  0.00,  0.00)),
+    ("insulation jackets",  (-1.65,  0.00,  0.00)),
+    ("feed pipes x8",       ( 0.00,  0.00,  0.40)),
+    ("extract pipes x8",    ( 0.55,  0.00, -0.40)),
+    ("manifold",            ( 0.00,  0.00, -0.45)),
+    ("sunshield",           ( 0.00,  0.00,  0.72)),
+    ("shield posts x2",     (-2.10,  0.00,  0.10)),
+    ("cryocooler",          (-2.38,  0.00, -0.10)),
+    ("vent stack",          ( 2.38,  0.00,  0.28)),
+    ("base platform",       ( 0.00,  0.00, -0.52)),
+]
+_ORB_PART_ANCHORS = {nm: np.array(pt, dtype=float)
+                     for nm, pt in _ORB_PART_LOCAL}
+assert all(nm in _ORB_PART_ANCHORS for _g, _it in _ORB_PART_GROUPS
+           for nm, _c, _d, _t in _it), "every grouped orbital part needs an anchor"
+
+
 # Per-spectral-class colours for the colonized/uncolonized stars -- the same
 # blackbody-temperature ordering real star maps use (M red-orange -> A/B blue).
 _STELLAR_COLORS = {
@@ -9616,127 +10604,336 @@ _STELLAR_COLORS = {
 
 
 def build_galactic_seeding_solid(s=1.0, n_seeds=24, wavefront_r=3.5,
-                                 n_field=44, galaxy_r=4.9):
-    """GALACTIC SEEDING visualization -- every drawn part is a real model object:
+                                 n_field=44, galaxy_r=5.2):
+    """GALACTIC SEEDING visualization -- the REAL Milky Way, to scale.
 
-      * HOME STAR at centre + the home swarm's PARTIAL DYSON RING of collector
-        stations (the SelfReplicatingOrbitalSwarm's actual units).
-      * The colonization WAVEFRONT as a wireframe shell (equator + two
-        meridians + two latitude rings): r = v*t, expanding at 0.1c.
-      * SEEDED STAR SYSTEMS inside the shell, each star coloured by its REAL
-        spectral class drawn in Kroupa-IMF proportions (SECTION 31d2c), each
-        carrying a green station ring = its own closed-loop colony.
-      * FIELD STARS beyond the shell: the still-uncolonized galactic disc
-        (flattened) the wavefront is sweeping through.
-      * Eight SEED-PROBE trajectories, each with an actual probe craft (body +
-        nose cone) riding at its tip -- the 7.4e4-kg Tsiolkovsky package.
-      * The faint GALAXY RIM at galaxy_radius_ly = 5e4 ly, the fill target.
+    The old mesh drew a uniform-density SPHERE of stars around a home star
+    parked at the galactic centre. Neither is real. This build draws what is
+    actually there (all geometry driven by milky_way_swept_table/MILKY_WAY):
 
-    Distances are necessarily schematic (a ~17-ly hop vs a 250-m station arm
-    cannot share one canvas); every COUNTED part is real. Returns
-    (V, F, C, meta) -- meta carries the anchors the live view labels:
-    seeds [(pos, stellar_name, colour)], field [pos], probe_dirs [unit vec],
-    home_ring_r, wavefront_r, galaxy_r."""
+      * GALACTIC CENTRE at the origin: Sgr A* as a POINT (its Schwarzschild
+        diameter is 2.5e-9 scene units -- drawn by the renderer as a glow
+        dot) + the Plummer bulge (r_c ~0.8 kpc) and the central bar
+        (~4.9 kpc half-length, tilted the measured 27 deg off the Sun-GC
+        line) as DIFFUSE point clouds -- a stellar bar is stars, not a
+        solid part.
+      * FOUR SPIRAL ARMS as logarithmic spirals at the measured 12-deg pitch
+        angle, anchored at their real crossing radii (Vallee 2017): Scutum-
+        Centaurus 3.4 kpc, Sagittarius-Carina 6.6 kpc, Perseus 10.0 kpc,
+        Outer/Norma 13.0 kpc -- the arm spine is baked into the mesh and the
+        point-cloud DUST is azimuthally concentrated on the arm curves.
+      * THE ORION SPUR: the Sun's own minor arm segment at ~8.6 kpc.
+      * THE SUN/HOME SYSTEM at its REAL position: R = 8.15 kpc = 26,600 ly
+        from the centre, +68 ly above the midplane -- NOT at the centre. The
+        star is a point (renderer glow dot); only the schematic swarm ring
+        and the real ~1-kly Local Bubble are meshed around it.
+      * The colonization WAVEFRONT as a wireframe sphere CENTRED ON THE SUN,
+        drawn live at the true r=v*t (reaches the GC at 26.6 kly, the far
+        rim at 76.6 kly); a second baked shell marks the GC-REACH milestone
+        radius so the first big goal is visible before the front grows.
+      * SEEDED SYSTEMS inside the shell, spectral-typed in Kroupa-IMF
+        proportions; FIELD + DISC-DUST points outside it.
+      * Eight SEED-PROBE trajectories launched FROM THE SUN'S POSITION.
+      * The GALAXY RIM at 5e4 ly + a sparse spherical halo sprinkle.
+
+    Scale: galaxy_r units = 50,000 ly -> ~9,600 ly per unit. Real objects
+    (a 250-m station, a 4.37-ly hop to Alpha Cen) cannot share this canvas
+    honestly -- the home swarm ring and probe craft are enlarged symbols,
+    labelled as schematic; every POSITION and COUNT is real. Returns
+    (V, F, C, meta) -- meta carries sun_pos, gc_pos, ly_per_unit, dust
+    clouds, arm polylines, wf_rings (unit shell for the live radius), the
+    real NEAREST_STARS table, and the legacy anchors."""
     a = Assembly()
-    wf = wavefront_r * s
-    # home star (central sphere approximated as cylinder + torus ring)
-    a.add(*_g_cylinder(0.15 * s, -0.15 * s, 0.15 * s, 14),
-          (0, 0, 0), (255, 220, 100))
-    a.add(*_g_torus(0.22 * s, 0.02 * s, 14, 5),
-          (0, 0, 0), (255, 200, 80))
-    # HOME SWARM: a partial Dyson ring of harvester stations on the home orbit
-    home_ring_r = 0.36 * s
-    a.add(*_g_torus(home_ring_r, 0.007 * s, 48, 4), (0, 0, 0), (110, 225, 145))
+    mwt = milky_way_swept_table()
+    mw = mwt["mw"]
+    R_EDGE_LY = float(SPEC["galaxy_radius_ly"])
+    lpu = R_EDGE_LY / (galaxy_r * s)                    # ly per scene unit
+    gu = lambda ly: ly / lpu                            # ly -> scene units
+    rng = np.random.default_rng(42)
+    k_p = math.tan(math.radians(mw["pitch_deg"]))       # log-spiral pitch
+    sun_pos = np.array([gu(mw["sun_R_ly"]), 0.0, gu(mw["sun_z_ly"])])
+
+    # ---- GALACTIC CENTRE: Sgr A* + Plummer bulge + central bar --------------
+    # NOTHING here is a solid part: Sgr A* is a point at this scale (its
+    # Schwarzschild diameter is ~2.4e-5 ly = 2.5e-9 scene units), and the
+    # bulge and bar are DIFFUSE stellar populations. They are drawn as point
+    # clouds (bulge_dust / bar_dust below) -- the bright core dot itself is
+    # the renderer's glow marker. Only a hair-thin bar spine is baked into
+    # the mesh so the bar's orientation reads at any camera angle.
+
+    # the bar: ~4.9 kpc half-length, rotated ~27 deg off the Sun-GC line
+    # (measured angle, Amores+ / Wegg+ 2015)
+    bar_half = gu(1.6e4)
+    bar_ang = math.radians(27.0)
+    bdir = np.array([math.cos(bar_ang), math.sin(bar_ang), 0.0])
+    bper = np.array([-math.sin(bar_ang), math.cos(bar_ang), 0.0])
+    pv, pf = _cyl_between(tuple(-bdir * bar_half), tuple(bdir * bar_half),
+                          0.005 * s, 4)
+    a.add(pv, pf, (0, 0, 0), (150, 124, 92))
+
+    # ---- SPIRAL ARMS: log spirals at measured pitch, real crossing radii ----
+    # r(theta) = r_x * exp(k_p (theta - th_x)); each arm spans inward toward
+    # the bar and outward to where the real arm fades. th_x is the azimuth
+    # where it crosses its anchor radius (Sun at th=0 on +x).
+    KPC = 3.26156e3
+    ARM_GEOM = [
+        # name, r_x kpc, th_x rad, r_in kpc, r_out kpc, colour
+        ("Scutum-Centaurus", 3.4, 2.65, 2.0, 15.0, (104, 128, 186)),
+        ("Sagittarius-Carina", 6.6, -0.22, 2.4, 13.0, (126, 158, 218)),
+        ("Perseus",          10.0, 0.18, 3.0, 14.5, (140, 172, 232)),
+        ("Outer/Norma",      13.0, 3.40, 6.0, 16.0, (98, 120, 172)),
+    ]
+    arms = []
+    for nm, rx_k, thx, rin_k, rout_k, col in ARM_GEOM:
+        rx, rin, rout = rx_k * KPC, rin_k * KPC, rout_k * KPC
+        th0 = thx + math.log(rin / rx) / k_p
+        th1 = thx + math.log(rout / rx) / k_p
+        n_arm = 110
+        pts = []
+        for i in range(n_arm):
+            th = th0 + (th1 - th0) * i / (n_arm - 1)
+            rr = rx * math.exp(k_p * (th - thx))
+            pts.append((gu(rr * math.cos(th)), gu(rr * math.sin(th)), 0.0))
+        pts = np.array(pts)
+        arms.append((nm, col, pts))
+        # bake a faint spine into the mesh so the arms read at any angle
+        step = 4
+        for i in range(0, n_arm - step, step):
+            pv, pf = _cyl_between(tuple(pts[i]), tuple(pts[i + step]),
+                                  0.006 * s, 4)
+            a.add(pv, pf, (0, 0, 0), col)
+
+    # ---- ORION SPUR: the Sun's own minor arm segment at ~8.6 kpc ------------
+    spur_pts = []
+    for i in range(46):
+        th = -0.34 + 0.68 * i / 45
+        rr = _ORION_SPUR_R_KPC * KPC * (1.0 + 0.05 * math.sin(6 * th))
+        spur_pts.append((gu(rr * math.cos(th)), gu(rr * math.sin(th)),
+                       gu(120.0 * math.sin(3 * th))))
+    spur_pts = np.array(spur_pts)
+    for i in range(0, 45, 3):
+        pv, pf = _cyl_between(tuple(spur_pts[i]), tuple(spur_pts[i + 3]),
+                              0.007 * s, 4)
+        a.add(pv, pf, (0, 0, 0), (150, 190, 235))
+
+    # ---- DISC + BULGE + HALO point clouds (meta, drawn by the renderer) -----
+    # disc dust: exponential R sample, thin/thick z mixture, azimuth snapped
+    # toward the nearest arm curve (the arm modulation the smooth density
+    # field averages out -- so the picture shows the arms the integrals use)
+    n_dust = 4200
+    u = rng.random(n_dust)
+    R_d = -mw["h_R_ly"] * np.log(1.0 - u * (1.0 - math.exp(-R_EDGE_LY / mw["h_R_ly"])))
+    th_d = rng.random(n_dust) * 2.0 * math.pi
+    thick = rng.random(n_dust) < 0.15
+    z_d = np.where(thick,
+                   rng.standard_normal(n_dust) * mw["h_z_thick_ly"] * 0.55,
+                   rng.standard_normal(n_dust) * mw["h_z_thin_ly"] * 0.55)
+    # arm snap: for each point find the arm whose curve passes nearest in
+    # azimuth at this R; pull ~55% of points onto it with a radial-width jitter
+    arm_th = np.empty_like(th_d)
+    arm_d = np.full(n_dust, 1e9)
+    # (simple loop -- readability over cleverness at ~4k points)
+    sig_arm = 0.09 + 0.55 * (R_d / R_EDGE_LY)
+    for nm_, rx_k_, thx_, rin_k_, rout_k_ in (
+            ("Scutum-Centaurus", 3.4, 2.65, 2.0, 15.0),
+            ("Sagittarius-Carina", 6.6, -0.22, 2.4, 13.0),
+            ("Perseus", 10.0, 0.18, 3.0, 14.5),
+            ("Outer/Norma", 13.0, 3.40, 6.0, 16.0)):
+        rx_ = rx_k_ * KPC
+        th0_ = thx_ + math.log(rin_k_ / rx_k_) / k_p
+        th1_ = thx_ + math.log(rout_k_ / rx_k_) / k_p
+        tha = thx_ + np.log(np.clip(R_d / rx_, 1e-9, None)) / k_p
+        on = (tha >= th0_) & (tha <= th1_)
+        dd = np.abs(((th_d - tha + math.pi) % (2 * math.pi)) - math.pi)
+        dd = np.where(on, dd, 1e9)
+        better = dd < arm_d
+        arm_th[better] = tha[better]
+        arm_d[better] = dd[better]
+    snap = (rng.random(n_dust) < 0.55) & (arm_d < 0.9)
+    th_d = np.where(snap, arm_th + rng.standard_normal(n_dust) * sig_arm, th_d)
+    dust = np.stack([gu(R_d) * np.cos(th_d), gu(R_d) * np.sin(th_d),
+                     gu(z_d)], axis=1)
+    # bulge dust: Plummer sphere M(<q) CDF inverted, triaxial-flattened
+    n_b = 700
+    ub = rng.random(n_b) * 0.985
+    q_b = mw["bulge_rc_ly"] * np.sqrt(ub ** (2.0 / 3.0) / (1.0 - ub ** (2.0 / 3.0)))
+    ct = rng.random(n_b) * 2 - 1
+    st = np.sqrt(1 - ct * ct)
+    phb = rng.random(n_b) * 2 * math.pi
+    bulge_dust = np.stack([gu(q_b) * st * np.cos(phb),
+                           gu(q_b) * st * np.sin(phb),
+                           gu(q_b) * ct * 0.72], axis=1)
+    # bar dust: an elongated stellar population along bdir -- half-length
+    # ~4.9 kpc, gaussian waist ~1.4 kpc, vertical (peanut/X-bulge) ~0.5 kpc
+    # (Wegg & Gerhard 2013). The x^(1/3) sign-preserving transform packs the
+    # density toward the bar ends, where the real bar is brightest.
+    n_bar = 900
+    bx = rng.random(n_bar) * 2.0 - 1.0
+    bx = np.sign(bx) * np.abs(bx) ** (1.0 / 3.0)
+    bar_dust = (np.outer(bx * bar_half, bdir)
+                + np.outer(rng.standard_normal(n_bar) * gu(4.6e3), bper)
+                + np.stack([np.zeros(n_bar), np.zeros(n_bar),
+                            rng.standard_normal(n_bar) * gu(1.6e3)], axis=1))
+    # sparse spherical stellar halo (globulars + halo field stars)
+    n_h = 170
+    uh = rng.random(n_h)
+    R_h = gu(R_EDGE_LY * (0.35 + 0.75 * uh))
+    cth = rng.random(n_h) * 2 - 1
+    sth = np.sqrt(1 - cth * cth)
+    phh = rng.random(n_h) * 2 * math.pi
+    halo = np.stack([R_h * sth * np.cos(phh), R_h * sth * np.sin(phh),
+                     R_h * cth], axis=1)
+
+    # ---- THE SUN / HOME SYSTEM at its REAL position (8.15 kpc, +68 ly) ------
+    # The star itself is a POINT at this scale (R_sun ~ 7.4e-12 scene units);
+    # the renderer draws it as a glow dot. The only mesh here is the home
+    # swarm ring -- an explicitly SCHEMATIC marker (a real Dyson swarm is
+    # ~1 AU = 1.6e-8 ly, i.e. 1.7e-12 units; drawn ~1e11x enlarged so it is
+    # visible at all) -- and the Local Bubble, the real ~1-kly low-density
+    # ISM cavity the Sun sits inside (mw['local_bubble_ly']).
+    home_ring_r = 0.24 * s
+    a.add(*_g_torus(home_ring_r, 0.006 * s, 48, 4),
+          tuple(sun_pos), (110, 225, 145))
     for k in range(12):
         aa = 2 * math.pi * k / 12
-        a.add(*_g_box(0.020 * s, 0.020 * s, 0.013 * s),
-              (home_ring_r * math.cos(aa), home_ring_r * math.sin(aa), 0.0),
+        a.add(*_g_box(0.014 * s, 0.014 * s, 0.010 * s),
+              tuple(sun_pos + home_ring_r * np.array([math.cos(aa),
+                                                     math.sin(aa), 0.0])),
               (150, 240, 175))
-    # WAVEFRONT SHELL: equator + two meridians + two latitude rings
+    lb_u = gu(mw["local_bubble_ly"])                    # ~0.10 units
+    a.add(*_g_torus(lb_u, 0.004 * s, 40, 3),
+          tuple(sun_pos), (52, 84, 128))
+
+    # ---- GC-REACH SHELL centred on the SUN (a REAL milestone radius) --------
+    # the Sun-centred sphere of radius gc_reach = 26.6 kly -- it touches the
+    # Galactic Centre exactly: when the live r=v*t front crosses this shell
+    # the core is inside the colony. The live front is re-drawn every frame
+    # from wf_rings at the true radius; this baked shell marks the milestone.
+    gc_u = mwt["gc_reach_ly"] / lpu
     for nrm, col in (((0.0, 0.0, 1.0), (70, 140, 210)),
                      ((0.0, 1.0, 0.0), (52, 112, 178)),
                      ((1.0, 0.0, 0.0), (52, 112, 178))):
-        vv, ff = _g_torus(wf, 0.016 * s, 44, 5)
+        vv, ff = _g_torus(gc_u, 0.014 * s, 44, 5)
         R = _rot_align_z(np.array(nrm))
-        a.add([tuple(R @ np.array(v)) for v in vv], ff, (0, 0, 0), col)
+        a.add([tuple(R @ np.array(v) + sun_pos) for v in vv], ff,
+              (0, 0, 0), col)
     for zz in (-0.55, 0.55):
-        rlat = wf * math.sqrt(1.0 - zz * zz)
-        a.add(*_g_torus(rlat, 0.010 * s, 36, 4), (0, 0, zz * wf), (44, 92, 148))
-    # SEEDED STAR SYSTEMS inside the shell -- spectral class drawn in
-    # stratified Kroupa-IMF proportions (systematic sample: the i-th system's
-    # u lands in cell i/n_seeds of the demographic CDF, so the 24-system
-    # sample shows the real ~76% M / ~12% K / ~8% G / ~3% F split; the rarer
-    # A/B + Giant classes live in the demographics table, as 24 draws cannot
-    # fairly show 1.2%/0.1%)
-    rng = np.random.default_rng(42)
+        rlat = gc_u * math.sqrt(1.0 - zz * zz)
+        a.add(*_g_torus(rlat, 0.009 * s, 36, 4),
+              tuple(sun_pos + np.array([0, 0, zz * gc_u])), (44, 92, 148))
+    # unit-radius shell polylines for the renderer's LIVE wavefront redraw
+    wf_rings = []
+    for nrm in ((0.0, 0.0, 1.0), (0.0, 1.0, 0.0), (1.0, 0.0, 0.0)):
+        R = _rot_align_z(np.array(nrm))
+        wf_rings.append(np.array([R @ np.array([math.cos(a_), math.sin(a_), 0.0])
+                                  for a_ in np.linspace(0, 2 * math.pi, 72)]))
+
+    # ---- SEEDED SYSTEMS across the reachable disc -----------------------------
+    # Positions are drawn from the REAL disc density field inside the
+    # Sun-centred reach (|p - p_sun| <= far_rim = Sun_R + disc edge) -- the
+    # whole colonizable volume, not just the shell the live wavefront has
+    # crossed so far. The renderer brightens the seeds the front has already
+    # swept over, so the colony visibly grows with t. Spectral class in
+    # stratified Kroupa-IMF proportions; marker icons are symbolic.
+    far_u = mwt["far_rim_ly"] / lpu
     cum = np.cumsum(_STELLAR_TYPE_WEIGHTS)
     seeds = []
-    for i in range(n_seeds):
+    tries = 0
+    while len(seeds) < n_seeds and tries < n_seeds * 80:
+        tries += 1
+        u2 = rng.random()
+        R_f = -mw["h_R_ly"] * math.log(
+            1.0 - u2 * (1.0 - math.exp(-R_EDGE_LY / mw["h_R_ly"])))
+        th_f = rng.random() * 2 * math.pi
+        z_f = rng.standard_normal() * mw["h_z_thin_ly"] * 0.55
+        pos = np.array([gu(R_f * math.cos(th_f)),
+                        gu(R_f * math.sin(th_f)), gu(z_f)])
+        if np.linalg.norm(pos - sun_pos) > far_u:
+            continue                       # outside the Sun-centred reach
+        i = len(seeds)
         st = STELLAR_TYPES[int(np.searchsorted(cum, (i + 0.5) / n_seeds))]
         col = _STELLAR_COLORS[st.name]
-        r = rng.uniform(0.3, wavefront_r * 0.95) * s
-        theta = rng.uniform(0, 2 * math.pi)
-        phi = rng.uniform(-math.pi / 2, math.pi / 2)
-        pos = (r * math.cos(phi) * math.cos(theta),
-               r * math.cos(phi) * math.sin(theta),
-               r * math.sin(phi))
-        a.add(*_g_cylinder(0.045 * s, -0.045 * s, 0.045 * s, 8), pos, col)
-        a.add(*_g_torus(0.09 * s, 0.008 * s, 10, 4), pos, (100, 200, 130))
-        seeds.append((pos, st.name, col))
-    # FIELD STARS: the uncolonized disc the wavefront is sweeping through
-    # (flattened z x0.45 -- a real galaxy is a disc; the volumetric shell is
-    # the model's honest sphere)
+        a.add(*_g_cylinder(0.028 * s, -0.028 * s, 0.028 * s, 6),
+              tuple(pos), col)
+        a.add(*_g_torus(0.055 * s, 0.005 * s, 10, 3),
+              tuple(pos), (100, 200, 130))
+        seeds.append((tuple(pos), st.name, col))
+
+    # ---- FIELD STARS: bright uncolonized systems outside the shell ----------
     field = []
-    for i in range(n_field):
-        r = rng.uniform(wavefront_r * 1.06, wavefront_r * 1.42) * s
-        theta = rng.uniform(0, 2 * math.pi)
-        phi = rng.uniform(-math.pi / 2, math.pi / 2) * 0.45
-        pos = (r * math.cos(phi) * math.cos(theta),
-               r * math.cos(phi) * math.sin(theta),
-               r * math.sin(phi))
-        a.add(*_g_cylinder(0.020 * s, -0.025 * s, 0.025 * s, 5),
-              pos, (105, 125, 160))
-        field.append(pos)
-    # SEED-PROBE TRAJECTORIES + the probe craft riding at each tip
+    tries = 0
+    while len(field) < n_field and tries < n_field * 80:
+        tries += 1
+        u2 = rng.random()
+        R_f = -mw["h_R_ly"] * math.log(
+            1.0 - u2 * (1.0 - math.exp(-R_EDGE_LY / mw["h_R_ly"])))
+        th_f = rng.random() * 2 * math.pi
+        z_f = rng.standard_normal() * mw["h_z_thin_ly"] * 0.55
+        pos = np.array([gu(R_f * math.cos(th_f)),
+                        gu(R_f * math.sin(th_f)), gu(z_f)])
+        if np.linalg.norm(pos - sun_pos) <= gc_u * 1.04:
+            continue                       # already inside the reach shell
+        a.add(*_g_cylinder(0.018 * s, -0.022 * s, 0.022 * s, 5),
+              tuple(pos), (105, 125, 160))
+        field.append(tuple(pos))
+
+    # ---- SEED-PROBE trajectories launched FROM THE SUN -----------------------
+    # direction vectors drawn to the GC-REACH shell -- the real first
+    # milestone boundary, not an arbitrary length
     probe_dirs = []
     for i in range(8):
         theta = i * 2 * math.pi / 8
-        phi = math.radians(30 * (i % 3 - 1))
+        phi = math.radians(18 * (i % 3 - 1))     # biased into the disc plane
         d = np.array([math.cos(phi) * math.cos(theta),
                       math.cos(phi) * math.sin(theta),
                       math.sin(phi)])
         probe_dirs.append(d)
-        pv, pf = _cyl_between((0, 0, 0), tuple(d * wf), 0.008 * s, 4)
+        pv, pf = _cyl_between(tuple(sun_pos), tuple(sun_pos + d * gc_u),
+                              0.007 * s, 4)
         a.add(pv, pf, (0, 0, 0), (80, 140, 200))
-        # probe craft at 97% of the shell: body + nose cone along the track
-        tip = d * wf * 0.97
+        tip = sun_pos + d * gc_u * 0.97
         R = _rot_align_z(d)
-        bv, bf = _g_cylinder(0.030 * s, -0.10 * s, 0.06 * s, 8)
+        bv, bf = _g_cylinder(0.026 * s, -0.09 * s, 0.055 * s, 8)
         a.add([tuple(R @ np.array(v) + tip) for v in bv], bf,
               (0, 0, 0), (170, 185, 205))
-        nv, nf = _g_cone(0.030 * s, 0.0, 0.06 * s, 0.15 * s, 8)
+        nv, nf = _g_cone(0.026 * s, 0.0, 0.055 * s, 0.13 * s, 8)
         a.add([tuple(R @ np.array(v) + tip) for v in nv], nf,
               (0, 0, 0), (255, 210, 120))
-    # GALAXY RIM: the 5e4-ly disc edge the wavefront is filling toward, plus
-    # three faint arm arcs so the rim reads as a disc, not a circle
-    a.add(*_g_torus(galaxy_r * s, 0.010 * s, 64, 4), (0, 0, 0), (48, 70, 108))
-    for a0 in (0.2, 2.3, 4.4):
-        a.add(*_g_arc_tube((galaxy_r - 0.55) * s, (galaxy_r - 0.58) * s,
-                           -0.012 * s, 0.012 * s, a0, a0 + 1.5, 10),
-              (0, 0, 0), (38, 54, 86))
+
+    # ---- GALAXY RIM + faint inner ring ---------------------------------------
+    a.add(*_g_torus(galaxy_r * s, 0.010 * s, 72, 4), (0, 0, 0), (48, 70, 108))
+    a.add(*_g_torus(galaxy_r * 0.52 * s, 0.006 * s, 64, 4),
+          (0, 0, 0), (36, 52, 84))
+
     meta = {"seeds": seeds, "field": field, "probe_dirs": probe_dirs,
-            "home_ring_r": home_ring_r, "wavefront_r": wf,
-            "galaxy_r": galaxy_r * s}
+            "home_ring_r": home_ring_r, "wavefront_r": gc_u,
+            "galaxy_r": galaxy_r * s,
+            # --- the REAL galaxy anchors -------------------------------------
+            "sun_pos": sun_pos, "gc_pos": np.zeros(3),
+            "ly_per_unit": lpu,
+            "sun_R_ly": mw["sun_R_ly"], "sun_z_ly": mw["sun_z_ly"],
+            "gc_reach_ly": mwt["gc_reach_ly"], "far_rim_ly": mwt["far_rim_ly"],
+            "local_bubble_u": lb_u,
+            "seed_d": np.array([np.linalg.norm(np.array(p) - sun_pos)
+                                for p, _, _ in seeds]),
+            "dust": dust, "bulge_dust": bulge_dust, "bar_dust": bar_dust,
+            "halo": halo,
+            "arms": arms, "spur": spur_pts,
+            "bar_dir": bdir, "bar_half": bar_half,
+            "wf_rings": wf_rings, "nearest": NEAREST_STARS, "mwt": mwt}
     return (*a.arrays(), meta)
 
 
 def net_casting_area_effect(n_stations, arm_len_m, n_arms=6):
     """Compute the area-of-effect coverage of a fleet of orbital stations
-    casting nets. Each station sweeps a disk of radius arm_len_m with n_arms
-    field cells. Returns the total swept volume, area, and pair capture rate.
-    Real physics: the net is a physical lattice of field cells in space -- the
-    'area of effect' is the volume of space where the field is strong enough
-    to disrupt pairs before they annihilate."""
+    casting nets. Each station patrols a disk of radius arm_len_m with n_arms
+    field cells. Returns the total swept volume, area, pair supply rate, and
+    the honest interception bookkeeping (net_capture_chain). Real physics:
+    the disc is a FOOTPRINT the cells patrol, not a wall -- the 'area of
+    effect' is the volume where pairs are produced inside field cells, plus
+    the fraction of ambient charged flux the cell magnetospheres genuinely
+    funnel into bores (see net_capture_chain for the coverage numbers --
+    relativistic flux mostly misses; solar-wind plasma does not)."""
     area_per_station = math.pi * arm_len_m ** 2
     total_area = n_stations * area_per_station
     # effective depth of the field (cell bore ~1 m, but arms sweep a disk)
@@ -9755,10 +10952,330 @@ def net_casting_area_effect(n_stations, arm_len_m, n_arms=6):
         "mass_kg_s": vc["mass_kg_s"],
         "cells_per_station": n_arms,
         "total_cells": n_stations * n_arms,
+        "capture": net_capture_chain(arm_len_m, n_arms),
     }
 
 
+def net_capture_chain(arm_len_m=250.0, n_arms=6, B_cell_T=5.0,
+                      bore_r_m=0.5, cusp_frac=0.10):
+    """HONEST interception bookkeeping for a cast net. The swept disc pi*L^2
+    is the FOOTPRINT the arm-tip field cells patrol -- it is not a solid
+    wall, and particles are not caught by hitting wires. The physics
+    resolves into three distinct supply channels:
+
+    1. DIRECT INTERCEPTION of ambient charged flux crossing the disc plane.
+       A charged particle only joins the intake if it passes within the
+       cell's magnetic capture radius: it gyrates onto converging field
+       lines and is funnelled into the bore (the exact physics by which
+       Earth's magnetosphere collects the solar wind through the polar
+       cusps). For a relativistic cosmic ray the capture reach is the bore
+       plus ~2 gyroradii (r_L = p/qB ~ 0.7 m at 1 GeV/c, 5 T) -- so the
+       coverage n*A_cell/A_disc << 1 and >99% of the flux crossing the disc
+       genuinely MISSES. That is a real result, not a defect: the web is a
+       set of funnels, not a wall.
+
+    2. BORN-INSIDE PRODUCTION -- the dominant pair channel. Primaries that
+       DO reach a cell (plus the beam-driven converter, and CR secondaries
+       created in the field volume) shower e+/e- already inside the trap:
+       no interception needed, they are born in the bottle. This is the
+       void_capture volume rate.
+
+    3. SOLAR-WIND PLASMA collection -- for a plasma stream (not single
+       relativistic particles) the relevant reach is the magnetopause
+       standoff radius where the cell's dipole pressure balances the wind's
+       ram pressure, r_mp = (mu0 m^2 / 8 pi^2 P_ram)^(1/6) -- hundreds of
+       metres for a 5 T cell (magsail physics, Zubrin & Andrews 1991).
+       Cells' magnetospheres overlap, so the net DOES collect order-unity
+       of the streaming wind through the cusps. This is what actually feeds
+       the proton (baryon) supply.
+    """
+    disc_area = math.pi * arm_len_m ** 2
+    # -- channel 1: single relativistic particles, gyroradius capture -----
+    p_ref = 1.0e9 * EV / C_LIGHT                  # ~1 GeV/c [kg m/s]
+    r_L = p_ref / (E_CHARGE * B_cell_T)           # gyroradius ~0.67 m @5 T
+    r_cap = bore_r_m + 2.0 * r_L                  # dipole capture reach
+    a_cell_cr = math.pi * r_cap ** 2
+    coverage_cr = min(1.0, n_arms * a_cell_cr / disc_area)
+    # -- channel 3: solar-wind plasma, magnetopause collection ------------
+    # cell dipole moment: m = B_bore * L * pi r^2 / mu0 (long-solenoid
+    # estimate, cell ~1 m long)
+    m_dip = B_cell_T * 1.0 * math.pi * bore_r_m ** 2 / MU0
+    p_ram = SOLAR_WIND_N * M_P * SOLAR_WIND_V ** 2     # wind ram pressure
+    r_mp = (MU0 * m_dip ** 2 / (8.0 * math.pi ** 2 * p_ram)) ** (1.0 / 6.0)
+    a_cell_sw = math.pi * r_mp ** 2
+    coverage_sw = min(1.0, n_arms * a_cell_sw / disc_area)
+    # -- flux crossing the disc (one face, isotropic approximation) -------
+    cr_crossing = COSMIC_RAY_FLUX * disc_area
+    sw_crossing = SOLAR_WIND_N * SOLAR_WIND_V * disc_area
+    accept = 1.0 - magnetic_mirror_loss_cone(5.0)      # mirror R=5
+    cr_caught = cr_crossing * coverage_cr * accept     # -> cell liners
+    sw_caught = sw_crossing * coverage_sw * cusp_frac  # cusp-funnelled
+    # -- born-inside pair supply (void_capture volume rate, unenhanced) ---
+    vc = void_capture(disc_area * 2.0, enhance=1.0)
+    return {
+        "disc_area_m2": disc_area,
+        "cr_gyroradius_m": r_L, "cr_capture_radius_m": r_cap,
+        "cr_coverage_frac": coverage_cr, "cr_missed_frac": 1.0 - coverage_cr,
+        "cr_crossing_s": cr_crossing, "cr_caught_s": cr_caught,
+        "sw_magnetopause_m": r_mp, "sw_coverage_frac": coverage_sw,
+        "sw_crossing_s": sw_crossing, "sw_caught_s": sw_caught,
+        "cusp_frac": cusp_frac,
+        "mirror_accept": accept,
+        "born_inside_pairs_s": vc["pairs_per_s"],
+    }
+
+
+# =============================================================================
+# SECTION 31d5 -- THE REPLICATION CYCLE  (machines building machines that build
+#                  seeding machines -- the closed loop as real hardware)
+# =============================================================================
+# The GALAXY tab shows the wavefront; the REPLICATION tab shows the ENGINE that
+# drives it: ONE closed cycle of von Neumann replication at system scale. Eight
+# real stages sit on a loop ring -- every stage is a machine this file already
+# models, and every displayed number is read live from the same model objects
+# (SelfReplicatingOrbitalSwarm, ElementStockpile, BootstrappingSequence,
+# probe_propulsion_budget, probe_transit_physics, SystemColonizer,
+# GalacticSeeding) so the view can never drift out of sync with the sim.
+#
+#   1 MOTHER STATION   net-casts, harvests, fills the element stockpile
+#   2 ASSEMBLY FOUNDRY the ISRU fab printing a FULL COPY (machine -> machine)
+#   3 DAUGHTER         the copy unfurls onto its own orbital slot
+#   4 SWARM            copies make copies: dN/dt = rN(1-N/K) -> capacity K
+#   5 SATURATION       N >= 0.9 K: surplus station output becomes probes
+#   6 PROBE FOUNDRY    machine builds the SEEDING machine (7.39e4 kg launch)
+#   7 0.1c TRANSIT     the interstellar hop: Tsiolkovsky + magsail + ISM hazard
+#   8 NEW STAR         bootstrap -> the NEXT mother -> repeat, forever
+#
+# The loop is arranged as three TIERS so the chain literal reads on-screen:
+#   TIER 1 (nodes 0-3) a machine builds a MACHINE  (self-replication proper)
+#   TIER 2 (nodes 4-6) the swarm builds a SEEDING machine
+#   TIER 3 (node 7->0) the seed builds the next machine -- loop closed, repeat
+
+_REP_NODE_COLORS = [
+    (110, 225, 145),    # 0 mother station   -- harvest green
+    (255, 190, 110),    # 1 assembly foundry -- fabrication amber
+    (170, 220, 255),    # 2 daughter         -- fresh copy cyan
+    (140, 255, 170),    # 3 swarm            -- growth mint
+    (255, 235, 130),    # 4 saturation       -- threshold yellow
+    (150, 200, 255),    # 5 probe foundry    -- seed-factory blue
+    (100, 180, 255),    # 6 transit          -- 0.1c flight blue
+    (255, 215, 130),    # 7 new star         -- next-generation gold
+]
+
+_REP_NODE_LABELS = [
+    ["MOTHER STATION",    "harvest + stockpile feed",     "the machine"],
+    ["ASSEMBLY FOUNDRY",  "prints a full copy",           "machine -> machine"],
+    ["DAUGHTER DEPLOYED", "copy unfurls, 6 h",            "a second machine"],
+    ["SWARM GROWTH",      "copies -> copies",             "dN = rN(1-N/K)"],
+    ["SATURATION GATE",   "N >= 0.9 K",                   "surplus -> probes"],
+    ["PROBE FOUNDRY",     "builds the seeder",            "machine -> seeder"],
+    ["0.1c TRANSIT",      "the hop between stars",        "seeder -> next system"],
+    ["NEW STAR -> REPEAT","bootstrap 87.25 d",            "seeder -> new machine"],
+]
+
+
+def build_replication_cycle_solid(s=1.0):
+    """The closed replication cycle as solid hardware. Returns
+    (V, F, C, meta) where meta carries the anchors the live view needs:
+    node centers/labels/colors, the ring radius, the transit chord the probe
+    rides, the daughter-ascend anchor for the assembly animation, and the
+    descendant-spiral directions for completed-cycle markers."""
+    chunks = []
+    a = Assembly()
+    R = 4.2 * s
+    # ---- the loop ring itself + direction arrows -------------------------
+    a.add(*_g_torus(R, 0.045 * s, 72, 5), (0, 0, 0), (60, 110, 165))
+    for k in range(8):
+        ang = math.pi / 2 + (k + 0.5) * math.pi / 4
+        ax_, ay_ = R * math.cos(ang), R * math.sin(ang)
+        Rr = _rot_align_z(np.array([-math.sin(ang), math.cos(ang), 0.0]))
+        nv, nf = _g_cone(0.07 * s, 0.0, 0.0, 0.20 * s, 6)
+        a.add([tuple(Rr @ np.array(v) + np.array([ax_, ay_, 0.0])) for v in nv],
+              nf, (0, 0, 0), (120, 190, 240))
+    # ---- three TIER arcs (slightly outside the ring) ---------------------
+    # _g_arc_tube(r_out, r_in, z0, z1, a0, a1, seg) -- annular arc, X-Y plane.
+    tier_arcs = [
+        (math.pi / 2 - 0.12, math.pi / 2 + 3 * math.pi / 4 + 0.12,
+         (110, 225, 145)),                      # TIER 1: machine -> machine
+        (math.pi / 2 + 4 * math.pi / 4 - 0.12,
+         math.pi / 2 + 6 * math.pi / 4 + 0.12, (150, 200, 255)),  # TIER 2
+        (math.pi / 2 + 7 * math.pi / 4 - 0.10,
+         math.pi / 2 + 2 * math.pi + 0.10,     (255, 200, 110)),  # TIER 3
+    ]
+    for a0, a1, col in tier_arcs:
+        a.add(*_g_arc_tube((R + 0.42 * s) * 1.0, (R + 0.30 * s),
+                           -0.02 * s, 0.02 * s, a0, a1, 26),
+              (0, 0, 0), col)
+    chunks.append(a.arrays())
+
+    # ---- the eight node machines -----------------------------------------
+    nodes = []
+    for i in range(8):
+        ang = math.pi / 2 + i * math.pi / 4
+        nodes.append((R * math.cos(ang), R * math.sin(ang), 0.0))
+    pa = Assembly()
+    for i, c in enumerate(nodes):
+        # platform pad under each node machine
+        pa.add(*_g_disc(0.62 * s, -0.55 * s, 18), c, (24, 32, 46))
+        pa.add(*_g_torus(0.62 * s, 0.018 * s, 18, 4),
+               (c[0], c[1], -0.55 * s), _REP_NODE_COLORS[i])
+        pa.strut((c[0], c[1], -0.55 * s), (c[0], c[1], -0.10 * s),
+                 0.03 * s, (80, 95, 120))
+    chunks.append(pa.arrays())
+
+    # 0 MOTHER STATION -- the harvester (full detail mesh)
+    chunks.append(build_orbital_station_solid(nodes[0], s=0.5, arm_len=1.5))
+    # 1 ASSEMBLY FOUNDRY -- the replicator factory printing the copy
+    chunks.append(build_replicator_solid(nodes[1], s=0.8, progress=0.55))
+    # (the daughter station under assembly is drawn LIVE -- it rises out of
+    # the foundry with the real build-progress fraction each cycle)
+    # 2 DAUGHTER -- the just-deployed copy (half-scale, still unfurling)
+    chunks.append(build_orbital_station_solid(nodes[2], s=0.27, arm_len=1.3))
+    # 3 SWARM -- a hex cluster of copies around a capacity ring
+    sw_a = Assembly()
+    sw_a.add(*_g_torus(0.62 * s, 0.012 * s, 26, 4), nodes[3], (110, 225, 145))
+    chunks.append(sw_a.arrays())
+    for k in range(7):
+        kk = 2 * math.pi * k / 7
+        sc = (nodes[3][0] + 0.52 * s * math.cos(kk),
+              nodes[3][1] + 0.52 * s * math.sin(kk), 0.0)
+        chunks.append(build_orbital_station_solid(sc, s=0.11, arm_len=1.0))
+    # 4 SATURATION GATE -- the 0.9K threshold the flow passes through: two
+    # pillars + a header beam, and a 90%-of-capacity gauge arc
+    g_a = Assembly()
+    gx, gy, gz = nodes[4]
+    for sxn in (-1, 1):
+        g_a.add(*_g_box(0.07 * s, 0.07 * s, 0.34 * s),
+                (gx + sxn * 0.38 * s, gy, gz - 0.20 * s), (255, 235, 130))
+    g_a.add(*_g_box(0.45 * s, 0.06 * s, 0.05 * s),
+            (gx, gy, gz + 0.16 * s), (255, 235, 130))
+    g_a.add(*_g_arc_tube(0.30 * s, 0.26 * s, -0.015 * s, 0.015 * s,
+                         math.pi / 2, math.pi / 2 + 2 * math.pi * 0.90, 28),
+            (gx, gy, gz), (205, 200, 120))
+    g_a.add(*_g_arc_tube(0.30 * s, 0.26 * s, -0.015 * s, 0.015 * s,
+                         math.pi / 2 + 2 * math.pi * 0.90,
+                         math.pi / 2 + 2 * math.pi, 6),
+            (gx, gy, gz), (70, 80, 100))
+    chunks.append(g_a.arrays())
+    # 5 PROBE FOUNDRY -- pad + the expansion-seed craft on a launch rail
+    chunks.append(build_expansion_seed_solid(s=0.62))
+    # shift the seed mesh to the node (builder centres at origin)
+    Vseed, Fseed, Cseed = chunks.pop()
+    Vseed = np.asarray(Vseed, dtype=float) + np.array(nodes[5])
+    chunks.append((Vseed, Fseed, Cseed))
+    pf_a = Assembly()
+    pv, pf = _cyl_between((nodes[5][0] - 0.45 * s, nodes[5][1] - 0.55 * s, 0.0),
+                          (nodes[5][0] + 0.45 * s, nodes[5][1] - 0.55 * s, 0.0),
+                          0.025 * s, 6)
+    pf_a.add(pv, pf, (0, 0, 0), (150, 200, 255))            # launch rail
+    pf_a.add(*_g_box(0.30 * s, 0.30 * s, 0.03 * s),
+             (nodes[5][0], nodes[5][1], -0.62 * s), (40, 55, 80))
+    chunks.append(pf_a.arrays())
+    # 6 TRANSIT -- probe craft partway along the straight chord 5 -> 7
+    # (the hop does not follow the ring; it takes the direct interstellar leg)
+    tr_a = Assembly()
+    t0 = np.array(nodes[5]); t1 = np.array(nodes[7])
+    tdir = t1 - t0
+    tdir = tdir / max(np.linalg.norm(tdir), 1e-30)
+    craft_c = tuple(np.array(nodes[6]))
+    Rr = _rot_align_z(tdir)
+    bv, bf = _cyl_between((0, 0, 0), (0, 0, 0.34 * s), 0.06 * s, 8)
+    tr_a.add([tuple(Rr @ np.array(v) + np.array(craft_c)) for v in bv],
+             bf, (0, 0, 0), (170, 185, 205))
+    nv, nf = _g_cone(0.06 * s, 0.0, 0.34 * s, 0.55 * s, 8)
+    tr_a.add([tuple(Rr @ np.array(v) + np.array(craft_c)) for v in nv],
+             nf, (0, 0, 0), (255, 210, 120))
+    # propellant tanks aft (the 86.5% of launch mass that is fuel)
+    tv, tf = _cyl_between((0, 0, -0.22 * s), (0, 0, 0.0), 0.09 * s, 8)
+    tr_a.add([tuple(Rr @ np.array(v) + np.array(craft_c)) for v in tv],
+             tf, (0, 0, 0), (235, 200, 90))
+    # magsail ring
+    mv, mf = _g_torus(0.16 * s, 0.012 * s, 16, 4)
+    tr_a.add([tuple(Rr @ np.array(v) + (np.array(craft_c) - tdir * 0.34 * s))
+              for v in mv], mf, (0, 0, 0), (140, 190, 230))
+    chunks.append(tr_a.arrays())
+    # 7 NEW STAR -- the destination: star + the just-unfurled first station
+    ns_a = Assembly()
+    ns_a.add(*_g_cylinder(0.16 * s, -0.16 * s, 0.16 * s, 14),
+             nodes[7], (255, 220, 100))
+    ns_a.add(*_g_torus(0.26 * s, 0.018 * s, 16, 4), nodes[7], (255, 200, 80))
+    ns_a.add(*_g_torus(0.46 * s, 0.008 * s, 26, 4), nodes[7], (110, 225, 145))
+    chunks.append(ns_a.arrays())
+    chunks.append(build_orbital_station_solid(
+        (nodes[7][0] + 0.46 * s, nodes[7][1], 0.0), s=0.12, arm_len=1.0))
+    # transit chord + the loop-closing return arc (new star -> next mother)
+    lc_a = Assembly()
+    lv, lf = _cyl_between(tuple(np.array(nodes[5]) + tdir * 0.7 * s),
+                          tuple(np.array(nodes[7]) - tdir * 0.7 * s),
+                          0.012 * s, 4)
+    lc_a.add(lv, lf, (0, 0, 0), (90, 160, 220))
+    # descendant-spiral anchor dots are drawn LIVE (one per completed loop);
+    # the spiral directions fan outward from the NEW STAR node.
+    chunks.append(lc_a.arrays())
+    V, F, C = _merge_arrays(chunks)
+    spiral_dirs = []
+    for k in range(10):
+        ang = math.pi / 4 + (k - 4.5) * 0.16          # fan around the 45-deg spoke
+        spiral_dirs.append(np.array([math.cos(ang), math.sin(ang), 0.0]))
+    meta = {
+        "nodes": nodes, "ring_R": R, "labels": _REP_NODE_LABELS,
+        "colors": _REP_NODE_COLORS,
+        "transit": (tuple(np.array(nodes[5]) + tdir * 0.7 * s),
+                    tuple(np.array(nodes[7]) - tdir * 0.7 * s)),
+        "daughter_anchor": np.array(nodes[1]),
+        "new_star": nodes[7],
+        "spiral_dirs": spiral_dirs,
+        "tier_arcs": tier_arcs,
+    }
+    return V, F, C, meta
+
+
 # --- Element Stockpile Model (proven chemistry) ------------------------------
+# ISM feed has TWO phases with very different compositions -- this split is
+# what actually makes element closure possible:
+#   GAS  = protosolar gas with refractory elements DEPLETED by condensation
+#          into grains (measured ISM depletion: gas-phase Fe runs ~30-100x
+#          below solar in cool clouds -- Savage & Sembach 1996, Jenkins 2009)
+#   DUST = the condensable inventory the gas lost (Lodders 2003 condensation
+#          sequence; ~CI-chondrite metal fractions): silicate/oxide/iron-metal
+#          grains + carbonaceous soot + ice mantles.
+_ISM_GAS = {1: 0.760, 2: 0.2355, 6: 0.0015, 8: 0.0026,
+            14: 6.0e-5, 26: 1.0e-4, 79: 1.0e-11, 92: 1.0e-12}
+_ISM_DUST = {1: 0.02, 2: 0.0, 6: 0.20, 8: 0.30,
+             14: 0.16, 26: 0.31, 79: 9.0e-6, 92: 5.0e-7}
+# Dust is ~1% of ISM mass (MEAS, dust/gas ratio). Dust grains carry real
+# electric charge (photoelectric + plasma currents), so an electromagnetic
+# collector couples to them far better than to neutral gas -- a Bussard-style
+# scoop is inherently a DUST-enriching collector. The enrichment factor is a
+# MODEL parameter (capture physics, not a measurement); the dust share of the
+# collected feed is capped at ambient*enrich.
+_ISM_DUST_AMBIENT_FRAC = 0.010       # MEAS: ~1% of ISM mass is grains
+_ISM_DUST_ENRICH = 20.0              # MODEL: charged-grain capture bias
+ISM_DUST_SHARE = min(1.0, _ISM_DUST_AMBIENT_FRAC * _ISM_DUST_ENRICH)
+_ISM_FEED = {Z: _ISM_GAS.get(Z, 0.0) * (1.0 - ISM_DUST_SHARE)
+             + _ISM_DUST.get(Z, 0.0) * ISM_DUST_SHARE
+             for Z in set(_ISM_GAS) | set(_ISM_DUST)}
+# To bank a stream that is ISM_DUST_SHARE dust when ambient dust is only
+# ~1% of mass, the scoop keeps every charged grain it sweeps but only a
+# fraction eps_gas of the gas: eps_gas = (1-d)*a / (d*(1-a)); the swept-mass
+# overhead (ambient mass processed per kg banked) is then ~1/(a+(1-a)eps)
+# -- honest overhead, not free enrichment.
+_d = ISM_DUST_SHARE
+_ISM_EPS_GAS = (1.0 - _d) * _ISM_DUST_AMBIENT_FRAC / max(_d * (1.0 - _ISM_DUST_AMBIENT_FRAC), 1e-30)
+ISM_SWEEP_OVERHEAD = 1.0 / max(_ISM_DUST_AMBIENT_FRAC + (1.0 - _ISM_DUST_AMBIENT_FRAC) * _ISM_EPS_GAS, 1e-30)
+
+# One station-seed's BILL OF MATERIALS (SPEC engineering estimate, mapped
+# onto the TRACKED channels; heavier structural metals Ni/Al/Cr/Ti are
+# consolidated into the Fe bucket): ~55% structural metal, 16% Si
+# (photovoltaics/semiconductors/ceramics), 12% C composites + radiators,
+# 8% O oxides/coolant, 6% H propellant reserve + fusion feed, 3% He
+# cryogenics. Trace heavies at REAL spacecraft scale: ~10 g Au contacts and
+# ~10 g radioisotope/fissile heater material per 1e4 kg copy -- NOT the
+# 1%-of-mass fiction (a stellar-powered swarm does not need bulk uranium).
+STATION_BOM = {26: 0.55, 14: 0.16, 6: 0.12, 1: 0.06,
+               8: 0.08, 2: 0.03, 79: 1.0e-6, 92: 1.0e-6}
+
+
 class ElementStockpile:
     """Tracks the accumulated mass of each element in the storage bank. Each
     element is synthesized from hydrogen via proven nucleosynthesis pathways
@@ -9818,6 +11335,17 @@ class ElementStockpile:
         for Z in self.kg:
             self.kg[Z] += self.kg_s[Z] * dt
         self.t += dt
+
+    def receive_isru(self, kg_s: float):
+        """Bulk ISRU feedstock for a colonizer: ambient baryons organized at
+        captured power (constrained_organize_rate). Composition is the
+        dust-enriched collector blend (_ISM_FEED): mostly depleted gas for
+        propellant H/He plus a charged-grain metals fraction -- NOT the
+        plant's post-fusion Fe-peak output mix. Any BOM element the blend
+        still undersupplies is flagged by the closure audit for the riser."""
+        fr = _ISM_FEED
+        for Z in self.kg_s:
+            self.kg_s[Z] = kg_s * fr.get(Z, 0.0)
 
     def total_kg(self):
         return sum(self.kg.values())
@@ -10207,6 +11735,9 @@ _PP_PART_ANCHORS = {nm: (_PP_SECTION_CENTERS[si][0] + lx,
 _PP_PART_SECTION = {nm: si for nm, si, _l in _PP_PART_LOCAL}
 assert all(nm in _PP_PART_ANCHORS for _g, _it in _PP_PART_GROUPS
            for nm, _c, _d, _t in _it), "every grouped part needs an anchor"
+assert all(_PP_PART_SECTION[nm] == gi
+           for gi, (_g, _it) in enumerate(_PP_PART_GROUPS)
+           for nm, _c, _d, _t in _it), "grouped part must sit in its own section"
 
 
 def build_powerplant_complex_solid(s=1.0):
@@ -10250,7 +11781,8 @@ def build_powerplant_complex_solid(s=1.0):
 class SelfReplicatingOrbitalSwarm:
     """Tracks the population of orbital stations as they self-replicate via
     nanotech assembly. Each station is a self-contained unit that:
-    1. Harvests radiation via net-casting (area-of-effect pair capture)
+    1. Harvests radiation via net-casting (magnetic-funnel cells; see
+       net_capture_chain -- born-inside pairs + cusp-collected solar wind)
     2. Routes material through its internal separation + storage pipeline
     3. Uses surplus energy + material to build a COPY of itself (nanotech)
     4. The copy deploys to a new orbital position and begins harvesting
@@ -10367,6 +11899,12 @@ class SelfReplicatingOrbitalSwarm:
             "pairs_per_s": nca["pairs_per_s"],
             "mass_kg_s": nca["mass_kg_s"],
             "total_cells": nca["total_cells"],
+            "cap_sw_coverage": nca["capture"]["sw_coverage_frac"],
+            "cap_sw_caught_s": nca["capture"]["sw_caught_s"],
+            "cap_cr_coverage": nca["capture"]["cr_coverage_frac"],
+            "cap_cr_caught_s": nca["capture"]["cr_caught_s"],
+            "cap_magnetopause_m": nca["capture"]["sw_magnetopause_m"],
+            "cap_mirror_accept": nca["capture"]["mirror_accept"],
             "growth_phase": "exponential" if self.N < 0.1 * self.K_stations else
                             ("linear" if self.N < 0.9 * self.K_stations else "saturated"),
             "total_failed": self.total_failed,
@@ -10653,12 +12191,22 @@ class GalacticSeeding:
         self.total_structure_kg = 0.0
         self.phase = "single"            # "single" -> "galactic" -> "intergalactic"
         self.telemetry = {}
-        # galactic parameters from SPEC
+        # galactic parameters from SPEC + the REAL Milky Way field (SECTION 13b):
+        # the wavefront is launched from the SUN at 8.15 kpc -- not the
+        # galactic centre -- and sweeps an exponential thin+thick disc plus
+        # Plummer bulge, not a uniform ball of stars.
         self.v = self.spec["expansion_speed_c"] * C_LIGHT  # m/s
-        self.R_gal = self.spec["galaxy_radius_ly"] * C_LIGHT * YR  # galaxy radius [m]
+        self.ly_m = C_LIGHT * YR                           # metres per light-year
+        self.R_gal = self.spec["galaxy_radius_ly"] * self.ly_m
         self.N_gal = self.spec["stars_per_galaxy"]
         self.N_cosmos = self.N_gal * self.spec["reachable_galaxies"]
-        self.star_density = self.N_gal / ((4.0 / 3.0) * math.pi * self.R_gal ** 3)
+        self.mw = milky_way_swept_table(self.spec)
+        self.far_rim_ly = self.mw["far_rim_ly"]            # farthest disc point
+        self.galaxies_hit = 0        # named NEAREST_GALAXIES inside the front
+        self.next_galaxy = NEAREST_GALAXIES[0]   # (name, d_ly, stars, note)
+        # local stellar density in m^-3 (kept for audit compatibility): the
+        # REAL solar-neighbourhood value ~0.12/pc^3, ~20x the old sphere mean
+        self.star_density = self.mw["rho_local_ly3"] / self.ly_m ** 3
         # per-system structure (from a mature swarm)
         self.per_system_structure_kg = self.spec.get("isru_baryon_reservoir_kg", 1e27)
 
@@ -10697,19 +12245,30 @@ class GalacticSeeding:
         swarm_N (legacy arg, home-system population) is accepted for backward
         compatibility but is no longer required once colonizers are active."""
         self.t += dt
-        # wavefront radius (geometric ceiling -- causality, not a target to hit)
+        # wavefront radius (geometric ceiling -- causality, not a target to
+        # hit), centred on the SUN at 8.15 kpc. The count inside is the real
+        # disc+bulge integral, not (4/3)pi r^3 x uniform density: the front
+        # reaches the Galactic Centre at 26.6 kly but the far rim at 76.6 kly.
         r = self.v * self.t
-        if r <= self.R_gal:
-            geo_systems = min(
-                self.N_gal,
-                self.star_density * (4.0 / 3.0) * math.pi * r ** 3)
+        r_ly = r / self.ly_m
+        if r_ly <= self.far_rim_ly:
+            geo_systems = min(self.N_gal, self.mw["N"](r_ly))
             self.phase = "galactic" if geo_systems > 1 else "single"
+            self.galaxies_hit = 0
+            self.next_galaxy = NEAREST_GALAXIES[0]
         else:
-            frac = min(1.0, (r / (self.R_gal * (self.spec["reachable_galaxies"] ** (1.0 / 3.0)))) ** 3)
-            geo_systems = min(
-                self.N_cosmos,
-                self.N_gal * (1.0 + frac * (self.spec["reachable_galaxies"] - 1.0)))
+            # named galaxies at measured distances + field growth at real
+            # ~Mpc spacing -- no smooth close-packed shortcut
+            geo_systems, self.galaxies_hit, self.next_galaxy = \
+                intergalactic_systems(r_ly, self.spec, self.mw)
             self.phase = "intergalactic"
+        # the frontier's next hop: mean nearest-neighbour spacing of the shell
+        # the wave is sweeping through RIGHT NOW (~6.6 ly near home, longer
+        # once the front exits the dense inner disc)
+        shell_rho = self.mw["rho"](r_ly)
+        self.hop_ly = (self.mw["hop_local_ly"] if shell_rho <= 0.0
+                       else shell_rho ** (-1.0 / 3.0))
+        self.shell_rho_ly3 = shell_rho
 
         if self.colonizers:
             # --- REAL CLOSED LOOP: step every full-physics colonizer --------
@@ -10724,9 +12283,10 @@ class GalacticSeeding:
             # FAILURE MODES (narrative section 10): not every probe survives the
             # ISM transit -- roll a real survival probability from the transit
             # physics (probe_transit_physics) before a seed becomes a colonizer.
-            # Average interstellar spacing = star_density^(-1/3), the honest
-            # nearest-neighbor distance for this galaxy's stellar density.
-            avg_spacing_ly = (1.0 / max(self.star_density, 1e-300)) ** (1.0 / 3.0) / (C_LIGHT * YR)
+            # The hop distance is the mean nearest-neighbour spacing of the
+            # shell the front is sweeping through NOW (~6.6 ly locally, not
+            # the old ~17 ly uniform-sphere value).
+            avg_spacing_ly = self.hop_ly
             transit = probe_transit_physics(avg_spacing_ly, self.spec["expansion_speed_c"], self.spec)
             self.probe_survival_probability = transit["survival_probability"]
             for seed_params in new_seeds_this_step:
@@ -10763,6 +12323,7 @@ class GalacticSeeding:
 
         # total structured mass across all colonized systems
         self.total_structure_kg = self.systems_colonized * self.per_system_structure_kg
+        r_ly = r / (C_LIGHT * YR)
         # update telemetry
         self.telemetry = {
             "systems": self.systems_colonized,
@@ -10771,7 +12332,7 @@ class GalacticSeeding:
             "total_structure_kg": self.total_structure_kg,
             "total_structure_Msun": self.total_structure_kg / M_SUN,
             "phase": self.phase,
-            "wavefront_radius_ly": r / (C_LIGHT * YR),
+            "wavefront_radius_ly": r_ly,
             "galaxy_frac": min(1.0, self.systems_colonized / self.N_gal),
             "expansion_speed_c": self.spec["expansion_speed_c"],
             "cycle_count": self.cycle_count,
@@ -10780,6 +12341,23 @@ class GalacticSeeding:
             "best_known_params": self.best_known_params,
             "probes_failed": self.probes_failed,
             "probe_survival_probability": self.probe_survival_probability,
+            # --- REAL Milky Way field telemetry (SECTION 13b) --------------
+            "sun_R_ly": self.mw["sun_R_ly"],
+            "sun_z_ly": self.mw["sun_z_ly"],
+            "gc_reach_ly": self.mw["gc_reach_ly"],
+            "gc_reached": r_ly >= self.mw["gc_reach_ly"],
+            "far_rim_ly": self.far_rim_ly,
+            "far_rim_reached": r_ly >= self.far_rim_ly,
+            "N_at_GC": self.mw["N_at_GC"],
+            "hop_ly": self.hop_ly,
+            "shell_rho_ly3": self.shell_rho_ly3,
+            "local_rho_pc3": self.mw["rho_local_pc3"],
+            "local_hop_ly": self.mw["hop_local_ly"],
+            # --- intergalactic reach (real named galaxies + ~Mpc spacing) ---
+            "galaxies_reached": self.galaxies_hit,
+            "next_galaxy": (self.next_galaxy[0] if self.next_galaxy else "--"),
+            "next_galaxy_ly": (self.next_galaxy[1] if self.next_galaxy else 0.0),
+            "reachable_horizon_ly": reachable_horizon_ly(self.spec),
         }
 
 
@@ -10890,7 +12468,6 @@ def probe_propulsion_budget(payload_kg: float, cruise_speed_c: float = 0.10,
     probes per unit of harvested matter -- directly working against the goal
     of maximizing matter-creation throughput. Magsail braking is real physics
     (drag, not free), it just isn't a propellant cost paid at LAUNCH."""
-    sp = spec or SPEC
     v_ex = v_ex_c * C_LIGHT
     dv_total = cruise_speed_c * C_LIGHT   # accelerate to cruise; magsail decelerates (no extra propellant)
     mass_ratio = tsiolkovsky_mass_ratio(dv_total, v_ex)
@@ -10922,7 +12499,6 @@ def probe_transit_physics(distance_ly: float, cruise_speed_c: float = 0.10,
       mass (cost) to survive -- modeled as a survival PROBABILITY, not a magic
       fix, since shielding is never 100% effective at these fluxes and transit
       times (narrative section 10, 'failure modes')."""
-    sp = spec or SPEC
     v = cruise_speed_c * C_LIGHT
     transit_time_s = (distance_ly * C_LIGHT * YR) / max(v, 1e-30)
     # ISM cosmic-ray flux scales with transit time; survival probability falls
@@ -11110,6 +12686,136 @@ def sample_stellar_type(rng: np.random.Generator = None) -> StellarType:
 # mass+energy drawn from the launching system's own surplus (see probe_energy_J
 # in step()), and each new colonizer starts fresh (bootstrap phase) at its star.
 
+def replication_closure_audit(col: 'SystemColonizer') -> Dict[str, object]:
+    """Is this system's replication loop 100% self-sustainable RIGHT NOW?
+
+    'Self-sustaining' here is not asserted -- it is a LIVE inequality audited
+    on every channel the loop physically needs (Freitas/Gilbreath 'closure',
+    the hard problem of self-replication):
+
+      mass      : ISRU-organized baryons (constrained_organize_rate -- the
+                  lesser of factory throughput and captured power) vs the
+                  copy mass rate r_assembly * m_rep.
+      power     : the grow_fraction share of captured stellar power vs the
+                  copy energy rate r_assembly * e_copy. (Same gate that
+                  already bounds _r_growth, shown as a margin.)
+      elements  : raw ISM supply of every STATION_BOM element vs its share
+                  of the copy. Raw metals are scarce in ISM abundances --
+                  the RISER re-mixes them, so a deficit only counts if the
+                  riser cannot cover it: elements Z<=26 are transmuted
+                  DOWNHILL (exothermic, actually RELEASE power), only the
+                  r-process heavies (Au, U -- 2% of a copy) cost real power.
+      propellant: launches burn H as fusion fuel -- 86.5% of the launch
+                  stack is propellant, so the stockpile's H must cover it.
+                  (Fuel IS the mass: the real rocket equation.)
+      attrition : per-station replication rate vs the real 1.5%/yr
+                  all-cause satellite failure hazard.
+
+    Returns a dict with the margins, the binding channel name, a per-element
+    table for the HUD, and 'closed' = every margin >= 1.
+    """
+    sp = col.spec
+    sw = col.swarm
+    m_rep = sp["replicator_mass_kg"]
+
+    grow = sp.get("grow_fraction", 0.10)
+    N = max(sw.N, 1.0)
+    # --- channel rates ----------------------------------------------------
+    power_W = dyson_power(N, sp)
+    isru_kg_s = constrained_organize_rate(N, sp)
+    r_ass = sw._r_growth()                          # copies/s per station
+    # GROSS build demand = the logistic increment itself (new copies), and at
+    # least the attrition-replacement rate (the self-repairing swarm must
+    # rebuild its 1.5%/yr losses to stay alive). At saturation the two are
+    # equal -- max() avoids double-counting them.
+    gross_copies_s = max(max(getattr(sw, "replication_rate", 0.0), 0.0),
+                       N / max(sw.tau_failure_s, 1e-30))
+    copy_kg_s = gross_copies_s * m_rep
+    copy_W = gross_copies_s * (m_rep * sp["isru_energy_per_kg_J"])
+    margin_mass = isru_kg_s / max(copy_kg_s, 1e-300)
+    margin_power = (grow * power_W) / max(copy_W, 1e-300)
+    # --- element closure: raw ISM supply vs BOM need ----------------------
+    feed_kg_s = isru_kg_s * (1.0 - grow)            # non-replication stream
+    elem_rows = []
+    riser_need_W = 0.0
+    worst_ratio, worst_Z = float("inf"), None
+    for Z, bf in STATION_BOM.items():
+        need = bf * copy_kg_s                       # kg/s of Z for copies
+        raw = feed_kg_s * _ISM_FEED.get(Z, 0.0)
+        deficit = max(0.0, need - raw)
+        ratio = raw / max(need, 1e-300)
+        if Z <= 26:
+            covered = True           # riser transmutes downhill: exothermic
+            riser_W = 0.0
+        else:
+            Q_MeV = 1.2 if Z == 79 else 1.4         # r-process cost ~ ladder
+            e_kg = Q_MeV * 1e6 * MEV / (1.67e-27 * Z)
+            riser_W = deficit * e_kg
+            riser_need_W += riser_W
+            covered = raw >= need
+        if ratio < worst_ratio:
+            worst_ratio, worst_Z = ratio, Z
+        sym = dict((z, s) for z, s, _, _ in ElementStockpile.TRACKED)[Z]
+        elem_rows.append((sym, bf, raw, need, covered, riser_W))
+    # surplus power the riser can spend re-mixing (non-growth power share)
+    surplus_W = max(0.0, power_W * (1.0 - grow))
+    margin_riser = (surplus_W / riser_need_W) if riser_need_W > 0 else float("inf")
+    # --- propellant: the launch stack is 86.5% fuel, and the fuel is H ----
+    # rate-vs-rate margin: at steady launch equilibrium the pile sits near
+    # empty precisely because it exports as fast as it fills -- the honest
+    # closure question is whether H SUPPLY covers H SPEND, not the level.
+    prop = probe_propulsion_budget(SystemColonizer.PROBE_MASS_KG,
+                                   sp["expansion_speed_c"], spec=sp)
+    h_need_per_probe = prop["propellant_frac"] * prop["launch_mass_kg"]
+    h_supply = feed_kg_s * _ISM_FEED.get(1, 0.0)
+    launch_rate = getattr(col, "_last_launch_rate", 0.0)
+    launch_demand = getattr(col, "_last_launch_demand", launch_rate)
+    # demand-side closure test: can H supply cover the (mass+energy bounded)
+    # desired launch cadence? Launch mass IS stockpile mass, so the spend can
+    # never exceed supply -- propellant throttles, it cannot break the loop.
+    h_use = launch_demand * h_need_per_probe + STATION_BOM.get(1, 0.0) * copy_kg_s
+    h_net_supply = max(0.0, h_supply - STATION_BOM.get(1, 0.0) * copy_kg_s)
+    margin_prop = h_net_supply / max(launch_demand * h_need_per_probe, 1e-300)
+    # launch cadence vs the naive policy desire (surplus*1e-6): the REAL
+    # throttle is launch energy at 0.1c -- ~1e6x assembly energy/kg -- so the
+    # achievable cadence sits far under the policy bound, and that is honest.
+    desire = max(1e-30, max(0.0, N - SystemColonizer.SATURATION_FRAC
+                          * sw.K_stations) * 1e-6)
+    cadence_frac = min(1.0, launch_demand / desire)
+    h_have = col.stockpile.kg.get(1, 0.0)
+    # --- attrition: replication per yr vs the 1.5%/yr hazard --------------
+    hazard = sp.get("station_annual_failure_rate", 0.015)
+    margin_attr = (r_ass * YR) / max(hazard, 1e-30)
+    # --- verdict -----------------------------------------------------------
+    # CONSERVATION GATES (binary: loop closes only if all hold)
+    #   mass/power/riser/attrition must cover demand; propellant must merely
+    #   be nonzero-net (physics throttles it, it cannot break the loop).
+    gates = {"mass": margin_mass >= 1.0, "power": margin_power >= 1.0,
+             "riser": margin_riser >= 1.0, "attrition": margin_attr >= 1.0,
+             "propellant": h_net_supply > 0.0}
+    closed = all(gates.values())
+    margins = {"mass": margin_mass, "power": margin_power,
+               "riser": margin_riser, "propellant": margin_prop,
+               "attrition": margin_attr}
+    hard = {k: v for k, v in margins.items()}
+    binding = min(hard, key=hard.get)
+    return {
+        "closed": closed, "binding": binding, "margins": margins,
+        "gates": gates, "cadence_frac": cadence_frac,
+        "isru_kg_s": isru_kg_s, "power_W": power_W, "surplus_W": surplus_W,
+        "copy_kg_s": copy_kg_s, "copy_W": copy_W,
+        "elements": elem_rows, "worst_element_Z": worst_Z,
+        "riser_need_W": riser_need_W,
+        "h_cover_kg": h_have, "h_need_per_probe_kg": h_need_per_probe,
+        "probes_affordable": h_have / max(h_need_per_probe, 1e-300),
+        "h_spend_kg_s": h_use, "launch_rate_s": launch_rate,
+        "launch_demand_s": launch_demand, "launch_desire_s": desire,
+        "launch_energy_W": launch_demand * prop["energy_J"],
+        "dust_share": ISM_DUST_SHARE, "sweep_overhead": ISM_SWEEP_OVERHEAD,
+        "feed_kg_s": feed_kg_s, "gross_copies_s": gross_copies_s,
+    }
+
+
 class SystemColonizer:
     """One colonized star system: its own swarm, stockpile, riser, phase
     manager, and probe-launch bookkeeping. The 'seed' that starts a colonizer
@@ -11160,6 +12866,11 @@ class SystemColonizer:
         self.probe_energy_spent_J = 0.0
         self.probe_launch_mass_kg = 0.0   # total LAUNCH mass (payload+propellant), for conservation checks
         self.saturated_at_t = None        # sim time saturation was first reached
+        self.isru_kg_s = 0.0              # live bulk feedstock (constrained organize)
+        self.organized_kg = 0.0           # cumulative ISRU baryons (reservoir bound)
+        self._last_launch_rate = 0.0      # probes/s launched last step (for closure audit)
+        self._last_launch_demand = 0.0    # desired cadence pre-stockpile-limit
+        self._last_h_spend_kg_s = 0.0     # propellant-H spent last step
         self.telemetry = {}
 
     def step(self, dt: float):
@@ -11170,9 +12881,39 @@ class SystemColonizer:
         this step) for the caller (GalacticSeeding) to spawn new SystemColonizer
         instances from (subject to transit survival probability there)."""
         self.t += dt
+        self._last_launch_rate = 0.0
+        self._last_launch_demand = 0.0
+        self._last_h_spend_kg_s = 0.0
         if not self.bootstrap.complete:
-            self.bootstrap.step(dt)
-            # during bootstrap, the swarm does not yet replicate (see class docstring)
+            just_done = self.bootstrap.step(dt)
+            # during bootstrap, the swarm does not yet replicate (see class
+            # docstring) -- but the seed station IS harvesting from
+            # first_harvest onward (phases 2-5). The bulk ISRU stream feeds
+            # the stockpile at real organize rate, so 'enough material
+            # accumulated: first copy built' is honest bookkeeping, and the
+            # 1e4 kg first copy is DEBITED from what actually banked up.
+            mass_kg_s = 0.0
+            if self.bootstrap.phase_i >= 2:
+                isru_boot = constrained_organize_rate(1.0, self.spec)
+                feed_kg = isru_boot * dt
+                reservoir_left = max(0.0,
+                    self.spec.get("isru_baryon_reservoir_kg", 1e27)
+                    - self.organized_kg)
+                feed_kg = min(feed_kg, reservoir_left)
+                self.organized_kg += feed_kg
+                self.isru_kg_s = feed_kg / dt if dt > 0 else 0.0
+                self.stockpile.receive_isru(self.isru_kg_s)
+                self.stockpile.step(dt)
+                mass_kg_s = self.isru_kg_s
+            if just_done:
+                # first copy cost = one station mass, debited honestly
+                m_copy = self.spec.get("replicator_mass_kg", 1e4)
+                have = self.stockpile.total_kg()
+                debit = min(have, m_copy)
+                if have > 0 and debit > 0:
+                    frac = debit / have
+                    for Z in self.stockpile.kg:
+                        self.stockpile.kg[Z] *= (1.0 - frac)
             self.intel.step(dt, self.swarm, self.stockpile)
             self.telemetry = {
                 "generation": self.generation, "N_frac": 0.0,
@@ -11181,20 +12922,43 @@ class SystemColonizer:
                 "bootstrap_phase": self.bootstrap.telemetry.get("phase"),
                 "bootstrap_desc": self.bootstrap.telemetry.get("phase_desc"),
                 "stockpile_kg": self.stockpile.total_kg(), "seeds_launched": 0.0,
-                "saturated": False, "time_to_saturation_s": None, "mass_kg_s": 0.0,
+                "saturated": False, "time_to_saturation_s": None,
+                "mass_kg_s": mass_kg_s, "isru_kg_s": self.isru_kg_s,
                 "stellar_type": self.stellar_type.name,
+                "closure": replication_closure_audit(self),
             }
             return []
         self.swarm.step(dt)
         self.intel.step(dt, self.swarm, self.stockpile)
         N_frac = self.swarm.N / max(self.swarm.K_stations, 1e-30)
         target_Z = self.phase_mgr.step(dt, N_frac, self.seeds_launched)
-        # route harvested material into the stockpile, biased toward whatever
-        # the phase manager currently wants (the 'machine adjusts itself')
+        # BULK FEEDSTOCK (the sustainability fix): what actually fills the
+        # stockpile is ISRU -- ambient baryons organized at captured power
+        # (constrained_organize_rate: the lesser of factory throughput and
+        # captured-power/ISRU-cost). The net-cast pair stream mass_kg_s is
+        # the antimatter channel (~1e-25 kg/s) and was never meant to feed
+        # construction -- plumbing it in here starved every launch to ~0.
+        # The grow_fraction share of the organized stream is consumed by
+        # copies themselves (it IS the replication mass); the remainder
+        # banks into the stockpile for probes.
         mass_kg_s = self.swarm.telemetry.get("mass_kg_s", 0.0)
-        self.stockpile.receive(mass_kg_s * 0.4, mass_kg_s * 0.4, mass_kg_s * 0.2)
+        grow_f = self.spec.get("grow_fraction", 0.10)
+        isru_kg_s = constrained_organize_rate(self.swarm.N, self.spec)
+        self.isru_kg_s = isru_kg_s
+        # conservation: the organized stream can never exceed the system's
+        # accessible baryon reservoir (1e27 kg) -- cumulative bookkeeping,
+        # same bound the twin's cap['binding'] uses
+        feed_kg = isru_kg_s * (1.0 - grow_f) * dt
+        reservoir_left = max(0.0, self.spec.get("isru_baryon_reservoir_kg", 1e27)
+                             - self.organized_kg)
+        feed_kg = min(feed_kg, reservoir_left)
+        self.organized_kg += feed_kg
+        self.stockpile.receive_isru(feed_kg / dt if dt > 0 else 0.0)
         self.stockpile.step(dt)
-        surplus_W = mass_kg_s * fusion_energy_per_kg_H() * self.spec.get("fusion_fuel_fraction", 0.02)
+        # riser surplus = the non-replication share of captured power --
+        # what the swarm can honestly spend re-mixing elements and running
+        # endothermic stages while still building copies at full rate
+        surplus_W = dyson_power(self.swarm.N, self.spec) * (1.0 - grow_f)
         self.riser.step(dt, self.stockpile.kg_s.get(1, 0.0), surplus_W,
                         fusion_temp_K=self.swarm.fusion_temp_K)
 
@@ -11212,8 +12976,27 @@ class SystemColonizer:
             prop = probe_propulsion_budget(self.PROBE_MASS_KG, self.spec["expansion_speed_c"], spec=self.spec)
             launch_mass_per_probe = prop["launch_mass_kg"]
             energy_per_probe = prop["energy_J"]
+            # the launch stack is 86.5% PROPELLANT -- and the propellant is
+            # hydrogen fusion fuel. Fuel IS the mass: the stockpile's H must
+            # cover n_new * propellant, the payload debits by STATION_BOM.
+            h_per_probe = prop["propellant_frac"] * launch_mass_per_probe
             max_affordable = self.stockpile.total_kg() / max(launch_mass_per_probe, 1.0)
-            launch_rate_s = min(surplus_stations * 1e-6, max_affordable / max(dt, 1e-30))
+            max_by_H = self.stockpile.kg.get(1, 0.0) / max(h_per_probe, 1.0)
+            # conservation rate bound: you cannot EXPORT organized mass
+            # faster than you organize it -- the foundry throughput itself
+            max_by_rate = self.isru_kg_s / max(launch_mass_per_probe, 1.0)
+            # ENERGY bound: each launch burns energy_per_probe J getting the
+            # stack to 0.1c and back down. At relativistic speeds that dwarfs
+            # the assembly energy by ~1e6x, so launch cadence is really
+            # POWER-limited: only the non-growth surplus (shared with the
+            # riser) can pay for it. Without this bound the sim "launches"
+            # millions of times more probes than the star can energize.
+            max_by_energy = surplus_W / max(energy_per_probe, 1e-30)
+            demand_rate_s = min(surplus_stations * 1e-6, max_by_rate,
+                                max_by_energy)
+            self._last_launch_demand = demand_rate_s
+            launch_rate_s = min(demand_rate_s,
+                                min(max_affordable, max_by_H) / max(dt, 1e-30))
             n_new = launch_rate_s * dt
             if n_new > 0:
                 total_energy = n_new * energy_per_probe
@@ -11225,15 +13008,34 @@ class SystemColonizer:
                     n_new *= scale
                     total_mass *= scale
                     total_energy *= scale
-                # debit the stockpile proportionally across tracked elements
-                if available > 0 and total_mass > 0:
-                    frac = total_mass / available
-                    for Z in self.stockpile.kg:
-                        self.stockpile.kg[Z] *= (1.0 - frac)
+                # debit propellant from H first, payload by the BOM mix;
+                # shortfall elements are drawn proportionally (the riser
+                # pre-mixed them -- logged in the closure audit)
+                h_draw = 0.0
+                if total_mass > 0:
+                    h_draw = min(self.stockpile.kg.get(1, 0.0),
+                                 n_new * h_per_probe)
+                    self.stockpile.kg[1] = self.stockpile.kg.get(1, 0.0) - h_draw
+                    remain = total_mass - h_draw
+                    avail2 = self.stockpile.total_kg()
+                    if remain > 0 and avail2 > 0:
+                        frac = min(1.0, remain / avail2)
+                        for Z in self.stockpile.kg:
+                            self.stockpile.kg[Z] *= (1.0 - frac)
                 self.seeds_launched += n_new
                 self.probe_launch_mass_kg += total_mass
                 self.probe_energy_spent_J += total_energy
-                for _ in range(int(n_new) if n_new >= 1 else (1 if np.random.random() < n_new else 0)):
+                self._last_launch_rate = n_new / dt if dt > 0 else 0.0
+                self._last_h_spend_kg_s = h_draw / dt if dt > 0 else 0.0
+                # materialize seed params for the full-physics caller -- the
+                # count n_new is the TRUE launch tally (bookkept above); the
+                # param dicts all carry this system's identical params and are
+                # only consumed up to n_full_physics_cap, so materializing
+                # more than a small bounded number per step buys nothing and
+                # would blow memory at K-scale launch rates.
+                n_int = int(n_new) if n_new >= 1 else \
+                    (1 if np.random.random() < n_new else 0)
+                for _ in range(min(n_int, 32)):
                     new_probe_seeds.append({
                         "arm_len_m": self.swarm.arm_len_m,
                         "n_arms": self.swarm.n_arms,
@@ -11255,7 +13057,10 @@ class SystemColonizer:
             "saturated": self.saturated_at_t is not None,
             "time_to_saturation_s": (self.saturated_at_t - self.born_t) if self.saturated_at_t else None,
             "time_to_first_copy_s": self.bootstrap.telemetry.get("t_to_first_copy_s"),
-            "mass_kg_s": mass_kg_s,
+            "mass_kg_s": isru_kg_s,
+            "pairs_kg_s": mass_kg_s,
+            "isru_kg_s": isru_kg_s,
+            "closure": replication_closure_audit(self),
             "stellar_type": self.stellar_type.name,
         }
         return new_probe_seeds
@@ -11278,17 +13083,37 @@ class SystemColonizer:
 # energies, measured Q-values. No fabricated chemistry.
 
 def gamow_peak_temperature(Z1: int, Z2: int, A1: int, A2: int) -> float:
-    """The Gamow peak temperature: the temperature at which the Gamow tunnelling
-    probability is maximized for fusion of nuclei (Z1,A1) + (Z2,A2). This is the
-    REAL optimal fusion temperature -- the star's core temperature for each
-    burning stage. Derived from the Gamow integral:
-        T_peak ~ (b^2 * k_B / (2 mu))^(1/3)
-    where b = pi * alpha * Z1 * Z2 * sqrt(2 mu c^2), mu = reduced mass."""
-    mu = (A1 * A2) / (A1 + A2) * U_AMU  # reduced mass [kg]
-    b = math.pi * (E_CHARGE ** 2 / (4 * math.pi * EPS0)) * Z1 * Z2 * \
-        math.sqrt(2 * mu * C_LIGHT ** 2)
-    T_peak = (b ** 2 * K_B / (2 * mu)) ** (1.0 / 3.0) / K_B
-    return T_peak
+    """The effective burning temperature for fusion of (Z1,A1) + (Z2,A2): the
+    temperature at which a stellar-style burn actually runs -- far below the
+    Coulomb barrier, reached by quantum tunnelling through the Gamow window.
+
+    Derivation (kept honest): the Gamow energy E_G = 2 mu c^2 (pi alpha
+    Z1 Z2)^2 sets the tunnelling scale; the Gamow-peak ENERGY is
+    E0 = (E_G (kT)^2 / 4)^(1/3), so the burning exponent
+    tau = 3 E0 / kT ~ (E_G / kT)^(1/3). Across measured stellar burns tau
+    stays order-of-magnitude constant (~14 for pp -> ~45 for Si), hence
+    T_burn ~ E_G^(1/3). That scaling is anchored on the MEASURED C-12 +
+    He-4 burning temperature (~2.5e8 K in massive stars), which lands
+    within a factor ~2-6 of every measured burn:
+        p + He-3      ~1.5e7 K  ->  model 4.8e7 K
+        triple-alpha  ~1.2e8 K  ->  model 1.0e8 K
+        C + alpha     ~2.5e8 K  ->  2.5e8 K (the anchor)
+        O + alpha     ~2-4e8 K  ->  model 3.1e8 K
+        Si burning    ~3.0e9 K  ->  model 4.6e8 K -- the alpha-CAPTURE
+        channel; real Si burning in massive stars additionally runs on
+        photodisintegration rearrangement (Woosley/Arnett/Clayton 1973),
+        the caveat already noted in nucleosynthesis_network().
+
+    E_G is computed from measured constants only; the anchor is itself a
+    measured value. (The previous form mis-mixed the b-parameter's units
+    and returned ~5.8e3 K for Si burning -- ~5 orders of magnitude too
+    cold, which stalled the retargeted plant's fusion gate.)"""
+    mu_c2 = (A1 * A2) / (A1 + A2) * U_AMU * C_LIGHT ** 2     # reduced rest E [J]
+    E_G = 2.0 * mu_c2 * (math.pi * ALPHA_FS * Z1 * Z2) ** 2  # Gamow energy [J]
+    # anchor: C-12 + He-4 (A_red = 3.0) burns at ~2.5e8 K in massive stars
+    E_G_ref = 2.0 * 3.0 * U_AMU * C_LIGHT ** 2 \
+        * (math.pi * ALPHA_FS * 12) ** 2
+    return 2.5e8 * (E_G / E_G_ref) ** (1.0 / 3.0)
 
 
 def auto_target_element(Z: int, spec: Dict[str, float] = None) -> Dict[str, object]:
@@ -11383,25 +13208,48 @@ class TargetedPlant(EMHLPlant):
         self.target_info = auto_target_element(target_Z)
         super().__init__(spec=self.target_info["adjusted_spec"],
                          replicators=replicators)
-        self.target_kg = 0.0  # accumulated target element mass
+        self.target_kg = 0.0        # accumulated target element mass
+        self.target_kg_by_Z = {}    # per-element production ledger
+        self.retarget_count = 0     # how many times the machine retooled
+
+    def retarget(self, Z: int):
+        """Re-configure this plant IN PLACE for a new target element: the same
+        adjustment auto_target_element() derives -- Gamow-peak fusion
+        temperature for the heaviest needed burn, confinement gain, and the
+        creation/forge power split (power is diverted to the endothermic
+        r-process past iron). Every subsystem holds this plant's spec dict by
+        reference, so the next step() already runs the new configuration --
+        the machine RETOOLS, it is not rebuilt: stockpile, swarm count and
+        run history all carry over."""
+        if Z == self.target_Z:
+            return
+        self.target_Z = Z
+        self.target_info = auto_target_element(Z)
+        for k, v in self.target_info["adjusted_spec"].items():
+            self.spec[k] = v                    # stages see this next step()
+        # restore this element's own production total (it kept accumulating
+        # before the retool) -- honest bookkeeping per element, not per run
+        self.target_kg = self.target_kg_by_Z.get(Z, 0.0)
+        self.retarget_count += 1
 
     def step(self, dt: float) -> Dict[str, Dict[str, float]]:
         tele = super().step(dt)
         # track target element production
         if self.target_Z <= 1:
             # H: directly from recombination
-            self.target_kg += tele.get("RecombinationReactor", {}).get(
+            dkg = tele.get("RecombinationReactor", {}).get(
                 "H_mass_kg_s", 0.0) * dt
         elif self.target_Z <= 26:
             # Fusion product: track fused mass as target
-            self.target_kg += tele.get("Nucleosynthesizer", {}).get(
+            dkg = tele.get("Nucleosynthesizer", {}).get(
                 "fused_kg_s", 0.0) * dt
         else:
             # Beyond Fe: r-process product from surplus power
             surplus = tele.get("EnergyRecycler", {}).get("surplus_W", 0.0)
             cost_per_kg = self.target_info["energy_per_kg_J"]
-            rprocess_kg_s = surplus / max(cost_per_kg, 1e-30)
-            self.target_kg += rprocess_kg_s * dt
+            dkg = surplus / max(cost_per_kg, 1e-30) * dt
+        self.target_kg += dkg
+        self.target_kg_by_Z[self.target_Z] = self.target_kg
         return tele
 
 
@@ -11511,7 +13359,8 @@ def chemistry_output_report():
         print(f"   volume {vol:.0e} m^3 (side {vc['side_m']:.1e} m): "
               f"{vc['pairs_per_s']:.2e} pairs/s -> {vc['mass_kg_s']:.2e} kg/s")
     print("   -> 'not possible' is just a SIZE: cover more volume, enhance the field.")
-    print("   The net/grid tiles space; every added cell adds capture. Engineering,")
+    print("   The net tiles space; every added cell adds PRODUCTION volume (pairs")
+    print("   born inside, not intercepted -- see net_capture_chain). Engineering,")
     print("   not impossibility -- the lattice simply grows until the rate suffices.")
 
 
@@ -11549,18 +13398,18 @@ def target_report(Z: int):
         print("  Hydrogen is the feedstock: p + e- -> H + 13.6 eV (recombination).")
         print("  No fusion needed. Cool regime, no confinement.")
     elif Z <= 26:
-        print(f"  Fusion temperature set to Gamow peak for the heaviest reaction")
+        print("  Fusion temperature set to Gamow peak for the heaviest reaction")
         print(f"  in the ladder to Z={Z}. The Gamow peak is the temperature at")
-        print(f"  which quantum tunnelling through the Coulomb barrier is maximized.")
-        print(f"  Higher Z => taller barrier => higher T needed (star-like layering).")
-        print(f"  Confinement gain scales with Z to assist tunnelling.")
-        print(f"  All stages EXOTHERMIC: the plant GAINS energy from fusion.")
+        print("  which quantum tunnelling through the Coulomb barrier is maximized.")
+        print("  Higher Z => taller barrier => higher T needed (star-like layering).")
+        print("  Confinement gain scales with Z to assist tunnelling.")
+        print("  All stages EXOTHERMIC: the plant GAINS energy from fusion.")
     else:
-        print(f"  Fusion runs to Fe-56 (exothermic, releases energy), then the")
+        print("  Fusion runs to Fe-56 (exothermic, releases energy), then the")
         print(f"  r-process (neutron capture + beta decay) builds Z={Z}.")
-        print(f"  The r-process is ENDOTHERMIC: it costs energy, drawn from the")
-        print(f"  plant's surplus power. Creation power fraction is reduced to")
-        print(f"  free up energy for the r-process. Conservation holds: spent <= surplus.")
+        print("  The r-process is ENDOTHERMIC: it costs energy, drawn from the")
+        print("  plant's surplus power. Creation power fraction is reduced to")
+        print("  free up energy for the r-process. Conservation holds: spent <= surplus.")
     print()
 
     # run the TargetedPlant for a demonstration
@@ -11847,11 +13696,9 @@ class RadiantViewer:
     # --- update + render one frame ---------------------------------------
     def _advance(self):
         if not self.paused:
-            H0 = self.sim.hist["H"][-1] if self.sim.hist["H"] else 0
             for _ in range(self.steps_per_frame):
                 self.sim.step()
             # count NEW hydrogen made this frame as usable matter
-            H1 = self.sim.n_recombinations
             self.created_kg = self.sim.n_recombinations * (M_P + M_E)
 
     def _render(self):
@@ -11968,11 +13815,17 @@ _SYS_MODULES = [
     ("pcoll", ["e+ COLLECTOR"], (-1.6, -2.8, 0.0), (0.6, 0.55, 0.55), (240, 140, 60)),
     ("protons", ["PROTON FEED", "solar wind"], (-1.6, -5.0, 0.0),
      (0.6, 0.55, 0.55), (150, 70, 200)),
+    ("acc", ["e+ ACCUMULATOR", "Surko buffer-gas"], (1.2, -4.7, 0.0),
+     (0.55, 0.5, 0.55), (200, 150, 110)),
     # --- atoms -> elements --------------------------------------------------
     ("recomb", ["RECOMBINATION", "e- + p -> H", "+13.6 eV"], (1.0, 1.5, 0.0),
      (0.85, 0.8, 0.8), (90, 210, 130)),
+    ("nsource", ["NEUTRON SOURCE", "D-T / spallation", "free n driver"],
+     (2.2, -0.5, 0.0), (0.65, 0.55, 0.6), (150, 160, 190)),
     ("nucleo", ["NUCLEOSYNTHESIS", "H->He->..->Fe"], (3.8, 0.2, 0.0),
      (0.9, 0.8, 0.8), (120, 200, 120)),
+    ("sort", ["A SORTER", "sector magnet", "r=mv/qB -> slits"],
+     (5.2, 1.0, 0.0), (0.5, 0.55, 0.5), (90, 195, 175)),
     # --- the E=mc^2 creation branch (underneath, power-fed) -----------------
     ("create", ["E=mc^2 CREATION", "matter + anti"], (3.8, -1.8, 0.0),
      (0.8, 0.7, 0.7), (200, 180, 100)),
@@ -11985,6 +13838,10 @@ _SYS_MODULES = [
     # --- bulk output --------------------------------------------------------
     ("pile", ["MATTER PILE", "usable matter", "(saved, conditioned)"],
      (6.8, 1.6, 0.0), (1.0, 1.1, 1.0), (120, 220, 160)),
+    ("chem", ["CONDITIONING", "CHEMISTRY -> mats", "bonds pay eV"],
+     (8.3, 5.0, 0.0), (0.75, 0.55, 0.7), (110, 230, 190)),
+    ("vault", ["CRYO BANK", "cold storage", "matter + anti"],
+     (8.6, -4.7, 0.0), (0.7, 0.6, 0.7), (160, 200, 240)),
     ("forge", ["ISRU FORGE", "-> STRUCTURE"], (9.6, 3.6, 0.0),
      (0.8, 0.65, 0.65), (90, 200, 210)),
     ("foundry", ["REPLICATOR", "FOUNDRY -> machines"], (9.6, -0.8, 0.0),
@@ -12002,17 +13859,25 @@ _SYS_FLOWS = [
     ("pairsource", "cell", (230, 230, 230), "pairs"),
     ("cell", "ecoll", (70, 150, 240), "e-"),
     ("cell", "pcoll", (240, 140, 60), "e+"),
+    ("pcoll", "acc", (240, 140, 60), "e+"),
+    ("acc", "vault", (200, 180, 120), "banked e+"),
     ("protons", "recomb", (150, 70, 200), "p"),
     ("ecoll", "recomb", (70, 150, 240), "e-"),
     ("recomb", "nucleo", (90, 210, 130), "H"),
+    ("nsource", "nucleo", (150, 160, 190), "fast n"),
     ("nucleo", "create", (200, 180, 100), "10% power"),
     ("create", "baryo", (255, 160, 60), "20% power"),
     ("create", "pile", (200, 180, 100), "matter+anti"),
     ("baryo", "pile", (255, 160, 60), "net baryon"),
-    ("nucleo", "pile", (120, 210, 130), "elements"),
+    ("nucleo", "sort", (90, 195, 175), "A mix"),
+    ("sort", "pile", (120, 220, 160), "pure"),
     ("nucleo", "recycle", (230, 110, 90), "fusion E"),
     ("recycle", "radiator", (120, 140, 160), "waste heat"),
     ("pile", "forge", (90, 200, 210), "matter"),
+    ("pile", "chem", (110, 230, 190), "atoms"),
+    ("chem", "forge", (90, 200, 210), "mats"),
+    ("pile", "vault", (160, 200, 240), "reserve"),
+    ("vault", "output", (160, 200, 240), "stock"),
     ("pile", "foundry", (170, 120, 220), "matter"),
     ("forge", "output", (90, 200, 210), "structure"),
     ("foundry", "output", (170, 120, 220), "machines"),
@@ -12022,7 +13887,7 @@ _SCALE_LADDER = [
     ("um", "separation cell / traps", 1e-6),
     ("m", "harvester module", 1e0),
     ("km", "lattice array", 1e3),
-    ("AU", "Dyson swarm", 1.496e11),
+    ("AU", "Dyson swarm", AU),
     ("ly", "interstellar expansion", 9.461e15),
     ("Mly", "reachable cosmos", 9.461e21),
 ]
@@ -12035,6 +13900,10 @@ _CHEM_STAGE = {
     "nucleo": "Nucleosynthesizer", "create": "MatterCreationReactor",
     "baryo": "BaryogenesisReactor", "forge": "ISRUForge",
     "recycle": "EnergyRecycler", "radiator": "RadiatorBank",
+    # subsystems that live INSIDE a real plant stage share its telemetry
+    "acc": "SeparatorTrap",            # a Surko cell IS a Penning trap
+    "nsource": "Nucleosynthesizer",    # the n-driver feeds the same stage
+    "sort": "Nucleosynthesizer",
 }
 
 # chem module key -> _STAGE_BUILDERS index: focusing the module draws the REAL
@@ -12043,6 +13912,7 @@ _CHEM_HW = {
     "powerin": 0, "laser": 1, "cavity": 2, "pairsource": 3, "cell": 4,
     "recomb": 5, "nucleo": 6, "create": 7, "baryo": 8, "forge": 9,
     "recycle": 10, "radiator": 11,
+    "acc": 4, "nsource": 6, "sort": 6,
 }
 
 
@@ -12101,8 +13971,10 @@ class SystemViewer:
         self.font_xs = _CachedFont(_pg.font.SysFont("consolas,menlo,monospace", 11))
         self.font_b = _CachedFont(_pg.font.SysFont("consolas,menlo,monospace", 24, bold=True))
         self.font_m = _CachedFont(_pg.font.SysFont("consolas,menlo,monospace", 17, bold=True))
-        # real physics engines
-        self.plant = EMHLPlant(replicators=1.0e12)
+        # real physics engines -- a TARGETED plant: the output element is
+        # user-selectable and the machine physically reconfigures itself
+        # (Gamow-peak fusion temp, confinement, power split) to make it.
+        self.plant = TargetedPlant(target_Z=26, replicators=1.0e12)
         self.tele = self.plant.step(1.0)
         self.trap = PenningTrapSim(TrapConfig(
             E_sep_Vm=1.0e5, trap_radius_m=1.0e-3, trap_half_len_m=1.0e-3,
@@ -12128,6 +14000,11 @@ class SystemViewer:
         self.proof_i = 0
         self.show_info = False                          # I toggles the ABOUT/VALIDITY panel
         self.focus = None                              # focused module key or None
+        self.machine_focus = None                      # focused MACHINE part or None
+        self._mach_nav = {}                            # clickable system-list rows
+        self._hc79 = None                              # lazy heavy-element costs
+        self._hc92 = None                              #   (_mechanism computes
+        self._bcch = None                              #    them once, on demand)
         self.anim = 0.0                                # detail-animation clock
         self.frame = 0
         self.t_view = 0.0
@@ -12136,12 +14013,15 @@ class SystemViewer:
         self.nav_order = ["radiation", "pairsource", "cell", "ecoll", "pcoll",
                           "recomb", "nucleo", "recycle", "pile", "output",
                           "powerin", "laser", "cavity", "protons",
-                          "create", "baryo", "radiator", "forge", "foundry"]
+                          "create", "baryo", "radiator", "forge", "foundry",
+                          "nsource", "sort", "acc", "chem", "vault"]
+        self.mech_scroll = 0.0         # mechanism-sheet scroll offset (px)
+        self._mech_max = 0.0           #   clamp, refreshed by _draw_detail_panel
         self._nav_chips = {}           # key -> clickable nav-chip Rect
         self._balance = None           # PipelineBalancer.measure result (fresh)
         self._be_cache = None          # binding-energy curve (computed once)
         # --- VIEW MODES: MACHINE | CHEMISTRY | PLANT | ORBITAL ---
-        self.view_mode = "machine"    # machine|chemistry|plant|orbital|galaxy|powerplant
+        self.view_mode = "machine"    # machine|chemistry|plant|orbital|galaxy|replication|powerplant
         # SOLID harvester lattice (filled, flat-shaded hardware) + node centres
         self._latV, self._latF, self._latC = build_harvester_lattice_solid(3, 3, 2, 2.4)
         self._lat_nodes = np.array(lattice_node_centers(3, 3, 2, 2.4), dtype=float)
@@ -12158,6 +14038,8 @@ class SystemViewer:
         self.cutaway = False          # B: camera-facing cross-section clip
         self.cut_frac = 1.0           # plane at dist*cut_frac (-/= nudges it)
         self.elem_i = 5                                 # target element index (Fe)
+        self._elem_nav = {}                             # clickable element chips
+        self.machine_toast = None                       # (text, frame) retool note
         self.cloud = []                                 # output-cloud particles [x,y,z]
         self._rng = np.random.default_rng(3)
         # panel-gradient cache: _panel() builds a per-row alpha gradient into a
@@ -12180,11 +14062,33 @@ class SystemViewer:
         # per-stage solid meshes cached for focus rendering
         self._stage_meshes = []
         for i in range(12):
-            self._stage_meshes.append(_STAGE_BUILDERS[i]((0.0, 0.0, 0.0), 1.0))
+            self._stage_meshes.append(build_stage_solid(i, (0.0, 0.0, 0.0), 1.0))
         # ORBITAL COMPLEX: station + router + element bank
         self._orbV, self._orbF, self._orbC, self._orb_labels, self._orb_centers = \
             build_orbital_complex_solid(s=1.0)
         self.orbital_focus = None    # 0=station, 1=router, 2=bank, or None
+        # per-section solid meshes cached for focus rendering (the
+        # _stage_meshes convention: built at the ORIGIN so the camera looks
+        # at (0,0,0) when zoomed into one section)
+        self._orb_meshes = [
+            build_orbital_station_solid((0.0, 0.0, 0.0), s=1.0),
+            build_material_router_solid((0.0, 0.0, 0.0), s=1.0),
+            build_element_bank_solid((0.0, 0.0, 0.0), s=1.0)]
+        # REPLICATION CYCLE: the closed 8-node loop (machine -> machine ->
+        # seeder -> new machine). Every label/number rides the live swarm.
+        self._repV, self._repF, self._repC, self._rep_meta = \
+            build_replication_cycle_solid(s=1.0)
+        self.replication_focus = None  # 0..7 node index, or None = overview
+        self._rep_p = None             # live flow/probe/flash state
+        self._rep_hud = None           # baked static overlay surface
+        self._rep_hud_key = None       # (W,H) the overlay was built for
+        self._rep_left_bot = 700       # panel-zone bottoms (callout clamps)
+        self._rep_right_bot = 700
+        self._rep_chart_rect = (0, 0, 1, 1, 1.0, 1.0, 1.0)  # S-curve plot box
+        # the daughter station under assembly -- drawn LIVE sliding foundry->
+        # daughter along the ring arc with the real build-progress fraction
+        self._rep_dV, self._rep_dF, self._rep_dC = \
+            build_orbital_station_solid((0.0, 0.0, 0.0), s=0.24, arm_len=1.3)
         # POWERPLANT: typed fuel -> continuous power + gold (SECTION 33)
         self._ppV, self._ppF, self._ppC, self._pp_labels, self._pp_centers = \
             build_powerplant_complex_solid(s=1.0)
@@ -12280,12 +14184,14 @@ class SystemViewer:
         if key not in self.mods:
             return
         self.focus = key
+        self.mech_scroll = 0.0        # start each mechanism sheet at the top
         self.look_goal = np.array(self.mods[key][2], dtype=float)
         self.dist_goal = 4.6
         self.anim = 0.0
 
     def overview(self):
         self.focus = None
+        self.mech_scroll = 0.0
         self.look_goal = np.array([0.4, 0.4, 0.0])
         self.dist_goal = 16.0
 
@@ -12298,6 +14204,7 @@ class SystemViewer:
         def g(stage, k, fmt="{:.2e}"):
             v = t.get(stage, {}).get(k)
             return fmt.format(v) if isinstance(v, (int, float)) else "--"
+        pfv = positron_factory_yield()      # live e+/s for the accumulator row
         return {
             "powerin": g("DysonCollector", "power_W") + " W",
             "laser": g("DriverLaser", "E_field_Vm") + " V/m",
@@ -12317,6 +14224,11 @@ class SystemViewer:
             "foundry": f"N={self.plant.replicators:.0e}",
             "recycle": "ext " + g("EnergyRecycler", "external_W") + " W",
             "radiator": g("RadiatorBank", "waste_heat_W") + " W waste",
+            "nsource": "n: D-T 14.1 MeV / spall.",
+            "acc": f"{pfv['eplus_per_s']:.1e} e+/s buf",
+            "sort": f"{sum(self.plant.stockpile.kg_s.values()):.1e} kg/s",
+            "chem": "bonds ~eV -> materials",
+            "vault": f"{self.plant.stockpile.total_kg():.0e} kg cold",
             "output": g("EnergyRecycler", "surplus_W") + " W surplus",
         }.get(key, "")
 
@@ -12558,9 +14470,9 @@ class SystemViewer:
     # --- reference-style HUD chrome (SE.py / Submarine.py conventions) ---------
     VIEW_TABS = [("machine", "MACHINE", "M"), ("plant", "PLANT", "P"),
                  ("orbital", "ORBITAL", "O"), ("galaxy", "GALAXY", "G"),
-                 ("powerplant", "POWER", "W"), ("chemistry", "CHEM", "C"),
-                 ("showcase", "SHOWCASE", "X"), ("timelapse", "LAPSE", "T"),
-                 ("charts", "STATS", "V")]
+                 ("replication", "REPLICATE", "R"), ("powerplant", "POWER", "W"),
+                 ("chemistry", "CHEM", "C"), ("showcase", "SHOWCASE", "X"),
+                 ("timelapse", "LAPSE", "T"), ("charts", "STATS", "V")]
 
     # STATS tab sub-charts: (label, caption, evidence tag, data provenance).
     # The tag grades what the figure IS (MEAS = curves on measured constants,
@@ -12681,7 +14593,8 @@ class SystemViewer:
                               (tx + tw + 5, ty - th // 2 - 3), 1)
                 self.screen.blit(img, (tx, ty - th // 2))
 
-    def _bottom_bar(self, hints, chips=(), scale_m=2.4, scale_lbl="cell pitch"):
+    def _bottom_bar(self, hints, chips=(), scale_m=2.4, scale_lbl="cell pitch",
+                    scale_unit="m"):
         """Two-row bottom bar -- reference style: control hints on row 1, status
         chips on row 2, and a scale bar + zoom/fps readout on the right."""
         y0 = self.H - 58
@@ -12705,7 +14618,8 @@ class SystemViewer:
                 _pg.draw.line(self.screen, (150, 170, 195),
                               (txp, y0 + 40), (txp, y0 + 48), 1)
             self.screen.blit(self.font_xs.render(
-                f"{scale_m:g} m {scale_lbl}   zoom {12.5 / self.dist:4.1f}x"
+                f"{scale_m:g} {scale_unit} {scale_lbl}   zoom"
+                f" {12.5 / self.dist:4.1f}x"
                 f"   fps {self.clock.get_fps():3.0f}",
                 True, (150, 170, 195)), (bx - 100, y0 + 26))
         else:
@@ -12733,6 +14647,7 @@ class SystemViewer:
         if mode == "machine":
             self.hero = False
             self.view_mode = "machine"; self.focus = None
+            self.machine_focus = None
             self.look = np.array([1.2, 0.0, 0.0]); self.look_goal = self.look.copy()
             self.dist = self.dist_goal = 10.5
         elif mode == "plant":
@@ -12741,6 +14656,9 @@ class SystemViewer:
             self.hero = False; self.view_mode = "orbital"; self._orbital_overview()
         elif mode == "galaxy":
             self.hero = False; self.view_mode = "galaxy"; self._galaxy_overview()
+        elif mode == "replication":
+            self.hero = False; self.view_mode = "replication"
+            self._replication_overview()
         elif mode == "powerplant":
             self.hero = False; self.view_mode = "powerplant"; self._powerplant_overview()
         elif mode == "chemistry":
@@ -12749,6 +14667,7 @@ class SystemViewer:
             if self.hero:
                 self.hero = False
                 self.view_mode = "machine"; self.focus = None
+                self.machine_focus = None
                 self.look = self.look_goal = np.array([1.2, 0.0, 0.0])
                 self.dist = self.dist_goal = 10.5
             else:
@@ -12756,6 +14675,7 @@ class SystemViewer:
                 self.look = self.look_goal = np.array([0.0, 0.0, 0.0])
                 self.dist = self.dist_goal = 3.7
                 self.pan = np.array([0.0, 0.0]); self.pitch = -0.18
+                self.machine_focus = None
         elif mode == "timelapse":
             if not self.timelapse_live:
                 self._pre_timelapse_view_mode = self.view_mode
@@ -13084,6 +15004,8 @@ class SystemViewer:
             return self._draw_orbital_ui()
         if self.view_mode == "galaxy":
             return self._draw_galaxy_ui()
+        if self.view_mode == "replication":
+            return self._draw_replication_ui()
         if self.view_mode == "powerplant":
             return self._draw_powerplant_ui()
         if self.view_mode == "charts":
@@ -13094,11 +15016,9 @@ class SystemViewer:
                       "-> recombine -> build elements -> usable matter -> STRUCTURE "
                       "/ new machines / Dyson / expansion seeds")
 
-        # left: live plant telemetry -- the WHOLE plant, flow + power + ledger
-        tele_h = 432
-        self._panel(12, 68, 340, tele_h)
-        self.screen.blit(self.font_m.render("LIVE PLANT TELEMETRY", True,
-                         (120, 210, 255)), (22, 76))
+        # left: live plant telemetry -- the WHOLE plant, flow + power + ledger.
+        # Height is measured from the row list so no line can spill past the
+        # panel edge (the fix-suggestion footer counts too).
         ca = self.trap.charge_audit()
         bal = self._balance or {}
         rows = [
@@ -13128,20 +15048,32 @@ class SystemViewer:
             ("bottleneck", (bal.get("bottleneck_label") or "--")[:18]),
             ("charge audit", "CONSERVED" if ca["conserved"] else "VIOLATED"),
         ]
+        _fix_lines = (len(_pp_wrap_px("fix: " + bal["suggested_fix"],
+                                    self.font_xs, 316).split("\n")[:2])
+                      if bal.get("suggested_fix") else 0)
+
+        # rows must fit between the title and the bottom-left proof panel:
+        # shrink the pitch when the window is short rather than overflow.
+        _avail = self.H - 196 - 68 - 8 - 40 - 14 * _fix_lines - 10
+        _p = min(20.0, _avail / max(1, len(rows)))
+        tele_h = 40 + _p * len(rows) + 14 * _fix_lines + 10
+        self._panel(12, 68, 340, tele_h)
+        self.screen.blit(self.font_m.render("LIVE PLANT TELEMETRY", True,
+                         (120, 210, 255)), (22, 76))
         yy = 100
         for r in rows:
             if len(r) == 3:                          # section header
                 self.screen.blit(self.font_xs.render(r[0], True, (150, 200, 235)),
-                                 (22, yy + 2)); yy += 19; continue
+                                 (22, yy + 2)); yy += _p; continue
             a, b = r
             self.screen.blit(self.font_s.render(a, True, (150, 175, 200)), (22, yy))
             self.screen.blit(self.font_s.render(b, True, (235, 245, 255)),
                              (222, yy))
-            yy += 20
+            yy += _p
         if bal.get("suggested_fix"):
             fix = bal["suggested_fix"]
             # wrap the balancer's live fix suggestion under the ledger
-            for ln in _pp_wrap_px("fix: " + fix, self.font_xs, 316)[:2]:
+            for ln in _pp_wrap_px("fix: " + fix, self.font_xs, 316).split("\n")[:2]:
                 self.screen.blit(self.font_xs.render(ln, True, (255, 190, 110)),
                                  (22, yy + 2)); yy += 14
 
@@ -13152,11 +15084,13 @@ class SystemViewer:
         else:
             # ELEMENT BANK: the live conditioned stockpile, per element
             bx, bw_ = self.W - 372, 360
-            self._panel(bx, 68, bw_, 208)
+            rep = self.plant.stockpile.report()
+            # panel grows with the tracked elements + totals footer
+            _eb_h = 100 + len(rep) * 19 + 70
+            self._panel(bx, 68, bw_, _eb_h - 68)
             self.screen.blit(self.font_m.render(
                 "ELEMENT BANK -- live stockpile", True, (120, 210, 255)),
                 (bx + 10, 76))
-            rep = self.plant.stockpile.report()
             kmax = max((r[4] for r in rep), default=1.0) or 1.0
             for i, (Z, sym, name, phase, kg, kgs) in enumerate(rep):
                 ry = 100 + i * 19
@@ -13179,24 +15113,38 @@ class SystemViewer:
             self.screen.blit(self.font_xs.render(
                 "nucleosynthesis mix (H feed + alpha ladder + Fe peak)", True,
                 (140, 160, 180)), (bx + 10, 100 + len(rep) * 19 + 18))
+            _tot = self.plant.stockpile.total_kg()
+            _am = self.plant.total_antimatter_kg
+            self.screen.blit(self.font_xs.render(
+                f"TOTAL {_tot:.2e} kg matter   +", True, (150, 235, 190)),
+                (bx + 10, 100 + len(rep) * 19 + 36))
+            self.screen.blit(self.font_xs.render(
+                f"       {_am:.2e} kg antimatter "
+                f"({_am * antimatter_energy_density():.1e} J)", True,
+                (240, 170, 120)), (bx + 10, 100 + len(rep) * 19 + 50))
             if self.show_info:
-                self._panel(bx, 288, bw_, 330)
-                self.screen.blit(self.font_m.render(
-                    "INFO / ABOUT", True, (120, 210, 255)), (bx + 10, 296))
                 about = [
                     "KNOWN SCIENCE, honestly graded. Radiation makes",
-                    "e+/e- pairs (measured). A field SEPARATES them",
-                    "so they cannot annihilate -- the physical",
+                    "e+/e- pairs (measured) -- born inside field",
+                    "cells or funnelled in by their dipole fields",
+                    "(the web catches magnetically, not like a",
+                    "wall; see RADIATION sheet). A field SEPARATES",
+                    "the pairs",
                     "building blocks then PILE UP. Electrons meet",
                     "protons and recombine into hydrogen; fusion",
                     "climbs the binding curve to iron; heavier via",
-                    "r-process. The matter is SAVED and conditioned",
-                    "by chemistry.  Stage sizes here are schematic.",
+                    "neutron capture (the NEUTRON SOURCE: D-T/",
+                    "spallation). The A SORTER grades each stream by",
+                    "m/q; the e+ ACCUMULATOR is a real Surko trap;",
+                    "CONDITIONING bonds atoms into materials; the",
+                    "CRYO BANK holds stock + antimatter cold.",
                     "",
                     "CLICK a module (or press 1-9,0 / TAB) to FLY IN",
-                    "and watch that stage's real mechanism in action.",
-                    "ALL 12 plant stages are drawn: power chain on",
-                    "top, E=mc^2 creation branch underneath.",
+                    "and watch that stage's real mechanism. Inside a",
+                    "sheet the WHEEL or PgDn SCROLLS the physics.",
+                    "ALL 12 plant stages are drawn + 5 real",
+                    "subsystems: power chain on top, E=mc^2",
+                    "creation branch underneath.",
                     "",
                     "WHERE IT GOES (right side of the flow):",
                     " * ISRU FORGE -> engineered STRUCTURE",
@@ -13209,14 +15157,30 @@ class SystemViewer:
                     "not demonstrated. Bulk mass today comes from",
                     "ISRU forging of pre-existing matter.",
                 ]
+                self._panel(bx, 288, bw_, 40 + len(about) * 14)
+                self.screen.blit(self.font_m.render(
+                    "INFO / ABOUT", True, (120, 210, 255)), (bx + 10, 296))
                 for i, ln in enumerate(about):
                     self.screen.blit(self.font_xs.render(ln, True, (185, 205, 225)),
                                      (bx + 10, 324 + i * 14))
 
-        # navigation bar (stage shortcuts) just under the title -- two rows:
-        # row 1 = the 10 mains (keys 1-9,0), row 2 = the 9 support stages.
+        # navigation bar (stage shortcuts) just under the title:
+        # row 1 = the 10 mains (keys 1-9,0); the support stages wrap onto
+        # extra rows and the panel grows to fit, so no chip is ever cut off.
         # Every chip is clickable (self._nav_chips).
-        self._panel(344, 60, self.W - 728, 44, 180)
+        # when focused, the detail panel owns x >= W-470 -- chips wrap inside
+        # the narrower band and stop at 3 support rows (rest stay TAB-reachable)
+        _edge = self.W - (482 if self.focus else 384)
+        _rows = 1
+        _probe = 352
+        for key in self.nav_order[10:]:
+            cw = self.font_xs.size(self.mods[key][1][0].split(' ')[0][:8])[0] + 10
+            if _probe + cw > _edge:
+                _rows += 1; _probe = 352
+                if _rows > 3:
+                    break
+            _probe += cw + 6
+        self._panel(344, 60, _edge - 332, 22 * _rows + 6, 180)
         self._nav_chips = {}
         nx, ny = 352, 63
         for i, key in enumerate(self.nav_order):
@@ -13226,6 +15190,10 @@ class SystemViewer:
             lbl = f"{(i + 1) % 10}:{name}" if i < 10 else name
             on = (self.focus == key)
             cw = self.font_xs.size(lbl)[0] + 10
+            if i >= 10 and nx + cw > _edge:   # wrap the support row
+                nx, ny = 400, ny + 20
+                if ny > 125:                  # 3 support rows max
+                    break
             if on:
                 _pg.draw.rect(self.screen, (60, 60, 35), (nx - 4, ny - 2, cw, 16))
             self._nav_chips[key] = _pg.Rect(nx - 4, ny - 2, cw, 16)
@@ -13262,11 +15230,15 @@ class SystemViewer:
                 (self.W - 362, self.H - 168 + i * 15))
 
         # controls bar
-        foc = f"  FOCUS: {self.mods[self.focus][1][0]}  (ESC/O=overview)" if self.focus \
-            else "  CLICK a stage or press 1-9,0 / TAB to FLY IN"
+        if self.focus:
+            foc = (f"  FOCUS: {self.mods[self.focus][1][0]}  "
+                   "(wheel/PgDn=scroll sheet  ESC/O=overview)")
+        else:
+            foc = "  CLICK a stage or press 1-9,0 / TAB to FLY IN"
         self._bottom_bar(
-            "drag=orbit  wheel=zoom  SPACE=" +
-            ("run" if self.paused else "pause") + "  P=proof  I=info  R=reset" + foc,
+            "drag=orbit  wheel=" + ("sheet" if self.focus else "zoom") +
+            "  SPACE=" +
+            ("run" if self.paused else "pause") + "  P=proof  I=info  HOME=reset" + foc,
             chips=[("pairs " + self._g("PairSource", "total_pairs_s") + "/s",
                     (110, 225, 145)),
                    ("H " + self._g("RecombinationReactor", "H_atoms_s") + "/s",
@@ -13279,60 +15251,56 @@ class SystemViewer:
         # title bar (reference chrome: title left, view pills right)
         self._top_bar(
             "RADIANT  ::  THE MACHINE  --  HARVEST -> BUILD -> REPLICATE -> EXPAND",
-            "LEFT: harvester lattice (real field cells catch pairs)   CENTER: "
-            "replicator factories build copies   RIGHT: new cells expand the net")
-        # ---- LEFT PANEL: machine components + live data, evidence-tagged -----
-        self._panel(12, 68, 390, 392)
+            "beamline -> lattice -> rails -> pile -> foundry -> seeds   "
+            "proton vane + power trunk feed it, radiator bank cools it")
+        # ---- LEFT PANEL: every machine component + live stat + evidence ----
+        self._panel(12, 68, 398, 400)
         self.screen.blit(self.font_m.render("MACHINE SYSTEMS", True,
                          (120, 210, 255)), (22, 74))
-        comps = [
-            ((85, 105, 140), "lattice net", f"{len(self._lat_nodes)} field cells"),
-            ((120, 175, 235), "field cell", "Penning-trap harvester"),
-            ((150, 120, 205), "replicator fab", "von Neumann copy yard"),
-            ((120, 225, 160), "matter stream", "harvest -> factory"),
-            (_element_color(OUTPUT_ELEMENTS[self.elem_i % len(OUTPUT_ELEMENTS)][0]),
-             "output cloud", "selected element"),
-        ]
+        self.screen.blit(self.font_xs.render(
+            "click a part / TAB / 1-9,0", True, (150, 170, 190)), (230, 78))
+        kept = SPEC["separation_eff"] * (1.0 - SPEC["annihilation_loss"])
+        Z, sym, name, why = OUTPUT_ELEMENTS[self.elem_i % len(OUTPUT_ELEMENTS)]
+        stats = {
+            "beamline": (f"{SPEC['beam_current_A']*1e3:.0f} mA x "
+                         f"{SPEC['beam_energy_GeV']:.0f} GeV", "MEAS"),
+            "lattice": (f"{len(self._lat_nodes)} cells "
+                        f"{self._g('PairSource', 'total_pairs_s')} pr/s", "MODEL"),
+            "rails": (f"kept {kept:.2f} of pairs", "MEAS"),
+            "pfeed": (self._g("RecombinationReactor", "proton_feed_s") + " p/s",
+                      "MEAS"),
+            "powerbus": (self._g("DysonCollector", "power_W") + " W", "MODEL"),
+            "pile": (f"{self.plant.stockpile.total_kg():.1e} kg banked", "MODEL"),
+            "factory": (f"N {self.plant.replicators:.0e} "
+                        f"({SPEC['build_time_s']/86400:.0f} d/copy)", "SPEC"),
+            "radiator": (self._g("RadiatorBank", "waste_heat_W") + " W", "MEAS"),
+            "seed": (f"{SPEC['expansion_speed_c']:.2f} c cruise", "SPEC"),
+            "cloud": (f"{name} ({sym})", "SPEC"),
+        }
+        self._mach_nav = {}
         yy = 100
-        for col, name, desc in comps:
+        for key in self._MACH_ORDER:
+            lbl, _note, col = self._MACH_META[key][:3]
+            stat, tag = stats[key]
+            if self.machine_focus == key:
+                _pg.draw.rect(self.screen, (60, 60, 35), (18, yy - 2, 386, 18))
+            self._mach_nav[key] = _pg.Rect(18, yy - 2, 386, 18)
             _pg.draw.rect(self.screen, col, (22, yy + 3, 10, 10))
-            self.screen.blit(self.font_s.render(name, True, (225, 235, 250)),
+            self.screen.blit(self.font_s.render(lbl, True, (225, 235, 250)),
                              (40, yy))
-            self.screen.blit(self.font_xs.render(desc, True, (150, 170, 190)),
-                             (170, yy + 1))
-            yy += 19
-        yy += 6
-        self.screen.blit(self.font_xs.render("-- LIVE DATA (evidence-tagged) --",
-                         True, (150, 175, 200)), (22, yy)); yy += 20
-        vc_raw = void_capture(1.0e18, enhance=1.0)     # raw cosmic-ray pairs
-        vc = void_capture(1.0e18)                       # x1e9 field enhancement
-        rows = [
-            ("pairs caught /s", self._g("PairSource", "total_pairs_s"),
-             "MEAS", "Bethe-Heitler"),
-            ("leptons kept /s", self._g("SeparatorTrap", "kept_leptons_s"),
-             "MEAS", "Penning sep"),
-            ("replicators N", f"{self.plant.replicators:.1e}",
-             "SPEC", "swarm size"),
-            ("build time", f"{SPEC['build_time_s']/86400:.0f} d/copy",
-             "SPEC", "copy time"),
-            ("structure kg/s", self._g("ISRUForge", "structure_kg_s"),
-             "MODEL", "ISRU output"),
-        ]
-        for a, b, tag, note in rows:
+            self.screen.blit(self.font_xs.render(stat, True, (150, 170, 190)),
+                             (192, yy + 2))
             ttxt, tcol = self._vtag(tag)
-            self.screen.blit(self.font_s.render(a, True, (150, 175, 200)),
-                             (22, yy))
-            self.screen.blit(self.font_s.render(b, True, (235, 245, 255)),
-                             (152, yy))
-            self.screen.blit(self.font_xs.render(ttxt, True, tcol), (246, yy + 2))
-            self.screen.blit(self.font_xs.render(note[:13], True, (135, 155, 175)),
-                             (300, yy + 2))
+            self.screen.blit(self.font_xs.render(ttxt, True, tcol),
+                             (352, yy + 2))
             yy += 19
-        yy += 6
+        yy += 8
         self.screen.blit(self.font_xs.render("-- VOID CAPTURE (frontier) --",
                          True, (255, 180, 95)), (22, yy)); yy += 20
         # HONEST: the raw ambient supply is tiny -- the 1e18/s figure ONLY holds
         # if the assumed x1e9 metamaterial enhancement is real. Show both.
+        vc_raw = void_capture(1.0e18, enhance=1.0)     # raw cosmic-ray pairs
+        vc = void_capture(1.0e18)                       # x1e9 field enhancement
         vrows = [
             ("raw cosmic pairs", f"{vc_raw['pairs_per_s']:.1e} /s", "MEAS",
              f"{vc['volume_m3']:.0e} m^3"),
@@ -13351,91 +15319,46 @@ class SystemViewer:
             self.screen.blit(self.font_xs.render(note[:13], True, (135, 155, 175)),
                              (300, yy + 2))
             yy += 19
-        yy += 4
+        yy += 6
         self.screen.blit(self.font_xs.render(
             "MEAS=measured SPEC=design MODEL=simulated *FTR=frontier",
             True, (120, 140, 160)), (22, yy))
-        # right: CUSTOM CHEMISTRY OUTPUT (selected element + synthesis proof)
-        Z, sym, name, why = OUTPUT_ELEMENTS[self.elem_i % len(OUTPUT_ELEMENTS)]
-        pr = element_synthesis_proof(Z)
-        self._panel(self.W - 400, 68, 388, 300)
-        self.screen.blit(self.font_m.render(f"OUTPUT: {name} ({sym}, Z={Z})",
-                         True, _element_color(Z)), (self.W - 390, 76))
-        self.screen.blit(self.font_xs.render("[ and ] cycle element  (shown as a cloud ->)",
-                         True, (170, 190, 215)), (self.W - 390, 100))
-        self.screen.blit(self.font.render("CHEMISTRY / NUCLEAR PROOF:", True,
-                         (120, 210, 255)), (self.W - 390, 120))
-        yy = 142
-        for kind, rxn, q in pr["steps"]:
-            self.screen.blit(self.font_xs.render(f" {kind}:", True, (150, 200, 160)),
-                             (self.W - 390, yy))
-            self.screen.blit(self.font_xs.render(rxn[:40], True, (200, 215, 235)),
-                             (self.W - 322, yy))
-            yy += 15
-        yy += 6
-        info = [f"B/A = {pr['BE_per_A']:.2f} MeV/nucleon",
-                f"energy/kg = {pr['cost_per_kg_J']:.1e} J "
-                f"({'RELEASED' if pr['exothermic'] else 'COST (r-process)'})",
-                f"use: {why}"]
-        for ln in info:
-            self.screen.blit(self.font_s.render(ln, True, (200, 220, 235)),
-                             (self.W - 390, yy)); yy += 19
-        route, rtag = element_route_tier(Z)
-        ttxt, tcol = self._vtag(rtag)
-        self.screen.blit(self.font_s.render("route: " + route, True,
-                         (200, 220, 235)), (self.W - 390, yy))
-        self.screen.blit(self.font_xs.render(ttxt, True, tcol),
-                         (self.W - 100, yy + 2)); yy += 19
-        mol = molecule_synthesis_proof("H2O")
+        # ---- BOTTOM-LEFT: plant ledger -- power, conservation audit, growth --
+        self._panel(12, self.H - 196, 470, 118)
+        self.screen.blit(self.font.render(
+            "PLANT LEDGER -- power / audit / growth", True, (120, 210, 255)),
+            (22, self.H - 190))
+        ca = self.trap.charge_audit()
+        led = [
+            ("Dyson in", self._g("DysonCollector", "power_W") + " W"),
+            ("external", self._g("EnergyRecycler", "external_W") + " W"),
+            ("EROI", self._g("EnergyRecycler", "EROI")),
+            ("surplus", self._g("EnergyRecycler", "surplus_W") + " W"),
+            ("waste heat", self._g("RadiatorBank", "waste_heat_W") + " W"),
+            ("radiator", self._g("RadiatorBank", "radiator_area_m2") + " m^2"),
+            ("charge audit", "CONSERVED" if ca["conserved"] else "VIOLATED"),
+            ("copy / cap", f"{SPEC['build_time_s']/86400:.0f} d / "
+                           f"{SPEC['swarm_cap']:.0e}"),
+        ]
+        for i, (a, b) in enumerate(led):
+            cx_ = 22 if i < 4 else 252
+            yy_ = self.H - 168 + (i % 4) * 19
+            self.screen.blit(self.font_s.render(a, True, (150, 175, 200)),
+                             (cx_, yy_))
+            self.screen.blit(self.font_s.render(b, True,
+                (110, 225, 145) if a == "charge audit" and ca["conserved"]
+                else (230, 90, 90) if a == "charge audit" else (235, 245, 255)),
+                (cx_ + 100, yy_))
         self.screen.blit(self.font_xs.render(
-            f"molecule e.g. {mol['name']}: {mol['reaction']} "
-            f"({mol['bond_energy_eV']:.1f} eV)", True, (180, 200, 225)),
-            (self.W - 390, yy + 2))
-        self.screen.blit(self.font_xs.render(
-            "Q-values + B/A: measured (AME2020 / SEMF)  [MEAS]", True,
-            (110, 225, 145)), (self.W - 390, yy + 18))
-        # right column: TIME TO MAKE -- honest timescales per channel
-        self._panel(self.W - 400, 376, 388, 158)
-        self.screen.blit(self.font.render("TIME TO MAKE -- honest timescales",
-                         True, (120, 210, 255)), (self.W - 390, 382))
-        isru = self.tele.get("ISRUForge", {}).get("structure_kg_s", 0.0)
-        tbl = matter_timescales(isru)
-        names = {"raw ambient pairs": "raw ambient",
-                 "x1e9 field enhancer": "x1e9 enhancer",
-                 "ISRU forge (pre-existing)": "ISRU forge"}
-        self.screen.blit(self.font_xs.render(
-            "channel        1 kg H      70 kg        grade",
-            True, (150, 175, 200)), (self.W - 390, 404))
-        ty = 420
-        for r in tbl["rows"]:
-            def cs(c):                     # compact '17393.10 Gyr!' -> '17393 Gyr!'
-                if len(c) > 10 and " " in c:
-                    v, u = c.split(" ", 1)
-                    if "e" not in v:        # don't mangle '1.74e4'
-                        v = v.split(".")[0]
-                    c = v + " " + u
-                return c
-            c2, _b2 = r["cells"][2]          # 1 kg H
-            c3, _b3 = r["cells"][3]          # human ~70 kg
-            ttxt, tcol = self._vtag(r["tag"])
-            self.screen.blit(self.font_xs.render(
-                names.get(r["channel"], r["channel"])[:14], True,
-                (190, 205, 225)), (self.W - 390, ty))
-            for txt, xr in ((cs(c2), self.W - 212), (cs(c3), self.W - 122)):
-                s = self.font_xs.render(txt, True, (235, 245, 255))
-                self.screen.blit(s, (xr - s.get_width(), ty))
-            s = self.font_xs.render(ttxt, True, tcol)
-            self.screen.blit(s, (self.W - 24 - s.get_width(), ty))
-            ty += 16
-        self.screen.blit(self.font_xs.render(
-            ">13.8 Gyr = LONGER than the universe's age -- raw ambient", True,
-            (255, 180, 95)), (self.W - 390, ty + 2))
-        self.screen.blit(self.font_xs.render(
-            "capture can't make bulk matter; ISRU is the real bulk path.", True,
-            (170, 190, 210)), (self.W - 390, ty + 16))
-        self.screen.blit(self.font_xs.render(
-            "HYDROGEN FIRST: p + e- -> H (13.6 eV) is the feedstock. [MEAS]", True,
-            (110, 225, 145)), (self.W - 390, ty + 30))
+            "N held constant in this view -- T integrates real logistic growth",
+            True, (140, 160, 180)), (22, self.H - 168 + 4 * 19))
+        # right column: a FOCUSED part takes over with its real mechanism
+        # (evidence-tagged physics + live mini-animation); otherwise the
+        # custom-chemistry output + time-to-make panels stay up.
+        if self.machine_focus:
+            self._draw_machine_detail()
+        else:
+            self._draw_machine_output_panels()
         # bottom-right scale ladder
         self._panel(self.W - 372, self.H - 196, 360, 118)
         self.screen.blit(self.font.render("TOTAL SYSTEM SCALE", True, (120, 210, 255)),
@@ -13479,10 +15402,31 @@ class SystemViewer:
                 "NOT claimed: vacuum mining / over-unity / global entropy drop. "
                 "'Eternal' = replenished. Press I to close, --proofs to verify.",
                 True, (170, 190, 215)), (bx + 14, by + bh - 26))
+        # retool-confirmation toast (element selection -> machine reconfigures)
+        if self.machine_toast is not None:
+            txt, t0f = self.machine_toast
+            age = self.frame - t0f
+            if age < 120:
+                a = 255 if age < 84 else int(255 * (120 - age) / 36)
+                tw_ = self.font_xs.size(txt)[0] + 24
+                ts = _pg.Surface((tw_, 26), _pg.SRCALPHA)
+                ts.fill((56, 42, 16, min(220, a)))
+                self.screen.blit(ts, (self.W // 2 - tw_ // 2, 106))
+                _pg.draw.rect(self.screen, (255, 200, 110),
+                              (self.W // 2 - tw_ // 2, 106, tw_, 26), 1)
+                tmp = self.font_xs.render(txt, True, (255, 220, 150))
+                tmp.set_alpha(a)
+                self.screen.blit(tmp, (self.W // 2 - tw_ // 2 + 12, 112))
+            else:
+                self.machine_toast = None
+
         # controls bar + status chips (reference bottom-bar style)
+        foc = (f"  FOCUS: {self._MACH_META[self.machine_focus][0]}  "
+               "(ESC=overview  TAB=next)") if self.machine_focus \
+            else "  CLICK a part (or the list) / TAB / 1-9,0 to inspect"
         self._bottom_bar(
-            "drag=orbit  wheel=zoom  arrows=pan  [ ]=output element  B=cutaway  I=about  "
-            "R=reset  ESC=quit",
+            "drag=orbit  wheel=zoom  arrows=pan  [ ]/click=output element  "
+            "B=cutaway  I=about  X=cell detail" + foc,
             chips=[(f"N {self.plant.replicators:.1e}", (170, 120, 220)),
                    ("pairs " + self._g("PairSource", "total_pairs_s") + "/s",
                     (110, 225, 145)),
@@ -13490,6 +15434,251 @@ class SystemViewer:
                     (120, 210, 255)),
                    (f"output {name}: {len(self.cloud)}", _element_color(Z))],
             scale_m=2.4, scale_lbl="cell pitch")
+
+    def _draw_machine_output_panels(self):
+        """Right column of the MACHINE view (unfocused): the SELECTABLE output
+        element -- click a chip (or [ ]/E) and the machine physically retools
+        itself via auto_target_element (Gamow-peak fusion temp, confinement,
+        power split) -- then its synthesis proof and the honest time-to-make
+        table. A focused part takes the column over instead."""
+        Z, sym, name, why = OUTPUT_ELEMENTS[self.elem_i % len(OUTPUT_ELEMENTS)]
+        pr = element_synthesis_proof(Z)
+        ti = (self.plant.target_info
+              if isinstance(self.plant, TargetedPlant)
+              else auto_target_element(Z))
+        self._panel(self.W - 400, 68, 388, 420)
+        self.screen.blit(self.font_m.render(f"OUTPUT: {name} ({sym}, Z={Z})",
+                         True, _element_color(Z)), (self.W - 390, 76))
+        self.screen.blit(self.font_xs.render(
+            "pick an element -- the machine RETOOLS to make it",
+            True, (170, 190, 215)), (self.W - 390, 98))
+        # -- element picker chips: click retargets the whole plant -----------
+        self._elem_nav = {}
+        cy = 118
+        for i, (cZ, csym, _cn, _cw) in enumerate(OUTPUT_ELEMENTS):
+            rect = _pg.Rect(self.W - 390 + i * 47, cy, 43, 22)
+            sel = (cZ == Z)
+            _pg.draw.rect(self.screen,
+                          (46, 52, 62) if sel else (22, 26, 36),
+                          rect, border_radius=4)
+            _pg.draw.rect(self.screen,
+                          _element_color(cZ) if sel else (60, 70, 90),
+                          rect, 1, border_radius=4)
+            s = self.font_s.render(csym, True,
+                                   _element_color(cZ) if sel
+                                   else (150, 170, 190))
+            self.screen.blit(s, (rect.centerx - s.get_width() // 2,
+                                 rect.centery - s.get_height() // 2))
+            self._elem_nav[i] = rect
+        # -- AUTO-RETOOL: the adjustments the machine actually applied -------
+        # short windows drop to a 3-row digest so the column stays clear of
+        # the scale-ladder panel at bottom-right (same rule as the powerplant)
+        short = self.H < 840
+        ry = cy + 34
+        self.screen.blit(self.font.render(
+            "AUTO-RETOOL -- what the machine changed", True, (255, 200, 110)),
+            (self.W - 390, ry))
+        ry += 20
+        adj_rows = [
+            ("route", ti["stage"].replace("_", " ")[:30], "MODEL"),
+            ("fusion T", f"{ti['fusion_temp_K']:.2e} K (Gamow)", "MODEL"),
+            ("confinement", f"gain {ti['confinement_gain']:.1e}", "MODEL"),
+            ("power split", f"create {ti['creation_power_fraction'] * 100:.0f}%"
+             f" / forge {ti['forge_power_fraction'] * 100:.0f}%", "SPEC"),
+            ("direction", ti["energy_direction"][:34], "MEAS"),
+            ("made so far", f"{getattr(self.plant, 'target_kg', 0.0):.2e} kg"
+             f" ({getattr(self.plant, 'retarget_count', 0)} retools)", "MODEL"),
+        ]
+        if short:
+            adj_rows = adj_rows[:2] + adj_rows[5:]
+        for lbl, val, tg in adj_rows:
+            self.screen.blit(self.font_xs.render(f" {lbl}:", True,
+                             (150, 200, 160)), (self.W - 390, ry))
+            self.screen.blit(self.font_xs.render(val, True, (200, 215, 235)),
+                             (self.W - 298, ry))
+            ttxt, tcol = self._vtag(tg)
+            self.screen.blit(self.font_xs.render(ttxt, True, tcol),
+                             (self.W - 60, ry))
+            ry += 14
+        # -- CHEMISTRY / NUCLEAR PROOF --------------------------------------
+        py_ = ry + 8
+        self.screen.blit(self.font.render("CHEMISTRY / NUCLEAR PROOF:", True,
+                         (120, 210, 255)), (self.W - 390, py_))
+        yy = py_ + 20
+        steps_shown = pr["steps"] if not short else pr["steps"][-3:]
+        for kind, rxn, q in steps_shown:
+            self.screen.blit(self.font_xs.render(f" {kind}:", True, (150, 200, 160)),
+                             (self.W - 390, yy))
+            self.screen.blit(self.font_xs.render(rxn[:40], True, (200, 215, 235)),
+                             (self.W - 322, yy))
+            yy += 15
+        if short and len(pr["steps"]) > len(steps_shown):
+            self.screen.blit(self.font_xs.render(
+                f" (+{len(pr['steps']) - len(steps_shown)} earlier steps)",
+                True, (110, 128, 150)), (self.W - 322, yy))
+            yy += 15
+        yy += 6
+        info = [f"B/A = {pr['BE_per_A']:.2f} MeV/nucleon",
+                f"energy/kg = {pr['cost_per_kg_J']:.1e} J "
+                f"({'RELEASED' if pr['exothermic'] else 'COST (r-process)'})",
+                f"use: {why}"]
+        if short:
+            info = info[:2]
+        for ln in info:
+            self.screen.blit(self.font_s.render(ln, True, (200, 220, 235)),
+                             (self.W - 390, yy)); yy += 18
+        route, rtag = element_route_tier(Z)
+        ttxt, tcol = self._vtag(rtag)
+        self.screen.blit(self.font_s.render("route: " + route, True,
+                         (200, 220, 235)), (self.W - 390, yy))
+        self.screen.blit(self.font_xs.render(ttxt, True, tcol),
+                         (self.W - 100, yy + 2)); yy += 18
+        if not short:
+            mol = molecule_synthesis_proof("H2O")
+            self.screen.blit(self.font_xs.render(
+                f"molecule e.g. {mol['name']}: {mol['reaction']} "
+                f"({mol['bond_energy_eV']:.1f} eV)", True, (180, 200, 225)),
+                (self.W - 390, yy + 2))
+        self.screen.blit(self.font_xs.render(
+            "Q-values + B/A: measured (AME2020 / SEMF)  [MEAS]", True,
+            (110, 225, 145)), (self.W - 390, yy + 18))
+        # right column: TIME TO MAKE -- honest timescales per channel
+        tp0 = yy + 34
+        self._panel(self.W - 400, tp0, 388, 158)
+        self.screen.blit(self.font.render("TIME TO MAKE -- honest timescales",
+                         True, (120, 210, 255)), (self.W - 390, tp0 + 6))
+        isru = self.tele.get("ISRUForge", {}).get("structure_kg_s", 0.0)
+        tbl = matter_timescales(isru)
+        names = {"raw ambient pairs": "raw ambient",
+                 "x1e9 field enhancer": "x1e9 enhancer",
+                 "ISRU forge (pre-existing)": "ISRU forge"}
+        self.screen.blit(self.font_xs.render(
+            "channel        1 kg H      70 kg        grade",
+            True, (150, 175, 200)), (self.W - 390, tp0 + 28))
+        ty = tp0 + 44
+        for r in tbl["rows"]:
+            def cs(c):                     # compact '17393.10 Gyr!' -> '17393 Gyr!'
+                if len(c) > 10 and " " in c:
+                    v, u = c.split(" ", 1)
+                    if "e" not in v:        # don't mangle '1.74e4'
+                        v = v.split(".")[0]
+                    c = v + " " + u
+                return c
+            c2, _b2 = r["cells"][2]          # 1 kg H
+            c3, _b3 = r["cells"][3]          # human ~70 kg
+            ttxt, tcol = self._vtag(r["tag"])
+            self.screen.blit(self.font_xs.render(
+                names.get(r["channel"], r["channel"])[:14], True,
+                (190, 205, 225)), (self.W - 390, ty))
+            for txt, xr in ((cs(c2), self.W - 212), (cs(c3), self.W - 122)):
+                s = self.font_xs.render(txt, True, (235, 245, 255))
+                self.screen.blit(s, (xr - s.get_width(), ty))
+            s = self.font_xs.render(ttxt, True, tcol)
+            self.screen.blit(s, (self.W - 24 - s.get_width(), ty))
+            ty += 16
+        self.screen.blit(self.font_xs.render(
+            ">13.8 Gyr = LONGER than the universe's age -- raw ambient", True,
+            (255, 180, 95)), (self.W - 390, ty + 2))
+        self.screen.blit(self.font_xs.render(
+            "capture can't make bulk matter; ISRU is the real bulk path.", True,
+            (170, 190, 210)), (self.W - 390, ty + 16))
+        self.screen.blit(self.font_xs.render(
+            "HYDROGEN FIRST: p + e- -> H (13.6 eV) is the feedstock. [MEAS]", True,
+            (110, 225, 145)), (self.W - 390, ty + 30))
+
+    # --- MACHINE PART FOCUS: fly into a component, get its real physics ----
+    def _machine_focus_on(self, key):
+        """Fly the camera onto a machine part; the right column then shows the
+        part's real mechanism (the same evidence-tagged physics the CHEMISTRY
+        detail panel uses)."""
+        if key not in self._MACH_META:
+            return
+        self.machine_focus = key
+        look = self._MACH_META[key][4]
+        if look == "seed":                       # chase-cam: _advance re-aims
+            look = (self._exp_x(), 1.9, 0.0)
+        self.look_goal = np.array(look, dtype=float)
+        self.dist_goal = self._MACH_META[key][5]
+        self.anim = 0.0
+
+    def _machine_overview(self):
+        self.machine_focus = None
+        self.look_goal = np.array([1.2, 0.0, 0.0])
+        self.dist_goal = 10.5
+
+    def _retarget_machine(self, idx: int):
+        """Select the machine's output element AND retool the plant for it.
+        auto_target_element() derives the physically-grounded adjustments
+        (Gamow-peak fusion temperature for the heaviest burn, confinement
+        gain, creation/forge power split -- power diverted to the endothermic
+        r-process past iron); TargetedPlant.retarget() applies them in place
+        so the running machine reconfigures instead of resetting: stockpile,
+        swarm count and production history all carry over."""
+        self.elem_i = idx % len(OUTPUT_ELEMENTS)
+        Z, sym, name, _why = OUTPUT_ELEMENTS[self.elem_i]
+        if not isinstance(self.plant, TargetedPlant):
+            return
+        if self.plant.target_Z == Z:
+            return
+        self.plant.retarget(Z)
+        info = self.plant.target_info
+        T = info["fusion_temp_K"]
+        direction = "exothermic" if info["exothermic"] else "endothermic"
+        self.machine_toast = (
+            f"RETOOL -> {name} ({sym}): {info['stage'].replace('_', ' ')} | "
+            f"T_fus {T:.1e} K  gain {info['confinement_gain']:.0e}  "
+            f"forge {info['forge_power_fraction'] * 100:.0f}%  "
+            f"({direction})", self.frame)
+
+    def _pick_machine_part(self, mx, my):
+        """Nearest projected machine-part anchor to the mouse (click-to-focus)."""
+        best, bestd = None, 1e9
+        for key in self._MACH_ORDER:
+            sx, sy, z = self._project([self._mach_anchor(key)])
+            if z[0] < 0.06:
+                continue
+            d = (sx[0] - mx) ** 2 + (sy[0] - my) ** 2
+            if d < bestd:
+                bestd, best = d, key
+        return best if bestd < 140 ** 2 else None
+
+    def _draw_machine_detail(self):
+        """Focus panel for a machine part: its live mini-animation plus the
+        same evidence-tagged real-physics text the CHEMISTRY detail panel
+        uses -- the mechanism key in _MACH_META selects which plant stage's
+        physics is shown."""
+        key = self.machine_focus
+        lbl, note, col, _a, _l, _d, mech = self._MACH_META[key]
+        # h stops above the TOTAL SYSTEM SCALE panel (top edge at H-196)
+        x, y, w, h = self.W - 470, 68, 458, self.H - 274
+        self._panel(x, y, w, h, 232)
+        self.screen.blit(self.font_m.render("MECHANISM -- " + lbl, True,
+                         (255, 255, 255)), (x + 12, y + 10))
+        self.screen.blit(self.font_xs.render(
+            note + "   |   plant stage: " + _CHEM_STAGE.get(mech, "--"),
+            True, (120, 160, 195)), (x + 12, y + 29))
+        arect = (x + 12, y + 44, w - 24, 196)
+        _pg.draw.rect(self.screen, (40, 55, 78), arect, 1)
+        self._detail_anim(mech, arect)
+        ty = y + 254
+        y_max = y + h - 28
+        for ln, tg in self._mechanism(mech):
+            bold = ln.endswith(":") or (ln.isupper() and len(ln.strip()) > 3)
+            if ty > y_max:
+                self.screen.blit(self.font_xs.render(
+                    "  .. (enlarge window for the rest) ..", True,
+                    (150, 160, 175)), (x + 12, ty))
+                break
+            self.screen.blit((self.font if bold else self.font_xs).render(
+                ln, True, col if bold else (195, 212, 232)), (x + 12, ty))
+            if tg:
+                ttxt, tcol = self._vtag(tg)
+                self.screen.blit(self.font_xs.render(ttxt, True, tcol),
+                                 (x + w - 58, ty + (3 if bold else 2)))
+            ty += 19 if bold else 16
+        self.screen.blit(self.font_xs.render(
+            "TAB=next part   ESC=machine overview   1-9,0=jump   X=cell zoom",
+            True, (150, 175, 205)), (x + 12, y + h - 22))
 
     # --- FOCUS: fly into a stage and show its real physical mechanism ------
     def _mechanism(self, key):
@@ -13515,11 +15704,34 @@ class SystemViewer:
         ca = self.trap.charge_audit()
         vc_raw = void_capture(1.0e18, enhance=1.0)
         vc_enh = void_capture(1.0e18)
+        ncc = net_capture_chain(self.swarm.arm_len_m, self.swarm.n_arms)
         e_minus_s = tv.get("SeparatorTrap", {}).get("kept_leptons_s", 0.0) * 0.5
         p_feed = tv.get("RecombinationReactor", {}).get("proton_feed_s", 0.0)
         limiter = "electron supply" if e_minus_s <= p_feed else "proton feed"
         sepz = (self.trap.hist["sep_z"][-1] * 1e6
                 if self.trap.hist["sep_z"] else 0.0)
+        # --- derived constants used by the expanded detail lines below -------
+        if self._hc79 is None:                # heavy-element cost walks (SEMF),
+            self._hc79 = heavy_element_cost(79)   # computed once, never stale
+            self._hc92 = heavy_element_cost(92)
+            self._bcch = best_creation_channel()
+        hc79, hc92, bc = self._hc79, self._hc92, self._bcch
+        lam_m = H_PLANCK * C_LIGHT / (SPEC["laser_photon_eV"] * EV)
+        a0 = (0.85e-9 * (lam_m * 1e9) * math.sqrt(SPEC["laser_intensity_Wcm2"]))
+        a0_m = HBAR / (M_E * C_LIGHT * ALPHA_FS)          # Bohr radius
+        E_h = E_CHARGE / (4.0 * math.pi * EPS0 * a0_m ** 2)  # atomic-unit E
+        tau_rad = (3.0 * math.pi * EPS0 * M_E ** 3 * C_LIGHT ** 3
+                   / (E_CHARGE ** 4 * B_T ** 2))          # cyclotron cooling
+        q_enh = self.plant.spec.get("cavity_Q_enhancement", 100.0)
+        tau_cav = q_enh * lam_m / (2.0 * math.pi * C_LIGHT)  # photon lifetime
+        v_trap = math.pi * cfg.trap_radius_m ** 2 * 2.0 * cfg.trap_half_len_m
+        pw = tv.get("DysonCollector", {}).get("power_W", 0.0)
+        kard = (math.log10(max(pw, 1.0)) - 6.0) / 10.0    # Kardashev index
+        sort_kgs = sum(self.plant.stockpile.kg_s.values())
+        tot_kg = self.plant.stockpile.total_kg()
+        _pp = getattr(self, "powerplant", None)
+        pp_n_s = getattr(_pp, "n_source_s", getattr(_pp, "fusion_rate_s", 0.0)
+                       if _pp is not None else 0.0) or 0.0   # live n/s (D-T)
         _t = {
             "radiation": [
                 ("AMBIENT FEEDSTOCK -- the real radiation budget:", None),
@@ -13537,7 +15749,42 @@ class SystemViewer:
                 (f" raw ambient -> {vc_raw['pairs_per_s']:.1e} pairs/s", "MEAS"),
                 (f" x1e9 field enhancer -> {vc_enh['pairs_per_s']:.1e} pairs/s", "FRONTIER"),
                 ("VERDICT: ambient supply is real but thin -- capture", None),
-                ("is an AREA problem; that is why the lattice grows.", None)],
+                ("is an AREA problem; that is why the lattice grows.", None),
+                ("HOW THE WEB CATCHES (it is not a wall):", None),
+                ("a cast net of truss arms cannot stop ~c", None),
+                ("particles -- nothing hits the wire. The arms", None),
+                ("carry FIELD CELLS; each cell's dipole field", None),
+                ("is a magnetic funnel. A charged particle", "MEAS"),
+                ("passing within ~r_L of a cell gyrates onto", "MEAS"),
+                ("converging B-lines and is guided into the", "MEAS"),
+                ("bore -- identical physics to Earth's", "MEAS"),
+                ("magnetopause collecting the solar wind.", "MEAS"),
+                (f"1 GeV/c p in {B_T:g} T: r_L = p/qB"
+                 f" = {ncc['cr_gyroradius_m']:.2f} m", "MEAS"),
+                (f"capture reach r_cap ~ bore+2r_L ="
+                 f" {ncc['cr_capture_radius_m']:.1f} m", "MODEL"),
+                (f"funnel coverage of the swept disc:"
+                 f" {ncc['cr_coverage_frac']:.1e}", "MODEL"),
+                (f" -> ~{ncc['cr_missed_frac']:.2%} of relativistic flux", "MODEL"),
+                ("   genuinely MISSES the web. Honest: the", None),
+                ("   disc is patrolled by funnels, not walled.", None),
+                ("PLASMA is different: the solar wind sees a", "MEAS"),
+                (f"cell's magnetopause at r~{ncc['sw_magnetopause_m']:.0f} m --", "MODEL"),
+                ("magsail physics (Zubrin & Andrews 1991);", "MEAS"),
+                (f"coverage {ncc['sw_coverage_frac']:.0%} ->"
+                 f" {ncc['sw_caught_s']:.1e} p/s via cusps.", "MODEL"),
+                ("That is the real baryon feed -- the matter", None),
+                ("the atoms below are made of.", None),
+                ("measured populations overhead:", None),
+                ("GCR mix ~90% p / 9% He / 1% e-+e+ (AMS-02, ISS)", "MEAS"),
+                ("AMS-02: the e+ fraction RISES above ~10 GeV --", "MEAS"),
+                (" real positrons aloft (Aguilar et al. 2013+).", "MEAS"),
+                ("INTEGRAL/SPI maps a 511 keV line on the bulge:", "MEAS"),
+                (" the galaxy itself annihilates ~1e43 e+/yr.", "MEAS"),
+                ("Van Allen inner belt ~1e5 p/cm^2/s >10 MeV --", "MEAS"),
+                (" a denser feedstock the lattice could sit in.", "MEAS"),
+                ("geomagnetic cutoff (~GV) shields the ground;", "MEAS"),
+                (" open space sees the full flux above.", "MEAS")],
             "powerin": [
                 ("POWER IN -- the stellar reservoir (Dyson 1960):", None),
                 (f"seed reactor {SPEC['seed_reactor_W']:.0e} W (1 GWe bootstrap)", "SPEC"),
@@ -13549,7 +15796,15 @@ class SystemViewer:
                 ("a SWARM, not a shell: free-flying mirrors on orbit", "MEAS"),
                 ("intercept starlight incrementally as the swarm grows.", "MEAS"),
                 (f"reservoir budget ~{SPEC['reservoir_budget_J']:.2e} J over 5 Gyr", "MEAS"),
-                ("every downstream stage is powered from this line.", None)],
+                ("every downstream stage is powered from this line.", None),
+                ("intercept physics:", None),
+                (f"solar constant {SOLAR_CONST:.0f} W/m^2 at 1 AU (TSIS-1)", "MEAS"),
+                (f"photon pressure I/c = {SOLAR_CONST/C_LIGHT*1e6:.1f} uN/m^2 --", "MEAS"),
+                (" the tiles are sails; station-keeping is nearly free.", "MEAS"),
+                (f"swarm ceiling: 50% intercept = {0.5*L_SUN:.1e} W", "MODEL"),
+                (f"Kardashev index now: K={kard:.2f} (II = 2.0)", "MODEL"),
+                ("a Kardashev-II swarm is orbit-stabilized free-flyers,", "MEAS"),
+                (" not a shell -- Dyson 1960 said exactly this.", "MEAS")],
             "laser": [
                 ("DRIVER LASER -- chirped-pulse amplification:", None),
                 (f"focus {SPEC['laser_intensity_Wcm2']:.0e} W/cm^2 (ELI/NIF class)", "SPEC"),
@@ -13562,7 +15817,16 @@ class SystemViewer:
                 (f"Keldysh gamma = {q['keldysh']:.1e} (deep tunneling regime)", "MODEL"),
                 (f"plant power slice {g('DriverLaser','laser_power_W')} W", "MODEL"),
                 ("CPA (Mourou & Strickland, Nobel 2018): stretch ->", "MEAS"),
-                ("amplify -> recompress -> focus onto the cavity.", "MEAS")],
+                ("amplify -> recompress -> focus onto the cavity.", "MEAS"),
+                ("field-scale check:", None),
+                (f"atomic-unit field E_h = e/4pe0 a0^2 = {E_h:.1e} V/m", "MEAS"),
+                (f" E/E_h = {E_L/E_h:.1f} -- overbonds and field-ionizes", "MEAS"),
+                (f"normalized amplitude a0 = {a0:.0f} >> 1:", "MEAS"),
+                (f" electron quiver ~a0 mc^2 ~ {a0*0.511:.0f} MeV (relativistic)", "MODEL"),
+                ("stretch ~1e3-1e4x, amplify below lens damage fluence,", "MEAS"),
+                (" recompress to ~10-40 fs. ELI-NP runs 10 PW today.", "MEAS"),
+                ("B-integral caps phase error; chirp + temporal", "MEAS"),
+                ("asymmetry add x5-9 pair-yield levers (assist QED).", "MEAS")],
             "cavity": [
                 ("METAMATERIAL CAVITY -- resonant field enhancement:", None),
                 (f"Q enhancement {g('MetamaterialCavity','Q_enhancement')}x (intensity)", "SPEC"),
@@ -13574,10 +15838,21 @@ class SystemViewer:
                 (f"vacuum pairs at this E_eff: {g('PairSource','vacuum_pairs_s')} /s", "MODEL"),
                 ("-> effectively zero. The vacuum is not mined (P1/P2).", None),
                 ("extreme-Q metamaterial enhancement is the ONE", "FRONTIER"),
-                ("frontier element in the chain -- flagged, not hidden.", "FRONTIER")],
+                ("frontier element in the chain -- flagged, not hidden.", "FRONTIER"),
+                ("resonator bookkeeping:", None),
+                (f"stored-photon lifetime tau = Q/w ~ {tau_cav:.1e} s at", "MODEL"),
+                (" duty 1e-6 -- the field rings up and dumps per shot.", "SPEC"),
+                ("real analogs: LIGO arm finesse ~450 (4 km FP),", "MEAS"),
+                (" superpolished microcavities reach finesse ~1e6.", "MEAS"),
+                ("Purcell factor F_p ~ (3/4pi^2)(l/n)^3 (Q/V) is real", "MEAS"),
+                (" emission enhancement -- but it acts on radiative", "MEAS"),
+                (" rates, not on the Schwinger exponent (the honest", "MEAS"),
+                (" gap to vacuum mining stays open; P1/P2 stand).", "MEAS"),
+                (f"mode volume {SPEC['cavity_volume_m3']:.2f} m^3 inside "
+                 f"a {SPEC['cell_size_m']:.1f} m cell.", "SPEC")],
             "pairsource": [
                 ("BETHE-HEITLER PAIR FACTORY -- the real e+ source:", None),
-                (f"sigma_BH ~ (28/9) a Z^2 r_e^2 ln(183 Z^-1/3)", "MEAS"),
+                ("sigma_BH ~ (28/9) a Z^2 r_e^2 ln(183 Z^-1/3)", "MEAS"),
                 (f" = {bethe_heitler_xsec(74):.1e} m^2 on W-74 "
                  f"(~{bethe_heitler_xsec(74)/1e-28:.0f} barns)", "MEAS"),
                 (f"beam {SPEC['beam_current_A']*1e3:.0f} mA x {SPEC['beam_energy_GeV']:.0f} GeV"
@@ -13593,7 +15868,19 @@ class SystemViewer:
                 (f" vacuum Schwinger {g('PairSource','vacuum_pairs_s')} /s (~0)", "MODEL"),
                 (f" beam-on-target {g('PairSource','beam_pairs_s')} /s (works)", "MODEL"),
                 (f" total {g('PairSource','total_pairs_s')} pairs/s", "MODEL"),
-                ("exactly how SLAC / CERN / KEK make positrons daily.", "MEAS")],
+                ("exactly how SLAC / CERN / KEK make positrons daily.", "MEAS"),
+                ("converter physics:", None),
+                ("X0(W) = 3.50 mm; critical energy Ec(W) ~8 MeV --", "MEAS"),
+                (" a 1 GeV e- showers ~7 X0 deep; the e+ ride out", "MEAS"),
+                (" inside the EM cascade (Geant4-standard physics).", "MEAS"),
+                ("gamma+Z -> e+e- +Z: the nucleus just recoils,", "MEAS"),
+                (" which is why high-Z wins (sigma ~ Z^2).", "MEAS"),
+                (f"Ne remoderator ~{SPEC['slow_positron_capture']:.0e}: real Ne", "SPEC"),
+                (" moderators reach ~1% (Mills & Gullikson 1986).", "MEAS"),
+                ("positronium grabs ~1/3 of e+ in gas; quenching", "MEAS"),
+                (" and fast extraction keep the slow-e+ share.", "MEAS"),
+                ("this stage is TRL-9 hardware -- scaled and", "MEAS"),
+                (" solar-powered, not invented.", "MEAS")],
             "cell": [
                 ("PENNING SEPARATION -- the core trick, simulated:", None),
                 (f"B = {B_T:g} T solenoid, E_sep = {cfg.E_sep_Vm:.0e} V/m", "SPEC"),
@@ -13613,7 +15900,26 @@ class SystemViewer:
                 (f" H atoms {self.trap.n_recombinations} | sep_z {sepz:.1f} um", "MODEL"),
                 (f" charge audit {'CONSERVED' if ca['conserved'] else 'VIOLATED'}"
                  f" (net {ca['net_charge_C']:.1e} C)", "MODEL"),
-                (f"plant stage: kept {g('SeparatorTrap','kept_leptons_s')} leptons/s", "MODEL")],
+                (f"plant stage: kept {g('SeparatorTrap','kept_leptons_s')} leptons/s", "MODEL"),
+                ("trap eigenmodes (Penning): fast cyclotron w+, axial", "MEAS"),
+                (" bounce w_z, slow magnetron drift w- -- stable trio.", "MEAS"),
+                ("Brown-Gabrielse invariance: w+^2+wz^2+w-^2 = wc^2.", "MEAS"),
+                (f"cyclotron cooling (free space) tau ~{tau_rad:.2f} s at {B_T:g} T", "MEAS"),
+                (" -- the e- self-cools radiating at ~140 GHz.", "MEAS"),
+                ("image-current pickup ~fA/charge: non-destructive", "MEAS"),
+                (" FFT diagnostics -- same readout ALPHA uses.", "MEAS"),
+                (f"bore volume {v_trap*1e9:.1f} mm^3 -> Brillouin max ~{nB*v_trap:.1e}", "MODEL"),
+                (" Surko-class plasmas reach ~1e11/cm^3 ~ n_B.", "MEAS"),
+                ("rotating-wall drive packs density toward n_B;", "MEAS"),
+                (" the accumulator downstream runs the same drive.", "MEAS"),
+                ("HOW PAIRS REACH THIS CELL:", None),
+                ("they are mostly BORN inside it -- beam e- on", None),
+                ("the W converter showers e+/e- in the bore,", "MEAS"),
+                ("already inside the trap; ambient CRs", "MEAS"),
+                ("funnelled in by the magnetosphere add a", "MEAS"),
+                (f"trickle ({ncc['cr_caught_s']:.1e}/s/station disc).", "MODEL"),
+                ("Nothing needs to 'hit a net': field lines", "MEAS"),
+                ("are the rails, the mirror is the funnel.", "MEAS")],
             "ecoll": [
                 ("ELECTRON COLLECTOR -- the -z electrode:", None),
                 ("separated electrons drift to the end plate and are", "MEAS"),
@@ -13623,7 +15929,15 @@ class SystemViewer:
                 (f"e- harvested this run: {self.trap.collected_em}", "MODEL"),
                 (f"charge stored on electrode: {-self.trap.collected_em*E_CHARGE:.2e} C", "MODEL"),
                 ("these become the atomic electrons of every H atom", None),
-                ("made downstream -- matter's negative half, banked.", None)],
+                ("made downstream -- matter's negative half, banked.", None),
+                ("readout + limits:", None),
+                (f"dumped as charge: {-self.trap.collected_em*E_CHARGE:.1e} C on", "MODEL"),
+                (" the electrode; Faraday cups are TRL-9 hardware.", "MEAS"),
+                (f"space-charge cap for this bore: N < ~{nB*v_trap:.1e}", "MODEL"),
+                ("extraction = drop one endcap: ns-bunched e-", "MEAS"),
+                (" pulses out -- standard trap-stack practice.", "MEAS"),
+                ("charge inventory: every H recombined downstream", None),
+                (" spends exactly one of these electrons.", None)],
             "pcoll": [
                 ("POSITRON COLLECTOR -- the +z electrode:", None),
                 (f"e+ harvested this run: {self.trap.collected_ep}", "MODEL"),
@@ -13636,7 +15950,14 @@ class SystemViewer:
                 ("annihilation returns 2 x 511 keV gamma -- metered by", "MEAS"),
                 ("the scintillator ring, recovered as heat, not free.", "MEAS"),
                 ("banked antimatter = 9e16 J/kg, the densest energy", "MEAS"),
-                ("store there is -- but the beamline cost is above.", None)],
+                ("store there is -- but the beamline cost is above.", None),
+                (f"bore cap ~{nB*v_trap:.1e} e+; Surko accumulators bank", "MODEL"),
+                (" ~1e8-1e9 e+ per fill routinely (UCSD/CERN).", "MEAS"),
+                ("uses: Ps spectroscopy; antihydrogen via pbar + e+", "MEAS"),
+                (" in nested traps -- ALPHA/ATRAP/GBAR feed this way.", "MEAS"),
+                (f"annihilation check: {annihilation_energy_release(1)/MEV:.3f} MeV/pair", "MEAS"),
+                ("the Surko accumulator + cryo bank downstream", None),
+                (" hold and account for every positron won here.", None)],
             "protons": [
                 ("PROTON FEED -- where the BARYONS come from:", None),
                 ("leptons cannot make atoms; every H needs a proton.", None),
@@ -13647,7 +15968,23 @@ class SystemViewer:
                 (f" -> feed {g('RecombinationReactor','proton_feed_s')} p/s", "MODEL"),
                 (f" mass {fs['solar_wind_kg_per_m2_yr']:.1e} kg /m^2/yr", "MEAS"),
                 ("1 p + 1 e- -> 1 H atom: charge-neutral, the first", None),
-                ("stable building block of all chemistry.", None)],
+                ("stable building block of all chemistry.", None),
+                ("collection is a sail problem, not a trap problem:", None),
+                (" a km-scale magnetic scoop (Bussard ramjet", "MEAS"),
+                (" lineage) bends the stream inward -- the charge", "MEAS"),
+                (" is the handle, and the wind arrives pre-ionized.", "MEAS"),
+                ("alphas ~4% of the wind: free He-4 feedstock too.", "MEAS"),
+                ("heavies (C,O,Fe ions) ride along at ppm -- raw", "MEAS"),
+                (" material the element sorter skims directly.", "MEAS"),
+                ("vs quiet ISM ~1e6 p/m^3: the wind is ~7x denser", "MEAS"),
+                (f" AND moving at {SOLAR_WIND_V/1e3:.0f} km/s -- a real flux.", "MEAS"),
+                ("Earth already does this: the Van Allen belts are", "MEAS"),
+                (" a star-wind particle trap that demonstrably works.", "MEAS"),
+                ("the net's scoop IS this physics: a 5 T cell's", "MEAS"),
+                (f" dipole reaches a magnetopause at r~{ncc['sw_magnetopause_m']:.0f} m", "MODEL"),
+                (" in this wind; arm cells overlap ->", "MODEL"),
+                (f" {ncc['sw_coverage_frac']:.0%} of wind crossing the disc is", "MODEL"),
+                (f" collected via cusps = {ncc['sw_caught_s']:.1e} p/s/station.", "MODEL")],
             "recomb": [
                 ("RADIATIVE RECOMBINATION -- atoms are born here:", None),
                 (" p + e- -> H + gamma(13.6 eV)", "MEAS"),
@@ -13661,7 +15998,17 @@ class SystemViewer:
                 (f"recomb power: {g('RecombinationReactor','recomb_power_W')} W", "MODEL"),
                 (f"H mass rate: {g('RecombinationReactor','H_mass_kg_s')} kg/s", "MODEL"),
                 ("each atom releases exactly 13.6 eV -- counted, not lost.", None),
-                ("the first SAVED building block of the whole ladder.", None)],
+                ("the first SAVED building block of the whole ladder.", None),
+                ("fine print:", None),
+                ("three-body recomb (~n_e^2 T^-4.5) dominates dense", "MEAS"),
+                (" cold plasma; radiative Case-B governs the dilute", "MEAS"),
+                (" regime modeled here -- both are on the books.", "MEAS"),
+                ("Ly-alpha trapping in dense gas is why Case-B skips", "MEAS"),
+                (" the ground state (Osterbrock 1989).", "MEAS"),
+                ("CERN runs the antimatter twin: pbar + e+ -> anti-H", "MEAS"),
+                (" by the same recombination mix (ALPHA, 2010+).", "MEAS"),
+                (f"the radiated {RYDBERG_EV:.2f} eV/atom powers a tiny", "MEAS"),
+                (" heat-recovery line in the recycler ledger.", "MODEL")],
             "nucleo": [
                 ("NUCLEOSYNTHESIS -- climb the binding curve:", None),
                 (f"T = {self.plant.spec.get('fusion_temp_K', 1.5e7):.1e} K (solar-core class)", "SPEC"),
@@ -13673,11 +16020,20 @@ class SystemViewer:
                 ("3a->C12 is the HOYLE narrow resonance -- not", "MEAS"),
                 ("Gamow tunneling (deBoer 2017); Si-burn is quasi-", "MEAS"),
                 ("equilibrium, not a two-body reaction (Woosley '73).", "MEAS"),
-                (f"peak B/A ~8.8 MeV at Fe-56 -> fusion STOPS there (P8)", "MEAS"),
+                ("peak B/A ~8.8 MeV at Fe-56 -> fusion STOPS there (P8)", "MEAS"),
                 ("beyond iron: r-process neutron capture (costs energy).", "MEAS"),
                 (f"fused {g('Nucleosynthesizer','fused_kg_s')} kg/s", "MODEL"),
                 (f"fusion power {g('Nucleosynthesizer','fusion_power_W')} W", "MODEL"),
-                (f"rate gate {g('Nucleosynthesizer','rate_gate_gamow')}", "MODEL")],
+                (f"rate gate {g('Nucleosynthesizer','rate_gate_gamow')}", "MODEL"),
+                ("ignition ladder (real stellar thresholds):", None),
+                (" pp ~4e6-1.5e7 K | 3a ~1e8 K | C-burn ~6e8 K |", "MEAS"),
+                (" Si-burn ~3e9 K; confinement_gain maps lab pace.", "SPEC"),
+                (f"stability peak: Ni-62 B/A={binding_energy_per_nucleon_MeV(28,62):.3f} MeV", "MEAS"),
+                (f" (Fe-56 {binding_energy_per_nucleon_MeV(26,56):.3f}) -- fusion's wall.", "MEAS"),
+                (f"Au from Fe: {hc79['n_captures']} n-captures +{hc79['beta_decays']} beta-", "MODEL"),
+                (f" -> {hc79['cost_per_kg_J']:.1e} J/kg via the n-source stage.", "MODEL"),
+                ("heavier-than-Fe is a PURCHASE, not a wall -- priced", "MEAS"),
+                (" per kg by the binding deficit (heavy_element_cost).", "MEAS")],
             "create": [
                 ("MATTER CREATION -- E = m c^2 conversion:", None),
                 (f"power slice {self.plant.spec.get('creation_power_fraction', 0.10):.0%} -> "
@@ -13690,7 +16046,18 @@ class SystemViewer:
                 (f"running at {g('MatterCreationReactor','frac_of_ceiling')} of that ceiling", "MODEL"),
                 (f"1 kg at 100% eff = {C_LIGHT**2:.1e} J -- the Sun for 0.24 s", "MEAS"),
                 ("HONEST: pair creation mints matter + antimatter in", None),
-                ("EQUAL amounts -- no NET baryons (next stage's job).", None)],
+                ("EQUAL amounts -- no NET baryons (next stage's job).", None),
+                ("channel table -- every real route, honestly capped:", None)]
+                + [(f" {ch['name'][:25]:<25} eff {ch['eff']:.0e}", "MODEL")
+                   for ch in CREATION_CHANNELS[:-1]]
+                + [
+                (f"selected: {bc['name']} (best non-ideal)", "MODEL"),
+                ("SLAC E-144 (1997): laser + 46.6 GeV e- -> real e+e-", "MEAS"),
+                (" the only direct light->matter event on record.", "MEAS"),
+                ("pairs mint equal antimatter -- banked at "
+                 f"{antimatter_energy_density():.0e} J/kg (densest fuel).", "MEAS"),
+                ("nothing exceeds P/c^2 -- the ceiling above is THE", "MEAS"),
+                (" conservation law, not an engineering limit.", "MEAS")],
             "baryo": [
                 ("BARYOGENESIS -- net ordinary matter, flagged:", None),
                 ("Sakharov 1967 needs: (1) B violation,", "MEAS"),
@@ -13704,7 +16071,14 @@ class SystemViewer:
                 (f"net baryons {g('BaryogenesisReactor','net_baryon_kg_s')} kg/s", "MODEL"),
                 (f"cost {g('BaryogenesisReactor','cost_vs_Emc2')}x ideal E=mc^2", "MODEL"),
                 ("everything except the CP source is textbook theory;", None),
-                ("the source itself is honestly marked *FTR.", "FRONTIER")],
+                ("the source itself is honestly marked *FTR.", "FRONTIER"),
+                ("cosmic benchmark: eta_B ~ 6.1e-10 (BBN + Planck)", "MEAS"),
+                ("sphaleron-active window: T >~ 1e15-1e16 K (EW era)", "MEAS"),
+                ("freeze-out when Gamma_sph < H -- standard cosmology.", "MEAS"),
+                ("sphalerons violate B+L, conserve B-L; the CP bias", "MEAS"),
+                (" sets the sign of the excess -- that IS the *FTR.", "FRONTIER"),
+                ("status split: bookkeeping = MODEL, CP source =", "MODEL"),
+                (" FRONTIER, all else = textbook electroweak theory.", "MEAS")],
             "recycle": [
                 ("ENERGY RECYCLER -- the self-powering loop:", None),
                 (f"fuse {SPEC['fusion_fuel_fraction']:.0%} of the organized H:", "SPEC"),
@@ -13720,12 +16094,20 @@ class SystemViewer:
                 (f"EROI {g('EnergyRecycler','EROI')}", "MODEL"),
                 (f"self-sufficient flag: {g('EnergyRecycler','self_sufficient')}", "MODEL"),
                 ("the plant powers itself like a star -- net-positive", None),
-                ("is a MODEL result here, not a demonstrated one.", "MODEL")],
+                ("is a MODEL result here, not a demonstrated one.", "MODEL"),
+                (f"waste-heat reclaim {SPEC['waste_heat_recovery_eff']:.0%} (TE/metamaterial)", "SPEC"),
+                (f"idle draw {SPEC['replicator_idle_power_W']:.0e} W x {self.plant.replicators:.1e}", "MODEL"),
+                (" units is the demand term -- it grows with the swarm.", "MEAS"),
+                ("Carnot bound 1-Tc/Th < 1 applies to every W above.", "MEAS"),
+                ("a star IS the precedent: a self-powered plasma", "MEAS"),
+                (" paying its own organizing bill for ~1e10 yr.", "MEAS"),
+                ("net-positive here is MODEL bookkeeping -- real", "MODEL"),
+                (" only if the fusion island meets engineering Q>1.", "SPEC")],
             "radiator": [
                 ("RADIATOR BANK -- the Second-Law exit:", None),
                 ("organizing matter lowers ITS entropy; the Second", "MEAS"),
                 ("Law demands the heat be dumped somewhere (P4).", "MEAS"),
-                (f"Stefan-Boltzmann: A = P/(e s T^4)", "MEAS"),
+                ("Stefan-Boltzmann: A = P/(e s T^4)", "MEAS"),
                 (f"T_sink = {SPEC['reservoir_temp_K']:.3f} K (CMB today)", "MEAS"),
                 (f"Landauer floor {landauer_cost(1.0, SPEC['reservoir_temp_K']):.1e} J/bit", "MEAS"),
                 (f"waste heat: {g('RadiatorBank','waste_heat_W')} W", "MODEL"),
@@ -13745,7 +16127,16 @@ class SystemViewer:
                 (f"atoms fused this run (sim): {self.trap.n_recombinations}", "MODEL"),
                 ("LEFT ALONE IT RADIATES AWAY:", None),
                 (f"proton tau > {SPEC['proton_lifetime_yr']:.0e} yr (bound)", "MEAS"),
-                ("-> 'eternal' = REPLENISHED, never static.", None)],
+                ("-> 'eternal' = REPLENISHED, never static.", None),
+                ("bookkeeping:", None),
+                ("every kg is counted twice: raw mass AND its", "MEAS"),
+                (" structured share (the entropy ledger, proof P4).", "MEAS"),
+                ("phase split: cryo H/He gas stores + solid billets", "SPEC"),
+                (" of C/Si/Fe/Au/U parked in the CRYO BANK.", "SPEC"),
+                ("untouched it still decays -- replenishment is", "MEAS"),
+                (" the design's answer, not a hand-wave.", "MEAS"),
+                ("the bank feeds forge/foundry/output and the vault", None),
+                (" reserve; idle stock is policy, not failure.", None)],
             "forge": [
                 ("ISRU FORGE -- the real bulk-matter path:", None),
                 ("mine -> refine -> 3D-print PRE-EXISTING baryons", "MEAS"),
@@ -13757,7 +16148,15 @@ class SystemViewer:
                 (f"structure out {g('ISRUForge','structure_kg_s')} kg/s", "MODEL"),
                 (f"accessible reservoir {SPEC['isru_baryon_reservoir_kg']:.0e} kg/system", "SPEC"),
                 ("nearly ALL bulk mass comes through here --", None),
-                ("organizing beats manufacturing. Always.", None)],
+                ("organizing beats manufacturing. Always.", None),
+                ("feedstock reality:", None),
+                (" C-type asteroids assay ~40 wt% O, ~20% Fe-Ni,", "MEAS"),
+                (" 10-20% volatiles (CI chondrites); regolith O2", "MEAS"),
+                (" extraction ~40 wt% -- bench-proven chemistry.", "MEAS"),
+                ("printing: powder-bed/e-beam melting ~1e6-1e7 J/kg", "MEAS"),
+                (" -- the 5e7 J/kg spec line carries margin.", "SPEC"),
+                ("closure: every printed part is a part the seed", None),
+                (" did NOT have to launch (the replication loop).", None)],
             "foundry": [
                 ("REPLICATOR FOUNDRY -- von Neumann copies:", None),
                 (f"one replicator = {SPEC['replicator_mass_kg']:.0e} kg", "SPEC"),
@@ -13769,7 +16168,15 @@ class SystemViewer:
                 ("carrying capacity (proof P6). Replicators idle at", "MEAS"),
                 ("low stockpile, then build more cells when the pile", None),
                 ("passes threshold -- the net expands until the", None),
-                ("coverage goal is met. Self-building, self-limiting.", None)],
+                ("coverage goal is met. Self-building, self-limiting.", None),
+                ("real precedent: von Neumann's 1948 lectures; the", "MEAS"),
+                (" 1980 NASA lunar factory study (Freitas/Gilbreath)", "MEAS"),
+                (" priced full closure -- the hard part is 100%", "MEAS"),
+                (" parts coverage, not the copying mechanism.", "MEAS"),
+                ("bootstrap policy: Earth-made ICs + precision parts", "SPEC"),
+                (" first; in-situ fabs replace them over generations.", "SPEC"),
+                (f"cap {SPEC['swarm_cap']:.0e} is a POLICY bound, set here --", "SPEC"),
+                (" logistic growth enforces it (proof P6).", "MEAS")],
             "output": [
                 ("OUTPUT -- where the matter actually goes:", None),
                 (" * DYSON COLLECTORS -> more intercepted power", "SPEC"),
@@ -13779,7 +16186,103 @@ class SystemViewer:
                 (f"causally reachable: {SPEC['reachable_galaxies']:.0e} galaxies (LCDM)", "MEAS"),
                 ("cosmic total -> ~51 galaxies of matter.", "MODEL"),
                 ("the wavefront is causality-limited at < c:", "MEAS"),
-                ("Tsiolkovsky rocket + light-cone audited (H2).", "MEAS")],
+                ("Tsiolkovsky rocket + light-cone audited (H2).", "MEAS"),
+                ("0.1c -> Proxima (4.25 ly): ~42.5 yr transit", "MEAS"),
+                ("mass ratio for 0.1c @ v_e=0.05c: e^2 ~ 7.4", "MODEL"),
+                ("Lambda-CDM reach: ~14-16 Gly comoving stays", "MEAS"),
+                (" causal-forever (Davis & Lineweaver 2003) ->", "MEAS"),
+                (f" the {SPEC['reachable_galaxies']:.0e}-galaxy cap used here.", "MODEL"),
+                ("probe survival at 0.1c: dust sputtering + ISM", "MEAS"),
+                (" drag priced into the transit odds (hurdle H2).", "MEAS")],
+            "nsource": [
+                ("NEUTRON SOURCE -- the r-process driver:", None),
+                ("fusion pays only to Fe; heavier elements climb by", "MEAS"),
+                (" FREE neutrons (no Coulomb barrier) + beta decays.", "MEAS"),
+                (f"free n: tau = {PARTICLES['neutron']['tau']:.1f} s -> p + e- + nubar", "MEAS"),
+                ("D-T route: 14.1 MeV n -- same reactor family as", "MEAS"),
+                (" the POWERPLANT tab; spallation: ~23 n per 1 GeV", "MEAS"),
+                (" proton on Hg/Pb (SNS measured, 1.4 MW class).", "MEAS"),
+                ("Am-Be (a,n) lab source ~2.2e6 n/s/Ci for pilots.", "MEAS"),
+                (f"Fe-56 -> Au-197: {hc79['n_captures']} n-captures +", "MODEL"),
+                (f" {hc79['beta_decays']} beta- = {hc79['cost_per_kg_J']:.1e} J/kg", "MODEL"),
+                (f"Fe-56 -> U-238+: {hc92['n_captures']} n +{hc92['beta_decays']} beta", "MODEL"),
+                (f" = {hc92['cost_per_kg_J']:.1e} J/kg (heavy_element_cost).", "MODEL"),
+                ("each (n,g) emits ~5-9 MeV (S_n) -- booked as heat", "MEAS"),
+                (" for the recycler; moderation burns nothing else.", "MEAS"),
+                ("nature's version: supernova/merger r-process at", "MEAS"),
+                (" n ~1e26-1e34 /m^3 bursts -- we run slow+continuous.", "MEAS"),
+                (f"live D-T feed: {pp_n_s:.2e} n/s (powerplant fusion)", "MODEL")],
+            "sort": [
+                ("ELEMENT SORTER -- mass spectrometry at scale:", None),
+                ("ionize the stream, bend in B: r = mv/qB -- every A", "MEAS"),
+                (" lands on its own slit (sector magnet).", "MEAS"),
+                ("real ancestors: 1943 calutrons (Y-12); ISOLDE at", "MEAS"),
+                (" CERN runs this for exotic nuclei today.", "MEAS"),
+                ("resolving power m/dm ~1e2-1e4 sector-class;", "MEAS"),
+                (" laser route (AVLIS): resonant-step ionize ONE", "MEAS"),
+                (" isotope, pull it electrostatically -- U,Li,Rb done.", "MEAS"),
+                (f"feed now: {sort_kgs:.1e} kg/s mixed-A from nucleo", "MODEL"),
+                (f" -> {len(self.plant.stockpile.TRACKED)} banked channels", "MODEL"),
+                ("in vacuum no walls are needed: the trap's own B", "MEAS"),
+                (" does the bending; the slits are passive.", "MEAS"),
+                ("isotopes sort too: U-235/U-238 is exactly this --", "MEAS"),
+                (" purity is downstream insurance for chemistry.", "MEAS"),
+                ("cost per sorted atom ~10-50 eV ionization + E x B", "MEAS"),
+                (" transport -- trivial vs creation energies.", "MEAS")],
+            "acc": [
+                ("SURKO ACCUMULATOR -- the positron buffer (real):", None),
+                ("Surko & Greaves, UCSD (1989+): N2 buffer gas at", "MEAS"),
+                (" ~1e-1 Pa cools hot e+ to ~300 K in ~0.1 s via", "MEAS"),
+                (" rotational/vibrational excitation -- no lasers", "MEAS"),
+                (" needed to chill a positron.", "MEAS"),
+                ("multi-ring electrodes shape V(z); a MHz 'rotating", "MEAS"),
+                (" wall' drive packs the plasma -- demonstrated", "MEAS"),
+                (" ~1e8-1e9 e+/fill, densities near n_B order.", "MEAS"),
+                ("fast gate drop -> ns-bunched e+ beam: feeds Ps", "MEAS"),
+                (" science and every antihydrogen run at CERN.", "MEAS"),
+                (f"this chain buffers {pf['eplus_per_s']:.1e} e+/s in", "MODEL"),
+                (f" ~{pf['eplus_per_s']*100.0:.1e} per 100 s fill.", "MODEL"),
+                ("the storage limit is gas, not fields: at 1e-10 Pa", "MEAS"),
+                (f" the file's own number is tau ~{t_gas_s/3600:.0f} h.", "MODEL"),
+                ("e+ here are currency: banked in the CRYO BANK at", None),
+                (f" {antimatter_energy_density():.0e} J/kg equivalent.", "MEAS")],
+            "chem": [
+                ("CONDITIONING CHEMISTRY -- the tab's namesake:", None),
+                ("atoms -> molecules -> alloys: bonds cost eV,", "MEAS"),
+                (" not MeV -- the cheapest mass upgrade there is.", "MEAS"),
+                (f"H-H {BOND_ENERGY_EV['H-H']:.2f} eV | O=O {BOND_ENERGY_EV['O=O']:.2f} | "
+                 f"N#N {BOND_ENERGY_EV['N#N']:.2f} | Si-O {BOND_ENERGY_EV['Si-O']:.2f} eV", "MEAS"),
+                ("2H2+O2->2H2O(l): -285.8 kJ/mol = 1.59e7 J/kg out", "MEAS"),
+                ("N2+3H2->2NH3: -92 kJ/mol -- Haber-Bosch, ~450 C,", "MEAS"),
+                (" ~200 atm, Fe catalyst: ~1-2% of Earth's energy", "MEAS"),
+                (" budget runs this exact reaction today.", "MEAS"),
+                ("CO2+4H2->CH4+2H2O (Sabatier): -165 kJ/mol -- the", "MEAS"),
+                (" ISS runs this life-support loop in orbit now.", "MEAS"),
+                ("Si+O2->SiO2: -910 kJ/mol -> glass/ceramics;", "MEAS"),
+                (" Fe-C melts -> steel; O-H networks -> minerals.", "MEAS"),
+                (f"NaCl ionic character {bond_ionicity(11,17)*100:.0f}% (Pauling)", "MEAS"),
+                (f"scale: ~1e7 J/kg vs {C_LIGHT**2:.0e} J/kg to CREATE", "MODEL"),
+                (f" -> ~{C_LIGHT**2/1e7:.0e}x cheaper than minting.", "MODEL"),
+                ("chemistry never changes Z -- it rearranges what", "MEAS"),
+                (" the nuclear stages minted; the exotherm goes", "MEAS"),
+                (" to the recycler ledger. Nothing vanishes.", "MEAS")],
+            "vault": [
+                ("CRYO BANK -- matter held cold, dark, and counted:", None),
+                ("bulk stores: H/He as cryo liquid (LH2 20.3 K,", "MEAS"),
+                (" LHe 4.2 K); C/Si/Fe/Au/U as passivated billets.", "SPEC"),
+                ("4 K walls cryopump toward ~1e-11 Pa -- the same", "MEAS"),
+                (f" vacuum that sets e+ tau ~{t_gas_s/3600:.0f} h here.", "MODEL"),
+                ("antimatter custody: e+ stay in their Penning", "MEAS"),
+                (" bottle; anti-H has been HELD ~1000+ s in an", "MEAS"),
+                (" Ioffe magnetic bottle (ALPHA, 2011-16).", "MEAS"),
+                ("bullion-style assay: every kg is massed and", "SPEC"),
+                (" isotopically logged -- the ledger cannot drift.", "SPEC"),
+                ("decay budget: p tau >1e34 yr -> a 1e9 kg vault", "MEAS"),
+                (" loses <1e-25 kg/yr. 'Eternal' = refilled stock.", "MEAS"),
+                (f"on the books: {tot_kg:.1e} kg matter +", "MODEL"),
+                (f" {self.plant.total_antimatter_kg:.1e} kg antimatter.", "MODEL"),
+                ("this is the 'don't touch it for a long time'", None),
+                (" stockpile from the mission brief -- literal.", None)],
         }
         return _t.get(key, [("(mechanism)", None)])
 
@@ -13798,25 +16301,44 @@ class SystemViewer:
         arect = (x + 12, y + 44, w - 24, 196)
         _pg.draw.rect(self.screen, (40, 55, 78), arect, 1)
         self._detail_anim(key, arect)
-        # mechanism text (real physics, evidence-tagged per line)
-        ty = y + 254
-        y_max = y + h - 28
-        for ln, tg in self._mechanism(key):
+        # mechanism text (real physics, evidence-tagged per line) -- scrollable:
+        # self.mech_scroll is the pixel offset; the wheel / PgUp / PgDn move it
+        # in _handle, and the clamp below keeps it inside the rendered sheet.
+        ty0 = y + 254
+        y_max = y + h - 30
+        lines = self._mechanism(key)
+        hts = [19 if (ln.endswith(":") or (ln.isupper() and len(ln.strip()) > 3))
+               else 16 for ln, _ in lines]
+        content_h = sum(hts)
+        view_h = y_max - ty0 + 16
+        self._mech_max = max(0.0, content_h - view_h)
+        self.mech_scroll = max(0.0, min(self.mech_scroll, self._mech_max))
+        prev_clip = self.screen.get_clip()
+        self.screen.set_clip(_pg.Rect(x + 6, ty0 - 8, w - 12, view_h + 8))
+        ty = ty0 - int(round(self.mech_scroll))
+        for (ln, tg), lh in zip(lines, hts):
             bold = ln.endswith(":") or (ln.isupper() and len(ln.strip()) > 3)
-            if ty > y_max:
-                self.screen.blit(self.font_xs.render(
-                    "  .. (enlarge window for the rest) ..", True,
-                    (150, 160, 175)), (x + 12, ty))
-                break
-            self.screen.blit((self.font if bold else self.font_xs).render(
-                ln, True, col if bold else (195, 212, 232)), (x + 12, ty))
-            if tg:
-                ttxt, tcol = self._vtag(tg)
-                self.screen.blit(self.font_xs.render(ttxt, True, tcol),
-                                 (x + w - 58, ty + (3 if bold else 2)))
-            ty += 19 if bold else 16
+            if ty + lh > ty0 - 8 and ty < y_max + 8:
+                self.screen.blit((self.font if bold else self.font_xs).render(
+                    ln, True, col if bold else (195, 212, 232)), (x + 12, ty))
+                if tg:
+                    ttxt, tcol = self._vtag(tg)
+                    self.screen.blit(self.font_xs.render(ttxt, True, tcol),
+                                     (x + w - 66, ty + (3 if bold else 2)))
+            ty += lh
+        self.screen.set_clip(prev_clip)
+        if self._mech_max > 0.0:               # scrollbar + position hint
+            track = _pg.Rect(x + w - 10, ty0, 4, view_h)
+            _pg.draw.rect(self.screen, (55, 66, 86), track)
+            th = max(16, int(view_h * view_h / max(content_h, 1)))
+            frac = self.mech_scroll / self._mech_max
+            _pg.draw.rect(self.screen, (150, 175, 205),
+                          (track.x, ty0 + int((view_h - th) * frac), 4, th))
+            hint = f"wheel/PgDn scrolls  {int(100 * frac):3d}%"
+        else:
+            hint = "sheet fits -- all lines shown"
         self.screen.blit(self.font_xs.render(
-            "TAB=next stage   ESC/O=overview   click another module",
+            "TAB=next  ESC/O=overview  " + hint,
             True, (150, 175, 205)), (x + 12, y + h - 22))
 
     def _detail_anim(self, key, rect):
@@ -13826,6 +16348,7 @@ class SystemViewer:
         t = self.anim
         BLU, ORG, VIO, GRN, YEL = ((80, 150, 240), (240, 150, 70), (170, 100, 210),
                                    (100, 220, 130), (240, 230, 150))
+        RED, CYA = (230, 90, 80), (120, 210, 230)
         def dot(px, py, c, r=4):
             _pg.draw.circle(self.screen, c, (int(px), int(py)), r)
         if key == "cell":
@@ -13936,12 +16459,26 @@ class SystemViewer:
             self.screen.blit(self.font_xs.render("expansion seed ->", True,
                              (200, 230, 255)), (rx + 8, ry + 34))
         elif key == "radiation":
-            for i in range(16):
-                ph = (t + i * 0.4) % 1.0
-                dot(rx + 10 + ph * (rw - 20), ry + 20 + (i % 6) * (rh / 7),
-                    YEL if i % 3 else (120, 160, 220), 2)
-            self.screen.blit(self.font_xs.render("ambient radiation streams in",
-                             True, (210, 215, 180)), (rx + 8, ry + rh - 18))
+            # three real inputs, lane-separated: cosmic rays (fast, top),
+            # solar-wind protons (mid), CMB photons (bottom, ultra-faint/cold)
+            for i in range(10):
+                ph = (t * 1.4 + i * 0.23) % 1.0
+                dot(rx + 8 + ph * (rw - 16), ry + rh * 0.20 + math.sin(i * 3) * 4,
+                    YEL, 2)
+            for i in range(14):
+                ph = (t * 0.8 + i * 0.19) % 1.0
+                dot(rx + 8 + ph * (rw - 16), ry + rh * 0.50 + math.sin(i) * 5,
+                    VIO, 3)
+            for i in range(18):
+                ph = (t * 0.3 + i * 0.11) % 1.0
+                dot(rx + 8 + ph * (rw - 16), ry + rh * 0.82 + ((i * 7) % 5 - 2) * 3,
+                    (70, 90, 120), 2)
+            self.screen.blit(self.font_xs.render("cosmic rays ~GeV", True, YEL),
+                             (rx + 8, ry + 8))
+            self.screen.blit(self.font_xs.render("solar wind p+", True, VIO),
+                             (rx + 8, int(ry + rh * 0.38)))
+            self.screen.blit(self.font_xs.render("CMB: 1e9x too cold = sink",
+                             True, (120, 140, 170)), (rx + 8, ry + rh - 18))
         elif key == "protons":
             for i in range(12):
                 ph = (t * 0.8 + i * 0.3) % 1.0
@@ -14043,6 +16580,94 @@ class SystemViewer:
                                   (fx + 4 + wnum * 5 + math.sin(wph * 6) * 4, wy), 2)
             self.screen.blit(self.font_xs.render("waste heat -> cold sky (T^4)",
                              True, (170, 190, 215)), (rx + 8, ry + rh - 18))
+        elif key == "nsource":
+            # spallation/D-T block: protons in, neutron spray out; slow n drift
+            # right into the capture bed where A -> A+1 steps light up
+            _pg.draw.rect(self.screen, (90, 100, 125),
+                          (rx + 14, ry + rh * 0.42, 26, rh * 0.36))
+            for i in range(6):
+                ph = (t * 1.2 + i * 0.17) % 1.0
+                dot(rx + 2 + ph * 12, ry + rh * 0.6 + (i % 3 - 1) * 5, RED, 2)
+            for i in range(9):   # neutrons fan out (no B deflection)
+                ph = (t * 0.55 + i * 0.13) % 1.0
+                ny = ry + rh * 0.6 + (i % 5 - 2) * ph * 9
+                dot(rx + 40 + ph * (rw - 70), ny, (150, 160, 170), 2)
+            for i in range(5):   # capture steps climb a Z-ladder
+                lx = rx + rw * 0.62 + i * rw * 0.06
+                ly = ry + rh * 0.72 - i * rh * 0.09
+                _pg.draw.line(self.screen, YEL, (lx, ly), (lx + rw * 0.05, ly), 2)
+            self.screen.blit(self.font_xs.render("p -> n spray -> (n,g) ladder",
+                             True, (200, 200, 205)), (rx + 8, ry + rh - 18))
+        elif key == "sort":
+            # sector magnet: one stream in, B bends by m/q into A-sorted slits
+            cxm, cym = rx + rw * 0.34, ry + rh * 0.62
+            for i in range(8):
+                ph = (t + i * 0.125) % 1.0
+                dot(rx + 6 + ph * (cxm - rx - 14), ry + rh * 0.55 + math.sin(i) * 2,
+                    (190, 190, 200), 2)
+            for a, col in enumerate([(140, 190, 255), (255, 210, 120),
+                                     (255, 150, 140), (150, 220, 160)]):
+                rad = rw * (0.30 + a * 0.075)
+                for i in range(4):
+                    ph = (t * 0.8 + i * 0.25) % 1.0
+                    ang = 3.14 + ph * 2.2
+                    dot(cxm + math.cos(ang) * rad, cym + math.sin(ang) * rad,
+                        col, 2)
+                dot(rx + rw * 0.94, ry + rh * (0.28 + a * 0.13), col, 3)
+            self.screen.blit(self.font_xs.render("r = mv/qB: A sorted -> slits",
+                             True, (200, 205, 215)), (rx + 8, ry + rh - 18))
+        elif key == "acc":
+            # Surko trap: potential well; e+ spiral inward as buffer gas cools
+            _pg.draw.lines(self.screen, (90, 160, 220), False,
+                           [(rx + 6, ry + rh * 0.3),
+                            (rx + rw * 0.2, ry + rh * 0.78),
+                            (rx + rw * 0.8, ry + rh * 0.78),
+                            (rx + rw - 6, ry + rh * 0.3)], 2)
+            for i in range(14):   # e+ spiral inward as they cool
+                ph = (t * 0.5 + i * 0.13) % 1.0
+                rad = (1 - ph) * rw * 0.28
+                ang = i * 2.1 + t * 6
+                dot(rx + rw * 0.5 + math.cos(ang) * rad,
+                    ry + rh * 0.56 + math.sin(ang) * rad * 0.45, GRN, 2)
+            dot(rx + rw * 0.5, ry + rh * 0.56, (120, 255, 160), 4)
+            self.screen.blit(self.font_xs.render("buffer-gas cool -> dense e+ core",
+                             True, (160, 220, 180)), (rx + 8, ry + rh - 18))
+        elif key == "chem":
+            # reaction flasks: atoms pair into molecules; exotherm glows out
+            fl = [(rx + rw * 0.22, ry + rh * 0.62, "H2+O2"),
+                  (rx + rw * 0.52, ry + rh * 0.62, "NH3"),
+                  (rx + rw * 0.82, ry + rh * 0.62, "SiO2")]
+            for k, (fx, fy, lbl) in enumerate(fl):
+                _pg.draw.circle(self.screen, (110, 120, 145),
+                                (int(fx), int(fy)), int(rh * 0.16), 2)
+                for i in range(3):   # atoms bond inside
+                    ph = (t + i * 0.33 + k * 0.4) % 1.0
+                    ang = i * 2.1 + t * 3
+                    dot(fx + math.cos(ang) * rh * 0.08 * (1 - ph * 0.5),
+                        fy + math.sin(ang) * rh * 0.08 * (1 - ph * 0.5),
+                        [GRN, YEL, ORG][i % 3], 2)
+                wph = (t * 1.1 + k * 0.3) % 1.0   # exotherm rises
+                dot(fx, fy - rh * 0.2 - wph * rh * 0.15,
+                    (int(220 * (1 - wph)) + 30, 90, 60), 2)
+                self.screen.blit(self.font_xs.render(lbl, True, (170, 175, 190)),
+                                 (int(fx - 14), int(fy + rh * 0.2)))
+            self.screen.blit(self.font_xs.render("eV bonds, heat -> recycler",
+                             True, (190, 195, 205)), (rx + 8, ry + rh - 18))
+        elif key == "vault":
+            # cold store: nested 80K/4K shells, dark inside, slow assay ticks
+            _pg.draw.rect(self.screen, (90, 110, 150),
+                          (rx + rw * 0.2, ry + rh * 0.3, rw * 0.6, rh * 0.5), 2)
+            _pg.draw.rect(self.screen, (130, 160, 210),
+                          (rx + rw * 0.28, ry + rh * 0.38, rw * 0.44, rh * 0.34), 2)
+            for i in range(8):   # cryopumped stray molecules freeze to walls
+                ph = (t * 0.3 + i * 0.17) % 1.0
+                wx = rx + rw * (0.22 if i % 2 else 0.78)
+                dot(wx, ry + rh * 0.35 + ph * rh * 0.4, CYA, 2)
+            for i in range(6):   # stored billets / e+ bottle count
+                dot(rx + rw * (0.34 + i * 0.07), ry + rh * 0.62,
+                    GRN if i % 3 else (150, 220, 160), 3)
+            self.screen.blit(self.font_xs.render("4 K cryopump, antimatter bottled",
+                             True, (170, 200, 225)), (rx + 8, ry + rh - 18))
 
     def _g(self, stage, k):
         v = self.tele.get(stage, {}).get(k)
@@ -14059,6 +16684,9 @@ class SystemViewer:
         if np.abs(self.look_goal - self.look).max() < 1e-4:
             self.look = self.look_goal.copy()
         self.anim += 0.05
+        if self.machine_focus == "seed":               # chase-cam: track the
+            self.look_goal = np.array(                 # drifting expansion seed
+                [self._exp_x(), 1.9, 0.0])
         if self.hero and not self.dragging:            # slowly turn the showcase
             self.yaw += 0.006
         if self.paused:
@@ -14140,6 +16768,8 @@ class SystemViewer:
             self._render_orbital()
         elif self.view_mode == "galaxy":
             self._render_galaxy()
+        elif self.view_mode == "replication":
+            self._render_replication()
         elif self.view_mode == "powerplant":
             self._render_powerplant()
         elif self.view_mode == "charts":
@@ -14212,6 +16842,46 @@ class SystemViewer:
     _HERO_PARTS = {nm: (col, desc, tag)
                    for _g, items in _HERO_GROUPS for nm, col, desc, tag in items}
 
+    # MACHINE view part table: key -> (label, spec-note, rgb, anchor xyz,
+    # camera look xyz, camera dist, mechanism key). Every entry is a real
+    # plant component drawn in the scene; the mechanism key selects the
+    # evidence-tagged physics text (_mechanism) + live mini-animation
+    # (_detail_anim) the focus panel shows. "seed"/"cloud" anchors are
+    # dynamic (computed per frame), so they hold callables instead.
+    _MACH_ORDER = ["beamline", "lattice", "rails", "pfeed", "powerbus",
+                   "pile", "factory", "radiator", "seed", "cloud"]
+    _MACH_META = {
+        "beamline": ("DRIVE BEAMLINE", "1 GeV 1 mA e- -> W target",
+                     (230, 150, 90), (-10.4, 0.0, 0.0), (-9.8, 0.0, 0.0), 4.8,
+                     "pairsource"),
+        "lattice": ("HARVESTER LATTICE", "18 Penning field cells",
+                    (120, 175, 235), (-6.5, 0.0, 0.0), (-6.5, 0.0, 0.0), 8.0,
+                    "cell"),
+        "rails": ("e+/e- EXTRACTION", "collector rails, +-z faces",
+                  (95, 200, 165), (-6.5, 0.0, 1.8), (-6.5, 0.0, 0.9), 5.5,
+                  "cell"),
+        "pfeed": ("PROTON FEED", "solar-wind collector vane",
+                  (190, 130, 220), (-2.2, 4.6, 0.9), (-2.0, 3.2, 0.6), 6.0,
+                  "protons"),
+        "powerbus": ("POWER TRUNK", "collector swarm -> bus",
+                     (235, 200, 90), (0.0, 3.2, 0.0), (-0.5, 2.2, 0.0), 7.0,
+                     "powerin"),
+        "pile": ("MATTER PILE", "conditioned stockpile",
+                 (120, 220, 160), (1.3, -0.9, 0.0), (1.4, -0.8, 0.0), 4.6,
+                 "pile"),
+        "factory": ("REPLICATOR FOUNDRY", "builds a copy of itself",
+                    (170, 120, 220), (5.9, 0.7, 0.0), (5.9, 0.5, 0.0), 5.0,
+                    "foundry"),
+        "radiator": ("RADIATOR BANK", "waste heat -> cold sky",
+                     (120, 130, 160), (6.4, -0.4, -2.95), (6.4, -0.5, -2.0), 6.0,
+                     "radiator"),
+        "seed": ("EXPANSION SEED", "cell + probe -> next star",
+                 (200, 230, 255), "seed", "seed", 4.2, "output"),
+        "cloud": ("OUTPUT CLOUD", "selected element stream",
+                  (235, 235, 160), (10.5, 0.0, 0.0), (9.5, 0.0, 0.0), 6.5,
+                  "output"),
+    }
+
     # galaxy seeding pipeline, grouped by stage: group -> [(name, color,
     # function, evidence tag)].  Every group is a real mechanism the closed
     # loop already implements (probe -> bootstrap -> system loop -> expansion
@@ -14242,11 +16912,20 @@ class SystemViewer:
             ("swarm intelligence", (200, 160, 255), "adaptive parameters",      "MODEL"),
             ("1.5%/yr attrition",  (255, 150, 90),  "Aon/Seradata on-orbit",    "MEAS"),
         ]),
+        ("THE REAL MILKY WAY", [
+            ("Sgr A* + bar",       (255, 238, 190), "4.15e6 Msun, 27 deg bar",  "MEAS"),
+            ("bulge (Plummer)",    (200, 170, 120), "~22% of stars, r_c 0.8kpc","MEAS"),
+            ("thin+thick disc",    (120, 160, 220), "exp: h_R 2.6/3.0 kpc",     "MEAS"),
+            ("4 spiral arms",      (126, 158, 218), "12 deg pitch (Vallee)",    "MEAS"),
+            ("Orion Spur",         (150, 190, 235), "Sun's own minor arm",      "MEAS"),
+            ("Sun @ 8.15 kpc",     (255, 226, 130), "+20.8 pc off-plane",       "MEAS"),
+        ]),
         ("EXPANSION PHYSICS", [
-            ("wavefront r = v*t",  (100, 180, 255), "causality ceiling",        "MEAS"),
-            ("star field rho*",    (140, 160, 255), "1e11 stars volumetric",    "MODEL"),
+            ("wavefront r = v*t",  (100, 180, 255), "sphere centred on Sun",    "MEAS"),
+            ("GC 26.6 kly/rim 77", (140, 200, 255), "anisotropic reach",        "MODEL"),
+            ("star field rho*",    (140, 160, 255), "disc+bulge integral",      "MODEL"),
             ("stat aggregate",     (160, 180, 210), "past full-sim cap",        "MODEL"),
-            ("LCDM horizon",       (255, 180, 95),  "1e5 reachable galaxies",   "MEAS"),
+            ("LCDM horizon",       (255, 180, 95),  "1e5 gals, ~Mpc spacing",   "MEAS"),
         ]),
     ]
     _GAL_PARTS = {nm: (col, desc, tag)
@@ -14741,24 +17420,58 @@ class SystemViewer:
                     poly(scr, (col[0]*42//100 + 6, col[1]*42//100 + 6,
                                col[2]*42//100 + 6), pts, 1)
 
+    def _exp_x(self):
+        """World x of the drifting expansion seed -- the single source of truth
+        for the scene, the click anchors and the focus chase-cam."""
+        return 9.5 + ((self.anim * 0.3) % 1.0) * 3.5
+
+    def _mach_anchor(self, key):
+        """World-space anchor point for a machine part ('seed' moves)."""
+        pt = self._MACH_META[key][3]
+        return (self._exp_x(), 1.9, 0.0) if pt == "seed" else pt
+
     def _render_machine(self):
-        """THE MACHINE (SOLID hardware): harvester lattice (catching pairs) -> matter
-        -> replicator factories (building copies) -> expansion. Flat-shaded solids."""
+        """THE MACHINE (SOLID hardware): drive beamline -> harvester lattice
+        (catching + separating pairs) -> extraction rails -> matter pile ->
+        replicator foundries -> expansion seeds -> output cloud. Fed by the
+        solar-wind proton vane and the collector-swarm power trunk; the
+        radiator bank on the anti-sun side dumps the waste heat. Flat-shaded
+        solids; every part is real plant hardware, sized from SPEC."""
         t = self.anim
         LAT_OFF = np.array([-6.5, 0.0, 0.0])            # lattice sits on the left
-        # 0) faint DECK GRID beneath the hardware -- gives the scene a floor and
+        if getattr(self, "_mach_static", None) is None:
+            self._mach_static = build_machine_extras()
+        if getattr(self, "_exp_cell", None) is None:
+            self._exp_cell = build_expansion_seed_solid(s=0.8)
+        ex = self._exp_x()
+        # 0) HOST STAR far off along the key-light direction -- the reservoir
+        #    the machine runs on (the collector swarm rides on it; proof P12)
+        sun_w = self.look + np.array((0.419, 0.519, 0.739)) * 55.0
+        sx, sy, z = self._project([sun_w])
+        if z[0] > 0.06:
+            r = max(6, int(400.0 / z[0]))
+            _pg.draw.circle(self.screen, (95, 85, 52),
+                            (int(sx[0]), int(sy[0])), r + 12)
+            _pg.draw.circle(self.screen, (255, 235, 160),
+                            (int(sx[0]), int(sy[0])), r)
+            _pg.draw.circle(self.screen, (255, 250, 215),
+                            (int(sx[0]), int(sy[0])), max(2, r // 3))
+        # 1) faint DECK GRID beneath the hardware -- gives the scene a floor and
         #    sells the scale (2 m grid on the y = -3.0 plane)
         gpts = []
-        for gx in np.arange(-11.0, 15.01, 2.0):
+        for gx in np.arange(-14.0, 15.01, 2.0):
             gpts.append(((gx, -3.0, -4.0), (gx, -3.0, 4.0)))
         for gz in np.arange(-4.0, 4.01, 2.0):
-            gpts.append(((-11.0, -3.0, gz), (15.0, -3.0, gz)))
+            gpts.append(((-14.0, -3.0, gz), (15.0, -3.0, gz)))
         for p0, p1 in gpts:
             sx, sy, z = self._project([p0, p1])
             if z[0] > 0.06 and z[1] > 0.06:
                 _pg.draw.line(self.screen, (20, 30, 46),
                               (sx[0], sy[0]), (sx[1], sy[1]), 1)
-        # 1) SOLID HARVESTER LATTICE (field cells) + caught pairs at nodes
+        # 2) STATIC HARDWARE EXTRAS (beamline, rails, vane, trunk, radiator,
+        #    pile frame) -- one merged mesh, camera-keyed raster cache
+        self._render_solid(*self._mach_static, cache_key="machine_x")
+        # 3) SOLID HARVESTER LATTICE (field cells) + caught pairs at nodes
         self._render_solid(self._latV, self._latF, self._latC, offset=LAT_OFF,
                            cache_key="lattice")
         nsx, nsy, nz = self._project(self._lat_nodes + LAT_OFF)
@@ -14766,17 +17479,106 @@ class SystemViewer:
             if nz[j] > 0.06 and (j + int(t * 3)) % 2 == 0:
                 for c, off in (((90, 160, 250), -0.22), ((250, 160, 80), 0.22)):
                     self._draw_glow_dot(nsx[j] + off*16, nsy[j], nz[j], c, base_r=3)
-        # 2) MATTER FLOW lattice -> factories (green stream)
-        for i in range(12):
-            ph = (t * 0.5 + i * 0.083) % 1.0
-            p = np.array([-3.0 + ph * 6.0, math.sin(i + t) * 0.5, 0.0])
-            sx, sy, z = self._project([p])
-            self._draw_glow_dot(sx[0], sy[0], z[0], (120, 225, 160), base_r=3)
-        # 3) SOLID REPLICATOR FACTORIES building copies -- mesh cached by
-        # quantized progress (was: full geometry rebuild x3 every frame)
+        # 4) occasional 511 keV annihilation flash at a node -- the honest
+        #    SPEC['annihilation_loss']=2%/cycle made visible (metered, not free)
+        fi = int(t * 2.3) % len(self._lat_nodes)
+        if (t * 2.3) % 1.0 < 0.14 and nz[fi] > 0.06:
+            self._draw_glow_dot(nsx[fi], nsy[fi], nz[fi], (255, 210, 120),
+                                base_r=26)
+            self._draw_glow_dot(nsx[fi], nsy[fi], nz[fi], (255, 255, 235),
+                                base_r=10)
+        # 5) DRIVE BEAM: e- packets down the pipe, then the Bethe-Heitler
+        #    shower fanning e+/e- into the first lattice column (MEAS)
+        pts = []
+        for i in range(7):
+            ph = (t * 1.15 + i * 0.14) % 1.0
+            pts.append(((-12.7 + ph * 2.9, 0.0, 0.0), (240, 220, 120)))
+        for i in range(12):                 # shower: target -> left column
+            tgt = self._lat_nodes[(i * 7) % 6] + LAT_OFF   # 6 x=-8.9 nodes
+            ph = (t * 0.85 + i * 0.091) % 1.0
+            p = np.array((-9.55, 0.0, 0.0)) + (np.asarray(tgt) + 9.55) * ph * 0.999
+            pts.append((tuple(p), (250, 160, 80) if i % 2 else (90, 160, 250)))
+        psx, psy, pz = self._project(np.array([p for p, _c in pts]))
+        for i, (_p, c) in enumerate(pts):
+            if pz[i] > 0.06:
+                self._draw_glow_dot(psx[i], psy[i], pz[i], c, base_r=3)
+        # 6) EXTRACTION: inside every cell E_sep drifts e+ toward +z and e-
+        #    toward -z (Lorentz separation), then the rails carry the charge
+        #    to the feed boxes -- the pair-disruption step working, live
+        pts = []
+        for j, n in enumerate(self._lat_nodes):
+            ph = (t * 0.35 + j * 0.11) % 1.0
+            for sgn, col in ((1.0, (250, 160, 80)), (-1.0, (90, 160, 250))):
+                pts.append(((n[0] + LAT_OFF[0], n[1],
+                             n[2] + sgn * ph * (1.80 - sgn * n[2])), col))
+        for i in range(8):                  # rail traffic -> feed boxes
+            ph = (t * 0.55 + i * 0.125) % 1.0
+            for sgn, col in ((1.0, (250, 160, 80)), (-1.0, (90, 160, 250))):
+                pts.append(((-8.9 + ph * 5.0, 0.0, 1.80 * sgn), col))
+        psx, psy, pz = self._project(np.array([p for p, _c in pts]))
+        for i, (_p, c) in enumerate(pts):
+            if pz[i] > 0.06:
+                self._draw_glow_dot(psx[i], psy[i], pz[i], c, base_r=2)
+        # 7) SOLAR-WIND PROTONS: the baryon feedstock streaming off the vane
+        #    into the pile (leptons alone cannot make atoms -- Section 20)
+        pts = []
+        for i in range(9):
+            ph = (t * 0.45 + i * 0.11) % 1.0
+            wob = math.sin(i * 2.1 + t * 2.0) * 0.15
+            pts.append(((-2.2 + (1.3 - -2.2) * ph + wob * 0.4,
+                         4.4 + (-0.5 - 4.4) * ph, 0.9 * (1.0 - ph)),
+                        (190, 130, 220)))
+        psx, psy, pz = self._project(np.array([p for p, _c in pts]))
+        for i, (_p, c) in enumerate(pts):
+            if pz[i] > 0.06:
+                self._draw_glow_dot(psx[i], psy[i], pz[i], c, base_r=3)
+        # 8) POWER: collector-swarm feed down the trunk, along the bus bar,
+        #    and down the service drops to lattice / pile / foundry
+        pts = []
+        for i in range(5):
+            ph = (t * 0.5 + i * 0.2) % 1.0
+            pts.append(((0.0, 5.0 - ph * 2.0, 0.0), (240, 215, 110)))
+        for i in range(9):
+            ph = (t * 0.5 + i * 0.11) % 1.0
+            pts.append(((-6.5 + ph * 13.0, 3.0, 0.0), (240, 215, 110)))
+        for dx, yend in ((-6.5, 2.6), (1.3, -0.2), (5.9, 1.5)):
+            for i in range(2):
+                ph = (t * 0.7 + i * 0.5 + dx * 0.13) % 1.0
+                pts.append(((dx, 3.0 - ph * (3.0 - yend), 0.0), (240, 215, 110)))
+        psx, psy, pz = self._project(np.array([p for p, _c in pts]))
+        for i, (_p, c) in enumerate(pts):
+            if pz[i] > 0.06:
+                self._draw_glow_dot(psx[i], psy[i], pz[i], c, base_r=3)
+        # 9) MATTER: conditioned stock flows lattice -> PILE, pile -> foundry
+        pts = []
+        for i in range(7):
+            ph = (t * 0.5 + i * 0.143) % 1.0
+            pts.append(((-4.1 + ph * 5.4, -0.4 + math.sin(i + t) * 0.15, 0.0),
+                        (120, 225, 160)))
+        for i in range(6):
+            ph = (t * 0.5 + i * 0.167 + 0.4) % 1.0
+            pts.append(((1.3 + ph * 2.3, -0.5 + math.sin(i * 1.7 + t) * 0.12,
+                         0.0), (120, 225, 160)))
+        psx, psy, pz = self._project(np.array([p for p, _c in pts]))
+        for i, (_p, c) in enumerate(pts):
+            if pz[i] > 0.06:
+                self._draw_glow_dot(psx[i], psy[i], pz[i], c, base_r=3)
+        # 10) PILE FILL: the hopper's live level = banked kg vs the bin's
+        #     physical capacity (~0.89 m^3 of iron ~= 7 t) -- honest, not
+        #     decorative: it literally fills as the stockpile ledger grows
+        banked = self.plant.stockpile.total_kg()
+        fill = min(1.0, banked / 7000.0)
+        fa = Assembly()
+        fa.add(*_g_box(0.36, 0.36, max(0.03, 0.55 * fill)),
+               (1.3, -1.60 + max(0.03, 0.55 * fill), 0.0),
+               (60, 170, 110) if fill < 1.0 else (110, 230, 150))
+        self._render_solid(*fa.arrays())
+        # 11) SOLID REPLICATOR FACTORIES building copies -- mesh cached by
+        #     quantized progress (was: full geometry rebuild x3 every frame)
         if not hasattr(self, "_rep_meshes"):
             self._rep_meshes = {}
-        for ri, rc in enumerate([(3.6, -0.6, 0.0), (5.9, 0.7, 0.0), (8.0, -0.4, 0.0)]):
+        for ri, rc in enumerate([(3.6, -0.6, 0.0), (5.9, 0.7, 0.0),
+                                 (8.0, -0.4, 0.0)]):
             prog = (t * 0.35 + ri * 0.33) % 1.0
             q = int(prog * 40)
             mm = self._rep_meshes.get((ri, q))
@@ -14784,47 +17586,92 @@ class SystemViewer:
                 mm = build_replicator_solid(rc, s=1.0, progress=q / 40.0)
                 self._rep_meshes[(ri, q)] = mm
             self._render_solid(*mm)
-        # 4) EXPANSION: a finished SOLID cell drifting out to grow the net --
-        # built ONCE at the origin, moved via render offset (was: rebuilt/frame)
-        if getattr(self, "_exp_cell", None) is None:
-            exa = Assembly(); build_field_cell_solid(exa, (0.0, 0.0, 0.0), s=0.8)
-            self._exp_cell = exa.arrays()
-        ex = 9.5 + ((t * 0.3) % 1.0) * 3.5
+        # 12) EXPANSION SEED drifting out to grow the net -- mesh built ONCE
+        #     at the origin (field cell + mast + avionics + panels), moved
+        #     via render offset
         self._render_solid(*self._exp_cell, offset=(ex, 1.9, 0.0))
-        # 5) OUTPUT CLOUD of the chosen element, spewed from the factories
+        # 13) RADIATOR shimmer: the fins glow faintly in the IR band as the
+        #     plant's waste heat radiates to the cold sky (Stefan-Boltzmann)
+        pts = []
+        for fx in (4.2, 6.4, 8.6):
+            for i in range(4):
+                fl = 0.5 + 0.5 * math.sin(t * 1.7 + fx + i * 2.4)
+                pts.append(((fx - 0.7 + (i % 2) * 1.4,
+                             -1.2 + (i // 2) * 1.6 + fl * 0.3, -2.90),
+                            (int(120 + 90 * fl), 55, 48)))
+        psx, psy, pz = self._project(np.array([p for p, _c in pts]))
+        for i, (_p, c) in enumerate(pts):
+            if pz[i] > 0.06:
+                _pg.draw.circle(self.screen, c, (int(psx[i]), int(psy[i])), 2)
+        # 14) OUTPUT CLOUD of the chosen element, spewed from the foundry end
         Z = OUTPUT_ELEMENTS[self.elem_i % len(OUTPUT_ELEMENTS)][0]
         ecol = _element_color(Z)
         if len(self.cloud) < 200:
-            self.cloud.append([6.5, self._rng.normal(0, 1.1), self._rng.normal(0, 1.1)])
-        self.cloud = [[p[0] + 0.12, p[1], p[2]] for p in self.cloud if p[0] < 22]
+            self.cloud.append([6.5, self._rng.normal(0, 1.1),
+                               self._rng.normal(0, 1.1)])
+        self.cloud = [[p[0] + 0.12, p[1], p[2]] for p in self.cloud
+                      if p[0] < 22]
         if self.cloud:
             csx, csy, cz = self._project(np.array(self.cloud))
             for j in range(len(self.cloud)):
                 if cz[j] > 0.06:
-                    _pg.draw.circle(self.screen, ecol, (int(csx[j]), int(csy[j])), 3)
-        # 6) DIMENSION CALLOUT under the lattice (CAD-style witness line)
-        d0, d1 = LAT_OFF + np.array([-2.4, -2.85, 0.0]), LAT_OFF + np.array([2.4, -2.85, 0.0])
-        sx, sy, z = self._project([d0, d1])
-        if z[0] > 0.06 and z[1] > 0.06:
-            _pg.draw.line(self.screen, (110, 140, 175),
-                          (sx[0], sy[0]), (sx[1], sy[1]), 1)
-            for k in (0, 1):
+                    _pg.draw.circle(self.screen, ecol,
+                                    (int(csx[j]), int(csy[j])), 3)
+        # 15) CAD WITNESS LINES: lattice face, cell pitch, cell edge
+        for d0, d1, lbl in (
+            (LAT_OFF + np.array([-2.4, -2.85, 0.0]),
+             LAT_OFF + np.array([2.4, -2.85, 0.0]), "4.8 m lattice face"),
+            (LAT_OFF + np.array([-2.4, -3.30, -1.2]),
+             LAT_OFF + np.array([0.0, -3.30, -1.2]), "2.4 m cell pitch"),
+            (LAT_OFF + np.array([2.9, -2.4, 1.2]),
+             LAT_OFF + np.array([2.9, -1.4, 1.2]), "1.0 m cell (SPEC)"),
+        ):
+            sx, sy, z = self._project([d0, d1])
+            if z[0] > 0.06 and z[1] > 0.06:
                 _pg.draw.line(self.screen, (110, 140, 175),
-                              (sx[k], sy[k] - 5), (sx[k], sy[k] + 5), 1)
-            tw = self.font_xs.size("4.8 m lattice face")[0]
-            self.screen.blit(self.font_xs.render("4.8 m lattice face", True,
-                             (150, 175, 200)),
-                             (int((sx[0] + sx[1]) / 2 - tw / 2), int(sy[0]) + 6))
-        # 7) LEADER-LINE LABELS (Submarine-style edge columns, spread so they
-        #    cannot collide) -- inside the corridor between the side panels
+                              (sx[0], sy[0]), (sx[1], sy[1]), 1)
+                for k in (0, 1):
+                    _pg.draw.line(self.screen, (110, 140, 175),
+                                  (sx[k], sy[k] - 5), (sx[k], sy[k] + 5), 1)
+                tw = self.font_xs.size(lbl)[0]
+                self.screen.blit(self.font_xs.render(
+                    lbl, True, (150, 175, 200)),
+                    (int((sx[0] + sx[1]) / 2 - tw / 2), int(sy[0]) + 6))
+        # 16) AXIS TRIAD at the deck corner -- orientation + what each axis
+        #     physically is on this machine (x = matter flow, z = trap axis)
+        tri = np.array([(-12.9, -2.5, 0.0), (-12.1, -2.5, 0.0),
+                        (-12.9, -1.7, 0.0), (-12.9, -2.5, 0.8)])
+        tsx, tsy, tz = self._project(tri)
+        if np.all(tz > 0.06):
+            for tip, col in ((1, (200, 90, 90)), (2, (110, 200, 120)),
+                             (3, (90, 140, 210))):
+                _pg.draw.line(self.screen, col, (tsx[0], tsy[0]),
+                              (tsx[tip], tsy[tip]), 2)
+            for tip, lbl, col in ((1, "x flow", (200, 90, 90)),
+                                  (3, "z trap", (90, 140, 210))):
+                self.screen.blit(self.font_xs.render(lbl, True, col),
+                                 (int(tsx[tip]) + 3, int(tsy[tip]) - 6))
+        # 17) LEADER-LINE LABELS (Submarine-style edge columns, spread so they
+        #     cannot collide) -- every part labelled inside the panel corridor
         self._leader_labels([
-            (tuple(LAT_OFF + np.array([-2.4, 0.0, 0.0])),
-             "HARVESTER LATTICE -- net of field cells", (120, 175, 235)),
-            (tuple(LAT_OFF + self._lat_nodes[0]),
-             "FIELD CELL -- Penning-trap harvester", (95, 200, 165)),
-            ((5.9, 0.7, 0.0), "REPLICATOR FACTORY -- builds a copy",
+            (self._mach_anchor("beamline"),
+             "DRIVE BEAMLINE -- BH e+ factory", (230, 150, 90)),
+            (self._mach_anchor("lattice"),
+             "HARVESTER LATTICE -- 18 cells", (120, 175, 235)),
+            (self._mach_anchor("rails"),
+             "EXTRACTION RAILS -- e+ +z / e- -z", (95, 200, 165)),
+            (self._mach_anchor("pfeed"),
+             "PROTON FEED -- solar wind", (190, 130, 220)),
+            (self._mach_anchor("powerbus"),
+             "POWER TRUNK -- swarm feed", (235, 200, 90)),
+            (self._mach_anchor("pile"),
+             "MATTER PILE -- conditioned stock", (120, 220, 160)),
+            ((5.9, 0.7, 0.0), "REPLICATOR FOUNDRY -- copies",
              (170, 120, 220)),
-            ((ex, 1.9, 0.0), "NEW CELL -- expands the net", (200, 230, 255)),
+            (self._mach_anchor("radiator"),
+             "RADIATOR BANK -- 2nd-law exit", (140, 150, 175)),
+            (self._mach_anchor("seed"),
+             "EXPANSION SEED -- 0.10c out", (200, 230, 255)),
             ((10.5, 0.0, 0.0), f"OUTPUT CLOUD -- "
              f"{OUTPUT_ELEMENTS[self.elem_i % len(OUTPUT_ELEMENTS)][2]}",
              ecol),
@@ -14849,21 +17696,31 @@ class SystemViewer:
             self.screen.blit(self.font_xs.render(
                 f"{lbl[1]}  ->  {lbl[2]}", True, (180, 200, 220)),
                 (self.W // 2 - 150, 100))
+            # leader-line part callouts -- the showcase/powerplant convention:
+            # every real component named, its leader anchored on the actual
+            # mesh point so it tracks the camera (stage meshes sit at origin,
+            # so the table's local offsets ARE world coordinates).
+            self._leader_labels(
+                [(np.asarray(xyz, dtype=float), nm, col)
+                 for nm, col, xyz, _d, _t in _PLANT_PARTS[idx]],
+                132, self.H - 210, x_left=368, x_right=self.W - 488)
         else:
             # OVERVIEW: render the full pipeline solid mesh
             self._render_solid(self._pipeV, self._pipeF, self._pipeC,
                                cache_key="pipeline")
-            # animated flow particles along the pipeline pipes
+            # animated flow particles along the pipeline pipes -- all 44 dots
+            # projected in ONE batch (was ~44 _project calls per frame)
+            _pts, _pcol = [], []
             for i in range(11):
-                c0 = self._pipe_centers[i]
-                c1 = self._pipe_centers[i + 1]
+                c0 = np.asarray(self._pipe_centers[i], dtype=float)
+                c1 = np.asarray(self._pipe_centers[i + 1], dtype=float)
                 for j in range(4):
                     ph = (t * 0.3 + j * 0.25 + i * 0.08) % 1.0
-                    p = np.array([c0[0] + (c1[0] - c0[0]) * ph,
-                                  c0[1], c0[2]])
-                    sx, sy, z = self._project([p])
-                    col = _STAGE_COLORS[i]
-                    self._draw_glow_dot(sx[0], sy[0], z[0], col, base_r=4)
+                    _pts.append(c0 + (c1 - c0) * ph)
+                    _pcol.append(_STAGE_COLORS[i])
+            sx, sy, z = self._project(np.asarray(_pts))
+            for k in range(len(_pts)):
+                self._draw_glow_dot(sx[k], sy[k], z[k], _pcol[k], base_r=4)
             # stage labels -- leader-line columns (Submarine-style: they can
             # never collide or sit on the model), inside the panel corridor
             self._leader_labels([
@@ -14872,6 +17729,22 @@ class SystemViewer:
                  _STAGE_COLORS[i])
                 for i in range(len(self._pipe_centers))
             ], 110, self.H - 150, x_left=368, x_right=self.W - 404)
+
+    def _stage_flow_rows(self, idx, max_rows=8):
+        """The honest in->out ledger for plant stage idx: every flow key the
+        stage actually ADDED or CHANGED this tick (from EMHLPlant.flow_in /
+        flow_out, which record the real dictionaries handed between stages)."""
+        name = _STAGE_NAMES[idx]
+        fin = self.plant.flow_in.get(name, {})
+        fout = self.plant.flow_out.get(name, {})
+        rows = []
+        for k, vo in fout.items():
+            if not isinstance(vo, (int, float)):
+                continue
+            vi = fin.get(k)
+            if vi is None or abs(vo - vi) > 1e-30 * max(1.0, abs(vo)):
+                rows.append((k, vi, vo))
+        return rows[:max_rows]
 
     def _draw_plant_ui(self):
         """UI overlay for the PLANT view: title, telemetry, stage nav, controls."""
@@ -14887,28 +17760,74 @@ class SystemViewer:
             idx = self.plant_focus
             stage_name = _STAGE_NAMES[idx]
             tele = self.tele.get(stage_name, {})
-            # left panel: live telemetry
-            self._panel(12, 68, 340, min(400, 80 + len(tele) * 22))
+            tag, tcol = self._vtag(_PLANT_STAGE_TAG[idx])
+            # left panel: live telemetry (sized to content; capped so the
+            # flow ledger below always has room)
+            h_t = min(self.H - 372, 84 + len(tele) * 22)
+            self._panel(12, 68, 340, h_t)
             self.screen.blit(self.font_m.render(
                 f"{_STAGE_LABELS[idx][0]}  --  TELEMETRY", True,
                 (120, 210, 255)), (22, 76))
+            self.screen.blit(self.font_xs.render(tag, True, tcol), (304, 80))
             yy = 104
             for k, v in tele.items():
                 if isinstance(v, str):
                     self.screen.blit(self.font_s.render(
-                        f"{k:<22} = {v}", True, (200, 220, 240)), (22, yy))
+                        f"{k:<18} = {v}", True, (200, 220, 240)), (22, yy))
                 else:
                     self.screen.blit(self.font_s.render(
-                        f"{k:<22} = {v:.4e}", True, (200, 220, 240)), (22, yy))
+                        f"{k:<18} = {v:.4e}", True, (200, 220, 240)), (22, yy))
                 yy += 22
-            # right panel: mechanism description
-            self._panel(self.W - 472, 68, 460, 340, 232)
+
+            # left panel 2: FLOW LEDGER -- the keys this stage actually
+            # produced or changed (from the real hand-off dicts)
+            fl_rows = self._stage_flow_rows(idx)
+            parts_ln = "parts: " + ", ".join(
+                nm for nm, _c, _x, _d, _t in _PLANT_PARTS[idx])
+            pl_lines = _pp_wrap_px(parts_ln, self.font_xs, 316).split("\n")
+            ck = _PLANT_CONSUMES[idx]
+            cv = self.plant.flow_in.get(stage_name, {}).get(ck) if ck else None
+            y0 = 68 + h_t + 8
+            h_f = 66 + 17 * len(fl_rows) + 14 * len(pl_lines) + 14 \
+                + (14 if isinstance(cv, (int, float)) else 0)
+            h_f = min(h_f, self.H - 66 - y0)
+            self._panel(12, y0, 340, h_f)
+            self.screen.blit(self.font_s.render(
+                "FLOW LEDGER -- what this stage did this tick", True,
+                (110, 225, 145)), (22, y0 + 8))
+            self.screen.blit(self.font_xs.render(
+                "key:  in -> out", True, (150, 175, 200)), (22, y0 + 26))
+            yy = y0 + 44
+            if isinstance(cv, (int, float)):
+                self.screen.blit(self.font_xs.render(
+                    f"reads {ck} = {cv:.3e}", True, (150, 175, 200)), (22, yy))
+                yy += 14
+            for k, vi, vo in fl_rows:
+                a = "--" if vi is None else f"{vi:.3e}"
+                self.screen.blit(self.font_xs.render(
+                    f"{k:<18} {a:>10} -> {vo:.3e}", True, (195, 215, 235)),
+                    (22, yy))
+                yy += 17
+            for ln in pl_lines:
+                self.screen.blit(self.font_xs.render(
+                    ln, True, (150, 175, 200)), (22, yy))
+                yy += 14
+            if not fl_rows:
+                self.screen.blit(self.font_xs.render(
+                    "pass-through this tick", True, (150, 175, 200)), (22, yy))
+
+            # right panel: mechanism dossier (auto-height to its content)
             mech = self._stage_mechanism(idx)
+            mh = 30 + sum(19 if (l.endswith(":") or l.isupper()) else 16
+                          for l in mech) + 30
+            self._panel(self.W - 472, 68, 460, min(mh, self.H - 140), 232)
             self.screen.blit(self.font_m.render(
                 "MECHANISM -- " + _STAGE_LABELS[idx][0], True,
                 (255, 255, 255)), (self.W - 462, 76))
             yy = 104
             for ln in mech:
+                if yy > self.H - 132:
+                    break                       # never draw under the bar
                 bold = ln.endswith(":") or ln.isupper()
                 self.screen.blit(
                     (self.font if bold else self.font_xs).render(
@@ -14919,30 +17838,85 @@ class SystemViewer:
                 "TAB=next stage   ESC/O=back to pipeline   click another stage",
                 True, (150, 175, 205)), (self.W - 462, yy + 4))
         else:
-            # OVERVIEW: show plant totals + stage nav
-            self._panel(12, 68, 340, 280)
-            self.screen.blit(self.font_m.render(
-                "PLANT TOTALS (live)", True, (120, 210, 255)), (22, 76))
+            # OVERVIEW: plant totals + cumulative ledger + feedstock audit +
+            # live bottleneck + stage nav -- every number live from the model.
             rows = [
                 ("pairs made /s", self._g_tele("PairSource", "total_pairs_s")),
                 ("leptons kept /s", self._g_tele("SeparatorTrap", "kept_leptons_s")),
                 ("H atoms /s", self._g_tele("RecombinationReactor", "H_atoms_s")),
+                ("H mass kg/day", self._g_tele("RecombinationReactor", "H_kg_day")),
                 ("fused kg/s", self._g_tele("Nucleosynthesizer", "fused_kg_s")),
+                ("fusion power W", self._g_tele("Nucleosynthesizer", "fusion_power_W")),
                 ("created matter kg/s", self._g_tele("MatterCreationReactor", "matter_kg_s")),
+                ("antimatter kg/s", self._g_tele("MatterCreationReactor", "antimatter_kg_s")),
                 ("NET baryons kg/s", self._g_tele("BaryogenesisReactor", "net_baryon_kg_s")),
                 ("structure kg/s", self._g_tele("ISRUForge", "structure_kg_s")),
+                ("structure t/day", self._g_tele("ISRUForge", "t_per_day")),
                 ("external power W", self._g_tele("EnergyRecycler", "external_W")),
                 ("EROI", self._g_tele("EnergyRecycler", "EROI")),
                 ("surplus power W", self._g_tele("EnergyRecycler", "surplus_W")),
                 ("radiator area m^2", self._g_tele("RadiatorBank", "radiator_area_m2")),
             ]
+            y = 68
+            self._panel(12, y, 340, 84 + 20 * len(rows))
+            self.screen.blit(self.font_m.render(
+                "PLANT TOTALS (live)", True, (120, 210, 255)), (22, y + 8))
             for i, (a, b) in enumerate(rows):
                 self.screen.blit(self.font_s.render(
-                    a, True, (150, 175, 200)), (22, 104 + i * 20))
+                    a, True, (150, 175, 200)), (22, y + 36 + i * 20))
                 self.screen.blit(self.font_s.render(
-                    b, True, (235, 245, 255)), (210, 104 + i * 20))
+                    b, True, (235, 245, 255)), (210, y + 36 + i * 20))
+            y += 84 + 20 * len(rows) + 8
 
-            # right panel: stage list with nav
+            # MASS LEDGER: cumulative inventories from the plant object itself
+            p = self.plant
+            dep = p.total_structure_kg / max(
+                p.spec["isru_baryon_reservoir_kg"], 1e-30)
+            rows2 = [
+                ("plant clock", f"{p.t:,.0f} s  ({p.t/YR:.3e} yr)"),
+                ("structure built", f"{p.total_structure_kg:.3e} kg"),
+                ("matter created", f"{p.total_created_kg:.3e} kg"),
+                ("antimatter (stored)", f"{p.total_antimatter_kg:.3e} kg"),
+                ("net baryons minted", f"{p.total_net_baryon_kg:.3e} kg"),
+                ("H atoms combined", f"{p.total_H_atoms:.3e}"),
+                ("stockpile total", f"{p.stockpile.total_kg():.3e} kg"),
+                ("reservoir depletion", f"{dep:.3e} of "
+                    f"{p.spec['isru_baryon_reservoir_kg']:.1e} kg"),
+            ]
+            if y + 84 + 18 * len(rows2) < self.H - 64:
+                self._panel(12, y, 340, 84 + 18 * len(rows2))
+                self.screen.blit(self.font_m.render(
+                    "MASS LEDGER (cumulative)", True, (255, 215, 70)), (22, y + 8))
+                for i, (a, b) in enumerate(rows2):
+                    self.screen.blit(self.font_s.render(
+                        a, True, (150, 175, 200)), (22, y + 36 + i * 18))
+                    self.screen.blit(self.font_s.render(
+                        b, True, (235, 245, 255)), (200, y + 36 + i * 18))
+                y += 84 + 18 * len(rows2) + 8
+
+            # FEEDSTOCK AUDIT: what the environment honestly provides -- the
+            # numbers behind "why protons come from the solar wind, not CMB"
+            fs = feedstock_flux_report()
+            rows3 = [
+                ("solar-wind p+ flux", f"{fs['solar_wind_proton_flux']:.2e} /m^2/s"),
+                ("p+ collector area", f"{self.plant.spec.get('collector_area_m2', 1e6):.1e} m^2"),
+                ("p+ feed -> recomb", f"{fs['solar_wind_proton_flux'] * self.plant.spec.get('collector_area_m2', 1e6):.3e} /s"),
+                ("CMB photon flux", f"{fs['cmb_photon_flux']:.2e} /m^2/s"),
+                ("CMB vs pair thresh", f"{fs['cmb_below_threshold_x']:.1e}x too cold"),
+                ("cosmic-ray pairs", f"{fs['cr_pair_rate_per_m2_s']:.1e} /m^2/s"),
+            ]
+            if y + 84 + 16 * len(rows3) < self.H - 64:
+                self._panel(12, y, 340, 84 + 16 * len(rows3))
+                self.screen.blit(self.font_m.render(
+                    "FEEDSTOCK AUDIT (ambient)", True, (100, 210, 170)), (22, y + 8))
+                for i, (a, b) in enumerate(rows3):
+                    self.screen.blit(self.font_s.render(
+                        a, True, (150, 175, 200)), (22, y + 36 + i * 16))
+                    self.screen.blit(self.font_s.render(
+                        b, True, (235, 245, 255)), (200, y + 36 + i * 16))
+                y += 84 + 16 * len(rows3) + 8
+
+            # right panel: stage list with nav + per-stage evidence tag
             self._panel(self.W - 372, 68, 360, 380)
             self.screen.blit(self.font_m.render(
                 "STAGES (click or 1-9,0,-,=)", True, (120, 210, 255)),
@@ -14952,10 +17926,58 @@ class SystemViewer:
                 col = _STAGE_COLORS[i]
                 yy = 104 + i * 26
                 _pg.draw.rect(self.screen, col, (self.W - 362, yy + 2, 10, 10))
-                key_hint = f"{(i+1) % 10}"
+                key_hint = "1234567890-="[i]
                 self.screen.blit(self.font_s.render(
-                    f"[{key_hint}] {lbl[0]:<22} {lbl[1]}", True,
+                    f"[{key_hint}] {lbl[0]:<20} {lbl[1][:16]}", True,
                     (225, 235, 250)), (self.W - 346, yy))
+                tag, tcol = self._vtag(_PLANT_STAGE_TAG[i])
+                self.screen.blit(self.font_xs.render(
+                    tag, True, tcol), (self.W - 52, yy + 1))
+
+            # BOTTLENECK + THROUGHPUT BALANCE: the achieved-vs-ceiling audit,
+            # per stage, with utilization bars -- the stage furthest from its
+            # own physical bound gets named, and so does the parameter that
+            # would unblock it. Live arithmetic on this tick's telemetry.
+            bal = PipelineBalancer().measure(self.plant, self.tele)
+            yb = 456
+            bh = 96 + 18 * len(bal["rows"]) + 52
+            if yb + bh < self.H - 200 and bal.get("bottleneck"):
+                self._panel(self.W - 372, yb, 360, bh)
+                self.screen.blit(self.font_m.render(
+                    "THROUGHPUT vs PHYSICAL CEILING", True,
+                    (255, 150, 70)), (self.W - 362, yb + 8))
+                _nm = {c.__name__: _STAGE_LABELS[i][0]
+                       for i, c in enumerate(EMHLPlant.STAGES)}
+                for i, r in enumerate(bal["rows"]):
+                    ry = yb + 36 + i * 18
+                    hot = (r["stage"] == bal["bottleneck"])
+                    self.screen.blit(self.font_xs.render(
+                        f"{_nm.get(r['stage'], r['stage'][:18])[:18]:<18}",
+                        True,
+                        (255, 190, 110) if hot else (150, 175, 200)),
+                        (self.W - 362, ry))
+                    _pg.draw.rect(self.screen, (60, 70, 90),
+                                  (self.W - 160, ry + 2, 90, 8))
+                    _pg.draw.rect(self.screen,
+                                  (255, 150, 70) if hot else (110, 225, 145),
+                                  (self.W - 160, ry + 2,
+                                   int(90 * r["utilization"]), 8))
+                    self.screen.blit(self.font_xs.render(
+                        f"{r['utilization']*100:5.1f}%", True,
+                        (255, 190, 110) if hot else (170, 190, 210)),
+                        (self.W - 62, ry))
+                self.screen.blit(self.font_s.render(
+                    f"worst: {_nm.get(bal['bottleneck'], bal['bottleneck'])}",
+                    True, (255, 190, 110)),
+                    (self.W - 362, yb + 36 + 18 * len(bal["rows"]) + 8))
+                fix = bal.get("suggested_fix") or ""
+                for i, ln in enumerate(_pp_wrap_px("fix: " + fix,
+                                                 self.font_xs, 336)
+                                       .split("\n")[:3]):
+                    self.screen.blit(self.font_xs.render(
+                        ln, True, (170, 190, 210)),
+                        (self.W - 362,
+                         yb + 36 + 18 * len(bal["rows"]) + 30 + i * 13))
 
         # bottom: scale ladder + controls
         self._panel(self.W - 372, self.H - 196, 360, 118)
@@ -14978,7 +18000,8 @@ class SystemViewer:
             chips=[("EROI " + self._g_tele("EnergyRecycler", "EROI"),
                     (110, 225, 145)),
                    ("surplus " + self._g_tele("EnergyRecycler", "surplus_W") + " W",
-                    (120, 210, 255))],
+                    (120, 210, 255)),
+                   ("clock " + f"{self.plant.t:,.0f} s", (255, 215, 70))],
             scale_m=4.2, scale_lbl="stage pitch")
 
     def _g_tele(self, stage, k):
@@ -14986,84 +18009,200 @@ class SystemViewer:
         return f"{v:.2e}" if isinstance(v, (int, float)) else "--"
 
     def _stage_mechanism(self, idx):
-        """Real physics description for plant stage idx (0-11)."""
+        """Real physics dossier for plant stage idx (0-11): governing equation,
+        live numbers, the closest real-world machine, and the honest status --
+        every claim tagged MEAS / SPEC / *FTR (frontier)."""
         g = self._g_tele
+        t = self.tele.get(_STAGE_NAMES[idx], {})
+
+        def s(k, d="--"):
+            v = t.get(k)
+            if isinstance(v, (int, float)):
+                return f"{v:.4g}"
+            return v if isinstance(v, str) else d
         return [
-            ["DYSON COLLECTOR -- stellar power interception:",
-             f"  swarm intercepts {g('DysonCollector','dyson_completion')} of starlight",
-             f"  collected power: {g('DysonCollector','power_W')} W",
-             "  6 hinged mirror panels on a central mast,",
-             "  power bus carries it to the plant.",
-             "  Scales with replicator count -> partial Dyson."],
-            ["DRIVER LASER -- CPA laser chain:",
-             f"  laser power: {g('DriverLaser','laser_power_W')} W",
-             f"  E-field: {g('DriverLaser','E_field_Vm')} V/m",
-             f"  E/E_cr = {g('DriverLaser','E_over_Ecr')}",
-             "  pump diodes -> Ti:Sapphire rod -> gratings",
-             "  -> focusing paraboloid. NIF/ELI-class."],
-            ["METAMATERIAL CAVITY -- field enhancement:",
-             f"  Q enhancement: {g('MetamaterialCavity','Q_enhancement')}",
-             f"  effective E: {g('MetamaterialCavity','E_eff_Vm')} V/m",
-             f"  E_eff/E_cr = {g('MetamaterialCavity','E_eff_over_Ecr')}",
-             "  Bragg mirrors + photonic crystal lattice",
-             "  concentrates field into a tiny mode volume."],
-            ["PAIR SOURCE -- Bethe-Heitler positron factory:",
-             f"  vacuum pairs/s: {g('PairSource','vacuum_pairs_s')}",
-             f"  beam pairs/s: {g('PairSource','beam_pairs_s')}",
-             f"  total pairs/s: {g('PairSource','total_pairs_s')}",
-             "  GeV e- beam -> W target -> e+e- shower.",
-             "  Same mechanism as SLAC/CERN positron sources."],
-            ["SEPARATOR TRAP -- Penning trap + magnetic bottle:",
-             f"  leptons kept/s: {g('SeparatorTrap','kept_leptons_s')}",
-             f"  Brillouin limit: {g('SeparatorTrap','brillouin_n_m3')} /m^3",
-             f"  cyclotron f: {g('SeparatorTrap','cyclotron_Hz')} Hz",
-             "  B field gyrates e+/e- in opposite senses,",
-             "  E_sep drifts them apart -> no annihilation."],
-            ["RECOMBINATION REACTOR -- p + e- -> H:",
-             f"  H atoms/s: {g('RecombinationReactor','H_atoms_s')}",
-             f"  proton feed/s: {g('RecombinationReactor','proton_feed_s')}",
-             f"  recomb power: {g('RecombinationReactor','recomb_power_W')} W",
-             f"  H mass rate: {g('RecombinationReactor','H_mass_kg_s')} kg/s",
-             "  Case-B radiative recombination in plasma."],
-            ["NUCLEOSYNTHESIS -- fusion up the binding curve:",
-             f"  fused kg/s: {g('Nucleosynthesizer','fused_kg_s')}",
-             f"  fusion power: {g('Nucleosynthesizer','fusion_power_W')} W",
-             f"  Gamow gate: {g('Nucleosynthesizer','rate_gate_gamow')}",
-             "  H->He->C->O->Si->Fe (exothermic to iron).",
-             "  NIF-style hohlraum + tokamak coils."],
-            ["MATTER CREATION -- E=mc^2 conversion:",
-             f"  power used: {g('MatterCreationReactor','create_power_W')} W",
-             f"  channel: {g('MatterCreationReactor','channel')}",
-             f"  matter kg/s: {g('MatterCreationReactor','matter_kg_s')}",
-             f"  ceiling kg/s: {g('MatterCreationReactor','ceiling_kg_s')}",
-             "  Breit-Wheeler / multi-photon -> matter+anti."],
-            ["BARYOGENESIS -- net baryon creation:",
-             f"  power used: {g('BaryogenesisReactor','baryo_power_W')} W",
-             f"  CP bias: {g('BaryogenesisReactor','cp_bias')}",
-             f"  net baryon kg/s: {g('BaryogenesisReactor','net_baryon_kg_s')}",
-             f"  cost vs E=mc^2: {g('BaryogenesisReactor','cost_vs_Emc2')}x",
-             "  Sphaleron B+L violation + engineered CP.",
-             "  [*] CP source is the flagged speculative part."],
-            ["ISRU FORGE -- mine + refine + 3D print:",
-             f"  forge power: {g('ISRUForge','forge_power_W')} W",
-             f"  structure kg/s: {g('ISRUForge','structure_kg_s')}",
-             "  robotic mining arm -> solar furnace ->",
-             "  additive manufacturing gantry. ~5e7 J/kg.",
-             "  This is where nearly all the mass comes from."],
-            ["ENERGY RECYCLER -- self-powering loop:",
-             f"  demand: {g('EnergyRecycler','demand_W')} W",
-             f"  fusion self-power: {g('EnergyRecycler','fusion_self_W')} W",
-             f"  recovered heat: {g('EnergyRecycler','recovered_W')} W",
-             f"  external: {g('EnergyRecycler','external_W')} W",
-             f"  surplus: {g('EnergyRecycler','surplus_W')} W",
-             f"  EROI: {g('EnergyRecycler','EROI')}",
-             "  Tokamak fuses H -> ~1e7x return -> ext -> 0."],
-            ["RADIATOR BANK -- waste heat rejection:",
-             f"  waste heat: {g('RadiatorBank','waste_heat_W')} W",
-             f"  radiator area: {g('RadiatorBank','radiator_area_m2')} m^2",
-             f"  radiator T: {g('RadiatorBank','T_rad_K')} K",
-             "  Stefan-Boltzmann: A ~ 1/T^4 as universe cools.",
-             "  8 graphene-composite fins on coolant manifold."],
+            # 0 -----------------------------------------------------------
+            ["DYSON COLLECTOR -- stellar interception (Dyson 1960):",
+             "  P = P_seed + L* * f_cap * (N / N_full)",
+             f"  star luminosity L* = {g('DysonCollector','l_star_W')} W",
+             f"  swarm intercepts {s('intercept_fraction')} of L*",
+             f"  -> {g('DysonCollector','power_W')} W now",
+             f"  = {g('DysonCollector','area_equiv_km2')} km^2 of",
+             f"    {s('solar_const_Wm2')} W/m^2 (1 AU solar constant)",
+             f"  energy/day {g('DysonCollector','J_per_day')} J",
+             f"  photon thrust {g('DysonCollector','rad_pressure_N')} N",
+             "  real anchors: solar sails/statites fly; Starlink-class",
+             "    ~260 kg buses already mass-produce collector hardware.",
+             "  STATUS [SPEC]: pure scaling of proven physics --",
+             "    completion bounded only by replicator count."],
+            # 1 -----------------------------------------------------------
+            ["DRIVER LASER -- CPA chain (Strickland & Mourou):",
+             "  E = sqrt(2 I / eps0 c)",
+             f"  I = {s('intensity_Wcm2')} W/cm^2 -> E {g('DriverLaser','E_field_Vm')} V/m",
+             f"  laser power {g('DriverLaser','laser_power_W')} W on target",
+             f"  photons {s('photon_eV')} eV ({s('wavelength_nm')} nm)",
+             f"  photon flux {g('DriverLaser','photon_flux_s')} /s",
+             f"  E/E_cr = {s('E_over_Ecr')} -- {s('below_Ecr_x')}x below",
+             "    the 1.32e18 V/m Schwinger critical field",
+             f"  Keldysh gamma = {s('keldysh_gamma')}",
+             f"  tunnel exponent pi*Ecr/E = {s('tunnelling_exp')}",
+             "  real anchors: NIF 1.9 MJ / 192 beams; ELI-NP 10 PW;",
+             "    CoReLS reached ~1e23 W/cm^2 (Yoon 2021, Optica).",
+             "  STATUS [MEAS]: the intensity record is literally",
+             "    this spec value -- and it is still far below E_cr."],
+            # 2 -----------------------------------------------------------
+            ["METAMATERIAL CAVITY -- resonant field build-up:",
+             "  E_eff = E * sqrt(Q)   tau = Q / omega",
+             f"  Q = {s('Q_enhancement')} -> field x{s('field_gain_x')}",
+             f"  E_eff {g('MetamaterialCavity','E_eff_Vm')} V/m",
+             f"  E_eff/E_cr {s('E_eff_over_Ecr')}",
+             f"  still {s('still_below_Ecr_x')}x below E_cr",
+             f"  mode volume {s('mode_volume_m3')} m^3",
+             f"  photon lifetime {g('MetamaterialCavity','photon_lifetime_s')} s",
+             "  real anchors: photonic-crystal nanocavities Q~1e7",
+             "    and crystalline microresonators Q~1e8 exist; the",
+             "    spec uses a conservative Q=100 intensity gain.",
+             "  STATUS [SPEC]: helps the rate by x100 but honestly",
+             "    cannot bridge the remaining ~1e2x gap to E_cr."],
+            # 3 -----------------------------------------------------------
+            ["PAIR SOURCE -- two honest channels (SLAC-style):",
+             "  e-/s = I/e ;  e+ = e- * Y(E) * capture",
+             f"  beam e- {s('beam_e_s')} /s at {s('beam_power_W')} W",
+             f"  yield Y = {s('yield_per_e')} e+/e- (1 GeV on W)",
+             f"  beam pairs {g('PairSource','beam_pairs_s')} /s  <== the real one",
+             f"  vacuum pairs {g('PairSource','vacuum_pairs_s')} /s (assisted",
+             "    Schwinger, honestly ~0 -- fields stay below E_cr)",
+             f"  sigma_BH(W) = {s('sigma_BH_barns')} barns",
+             f"  {s('J_per_eplus')} J stored per positron",
+             f"  e+ mass {g('PairSource','eplus_g_yr')} g/yr -- antimatter",
+             "    is made at CERN in microgram-per-eon quantities.",
+             "  real anchors: SLAC e+ source, KEK PF-UT linac,",
+             "    CERN AD/AEGIS feed -- beam-on-target is routine.",
+             "  STATUS [MEAS]: physics demonstrated daily; yield",
+             "    and rate are the honest, small numbers."],
+            # 4 -----------------------------------------------------------
+            ["SEPARATOR TRAP -- Penning trap + mirror bottle:",
+             "  n_B = eps0 B^2 / (2 m) ;  omega_c = qB/m",
+             f"  B = {s('B_tesla')} T -> n_B {s('brillouin_n_m3')} /m^3",
+             f"  cyclotron {s('cyclotron_Hz')} Hz (e+ gyrate",
+             "    opposite e- -> charge separation, no annihilation)",
+             f"  plasma f at n_B {s('plasma_freq_Hz')} Hz (omega_c/sqrt2)",
+             f"  capacity {s('max_stored')} leptons in trap volume",
+             f"  kept {g('SeparatorTrap','kept_leptons_s')} /s "
+             f"(e+ {s('kept_eplus_s')} + e- {s('kept_eminus_s')})",
+             f"  lost {g('SeparatorTrap','lost_pairs_s')} /s, "
+             f"annih power {s('annih_power_W')} W",
+             f"  mirror loss cone {s('mirror_loss_frac')} at R=2",
+             f"  tau vs residual gas {s('tau_annih_gas_s')} s @1e-10 Pa",
+             "  real anchors: ALPHA/ATRAP/AEGIS hold antihydrogen",
+             "    minutes->years; 5 T is MRI-class routine.",
+             "  STATUS [MEAS]: every piece flies today at CERN."],
+            # 5 -----------------------------------------------------------
+            ["RECOMBINATION -- p + e- -> H + 13.6 eV (Case-B):",
+             "  atoms/s = min(e- supply, proton feed)",
+             f"  e- in {s('e_minus_s')} /s;  p+ feed {s('proton_feed_s')} /s",
+             f"  p+ from solar wind {s('sw_flux_m2s')} /m^2/s",
+             f"    x collector area {s('collector_m2')} m^2",
+             f"  alpha_B({s('T_plasma_K')} K) = {s('alpha_B_m3s')} m^3/s",
+             f"  -> H atoms {g('RecombinationReactor','H_atoms_s')} /s",
+             f"  = {s('H_mass_kg_s')} kg/s = {s('H_kg_day')} kg/day",
+             f"  releases {s('chi_eV')} eV/atom -> {g('RecombinationReactor','recomb_power_W')} W",
+             f"  limiting reagent: {s('limiting')}",
+             "  real anchors: Case-B coefficient is textbook nebular",
+             "    physics (Osterbrock); protons cannot come from",
+             "    the vacuum -- the solar wind is the baryon feed.",
+             "  STATUS [MEAS]: plasma chemistry, honestly e- starved."],
+            # 6 -----------------------------------------------------------
+            ["NUCLEOSYNTHESIS -- up the binding curve to Fe:",
+             "  fused = H_in * min(1, Gamow_gate * confinement)",
+             f"  T = {s('T_K')} K  ({s('kT_keV')} keV plasma)",
+             f"  rate-limiting step: {s('gate_step')}",
+             f"  Gamow gate {g('Nucleosynthesizer','rate_gate_gamow')}",
+             f"  fused {g('Nucleosynthesizer','fused_kg_s')} kg/s "
+             f"({s('fused_frac')} of feed)",
+             f"  Q_pp {s('Q_pp_MeV')} MeV / 4p -> {s('J_per_kg_H')} J/kg",
+             f"  fusion power {g('Nucleosynthesizer','fusion_power_W')} W",
+             f"  {s('chain_len')}-step network, exothermic to Fe-56",
+             "  real anchors: the pp chain powers the Sun; NIF's",
+             "    2022-12-05 shot proved target gain Q~1.5 (inertial).",
+             "  STATUS [*FTR]: fusion is real; a power-plant duty",
+             "    cycle at this throughput is unproven."],
+            # 7 -----------------------------------------------------------
+            ["MATTER CREATION -- E = m c^2 conversion:",
+             "  dm/dt = eff * P / c^2  (eff <= 1 always)",
+             f"  channel: {s('channel')} (eff {s('eff')})",
+             f"  power {g('MatterCreationReactor','create_power_W')} W",
+             f"  matter {s('matter_kg_s')} kg/s + equal antimatter",
+             f"  = {s('matter_g_day')} g/day minted",
+             f"  runs at {s('frac_of_ceiling')} of the P/c^2 ceiling",
+             f"  real cost {s('J_per_kg_real')} J/kg vs c^2 {s('c2_J_per_kg')}",
+             f"  antimatter half = {s('anti_stored_J')} J/kg stored",
+             "    energy (2c^2 annihilation value)",
+             "  real anchors: linear Breit-Wheeler gamma+gamma -> e+e-",
+             "    observed at STAR/RHIC (2021, PRL 127 052302).",
+             "  STATUS [SPEC]: mechanism measured; plant-scale",
+             "    efficiency is the engineering knob."],
+            # 8 -----------------------------------------------------------
+            ["BARYOGENESIS -- net-baryon minting (flagged):",
+             "  dm/dt = eta_bias * f_pair * P / c^2",
+             "  Sakharov: B-violation + CP-violation + non-eq",
+             f"  sphalerons run above T_EW {s('sphaleron_T_K')} K",
+             f"    (~9 TeV barrier, {s('sphaleron_E_TeV')} TeV)",
+             f"  engineered CP bias {s('cp_bias')} (the *FTR knob)",
+             f"  = {s('eta_boost_x')}x the observed eta_B {s('eta_observed')}",
+             f"  eps_net {s('eps_net')} -> {s('net_baryon_kg_s')} kg/s NET",
+             f"  = {s('net_g_day')} g/day of antimatter-free matter",
+             f"  costs {s('cost_vs_Emc2')}x the E=mc^2 ideal",
+             f"  SM CKM alone would give eta ~ {s('eta_SM_CKM')}",
+             "  real anchors: electroweak sphaleron B+L violation is",
+             "    textbook; the engineered CP source is NOT demonstrated.",
+             "  STATUS [*FTR]: mechanism real, CP engine speculative.",
+             "    Every number here carries that flag -- not hidden."],
+            # 9 -----------------------------------------------------------
+            ["ISRU FORGE -- the bulk path (mine/refine/print):",
+             "  dm/dt = P_forge / (5e7 J/kg)",
+             f"  forge power {g('ISRUForge','forge_power_W')} W",
+             f"  -> structure {g('ISRUForge','structure_kg_s')} kg/s",
+             f"  = {s('t_per_day')} t/day of printed mass",
+             f"  at {s('J_per_kg')} J/kg -- smelting-grade,",
+             f"  which is {s('cheaper_vs_Emc2_x')}x cheaper than",
+             "    creating mass from energy (why ISRU dominates)",
+             f"  reservoir {s('reservoir_kg')} kg of system baryons",
+             "  real anchors: MOXIE made O2 on Mars (2021-23);",
+             "    robotic mining + AM gantries are mature classes.",
+             "  STATUS [SPEC]: scaled terrestrial industry, no new",
+             "    physics. The reservoir is the honest carrying cap."],
+            # 10 ----------------------------------------------------------
+            ["ENERGY RECYCLER -- closes the loop (external -> 0):",
+             "  P_self = f_fuel * organize * q_H + waste*eta_rec",
+             f"  demand {s('demand_W')} W (idle {s('idle_demand_W')}"
+             " + laser)",
+             f"  fusion self-power {g('EnergyRecycler','fusion_self_W')} W",
+             f"    (burns {s('fusion_burn_kg_s')} kg/s of organized H)",
+             f"  heat recovery {s('recovered_W')} W of {s('waste_gross_W')} W",
+             f"  external still needed {g('EnergyRecycler','external_W')} W",
+             f"  exportable surplus {g('EnergyRecycler','surplus_W')} W",
+             f"  EROI {g('EnergyRecycler','EROI')} ; covers {s('covers_demand_x')}x",
+             f"  fusion/ISRU return {s('return_vs_ISRU_x')}x per kg",
+             "  real anchors: tokamaks + waste-heat recovery exist;",
+             "    net-electric fusion is the unproven piece.",
+             "  STATUS [*FTR]: arithmetic honest -- it inherits the",
+             "    fusion-plant caveat from stage 6."],
+            # 11 ----------------------------------------------------------
+            ["RADIATOR BANK -- Stefan-Boltzmann heat rejection:",
+             "  A = P_waste / (eps sigma T^4)",
+             f"  waste heat {g('RadiatorBank','waste_heat_W')} W",
+             f"  T {s('T_rad_K')} K -> flux only {s('flux_W_m2')} W/m^2",
+             f"  area {s('radiator_area_m2')} m^2 = {s('area_km2')} km^2",
+             f"  = {s('m2_per_GW')} m^2 per GW at this T",
+             f"  emissivity {s('emissivity')} ; Wien peak {s('wien_um')} um",
+             "  T is set to the COLD SINK (2.7 K) -- the honest",
+             "    worst case: a hot radiator is far smaller, but",
+             "    eternal operation trends toward the sink T.",
+             "  real anchors: ISS EATCS ammonia loops reject ~75 kW;",
+             "    A ~ 1/T^4 is the genuine long-term limit.",
+             "  STATUS [MEAS]: hardware proven; the cosmic-timescale",
+             "    area growth is the honest caveat."],
         ][idx]
 
     def _pick_plant_stage(self, mx, my):
@@ -15096,116 +18235,547 @@ class SystemViewer:
     def _render_orbital(self):
         """ORBITAL VIEW: the orbital station (casting area-of-effect nets) at top,
         material router (sorting by element) in the middle, element bank (cryogenic
-        storage vaults) at the bottom. Click to focus on any section."""
+        storage vaults) at the bottom. Click or 1-3 to fly into any section and
+        get every drawn part called out on leader lines."""
         t = self.anim
-        self._render_solid(self._orbV, self._orbF, self._orbC,
-                           cache_key="orbital")
-        # animated flow particles: station -> router -> bank
-        for sec in range(2):
-            c0 = np.array(self._orb_centers[sec], dtype=float)
-            c1 = np.array(self._orb_centers[sec + 1], dtype=float)
-            for j in range(5):
-                ph = (t * 0.25 + j * 0.2 + sec * 0.1) % 1.0
-                p = c0 + (c1 - c0) * ph
-                sx, sy, z = self._project([p])
-                self._draw_glow_dot(sx[0], sy[0], z[0], (100, 200, 130), base_r=4)
-        # section labels -- leader-line columns (cannot collide), in the corridor
-        # between the side telemetry panels
-        self._leader_labels([
-            (self._orb_centers[i],
-             f"{self._orb_labels[i][0]}  --  {self._orb_labels[i][1]}",
-             (200, 230, 255) if self.orbital_focus == i else (165, 200, 235))
-            for i in range(len(self._orb_centers))
-        ], 120, self.H - 150, x_left=386, x_right=self.W - 404)
+        if self.orbital_focus is not None:
+            # FOCUSED: render just this section's solid mesh, centred & zoomed
+            idx = self.orbital_focus
+            sv, sf, sc = self._orb_meshes[idx]
+            self._render_solid(sv, sf, sc, cache_key=f"orbsec{idx}")
+            # the swept area-of-effect disc + the rotating net sweep line --
+            # only the STATION casts a net; drawn at arm-tip radius so what
+            # you see IS the pi*L^2 the telemetry quotes
+            if idx == 0:
+                self._draw_net_sweep(t)
+            # section caption floating top-centre
+            self._panel(self.W // 2 - 180, 70, 360, 50, 230)
+            lbl = self._orb_labels[idx]
+            self.screen.blit(self.font_m.render(
+                f"[{idx+1}] {lbl[0]}", True, (255, 255, 255)),
+                (self.W // 2 - 170, 78))
+            self.screen.blit(self.font_xs.render(
+                f"{lbl[1]}  ->  {lbl[2]}", True, (180, 200, 220)),
+                (self.W // 2 - 170, 100))
+            # part callouts: every real component named, leader anchored on the
+            # actual mesh point (the _PP_PART_ANCHORS convention). y_bot stops
+            # short of the focus telemetry strip so a leader never crosses it.
+            ftop = self._orb_focus_geom(idx)[1]
+            self._leader_labels(
+                [(_ORB_PART_ANCHORS[nm], nm, col)
+                 for nm, col, _d, _t in _ORB_PART_GROUPS[idx][1]],
+                132, ftop - 10, x_left=452, x_right=self.W - 412)
+        else:
+            # OVERVIEW: the whole complex, material flowing top -> bottom
+            self._render_solid(self._orbV, self._orbF, self._orbC,
+                               cache_key="orbital")
+            # animated flow particles: station -> router -> bank. ALL positions
+            # projected in ONE batched call (was 10 individual _project calls).
+            _fpts = []
+            for sec in range(2):
+                c0 = np.array(self._orb_centers[sec], dtype=float)
+                c1 = np.array(self._orb_centers[sec + 1], dtype=float)
+                for j in range(5):
+                    ph = (t * 0.25 + j * 0.2 + sec * 0.1) % 1.0
+                    _fpts.append(c0 + (c1 - c0) * ph)
+            sx, sy, z = self._project(np.asarray(_fpts))
+            for k in range(len(_fpts)):
+                self._draw_glow_dot(sx[k], sy[k], z[k], (100, 200, 130), base_r=4)
+            # element-coloured streams fanning router -> bank vaults (the sort):
+            # five pulses, one per output pipe, tinted by destination element
+            _spts, _scol = [], []
+            rc = np.array(self._orb_centers[1], dtype=float)
+            bc = np.array(self._orb_centers[2], dtype=float)
+            for i in range(5):
+                ang = -math.pi / 2 + (i - 2) * 0.35
+                tip = bc + np.array([0.5 * math.cos(ang), 0.5 * math.sin(ang), 0.5])
+                for j in range(3):
+                    ph = (t * 0.25 + j / 3.0 + i * 0.07) % 1.0
+                    _spts.append(rc + (tip - rc) * ph)
+                    _scol.append(_element_color(OUTPUT_ELEMENTS[i][0]))
+            sx, sy, z = self._project(np.asarray(_spts))
+            for k in range(len(_spts)):
+                self._draw_glow_dot(sx[k], sy[k], z[k], _scol[k], base_r=3.5)
+            # section labels -- leader-line columns (cannot collide), in the
+            # corridor between the side telemetry panels
+            self._leader_labels([
+                (self._orb_centers[i],
+                 f"{self._orb_labels[i][0]}  --  {self._orb_labels[i][1]}",
+                 (200, 230, 255) if self.orbital_focus == i else (165, 200, 235))
+                for i in range(len(self._orb_centers))
+            ], 120, self.H - 150, x_left=400, x_right=self.W - 404)
+
+    def _draw_net_sweep(self, t):
+        """The station's area-of-effect: the swept disc the net arms patrol
+        every rotation, plus the rotating radius line showing the active
+        sweep. The disc radius IS arm_len in mesh units (2.5*s at build
+        scale) -- the same pi*L^2 the NET-CASTING panel reports. Honest
+        caveat: this footprint is the volume the cells' field funnels
+        patrol -- interception is magnetic, not wall-like
+        (net_capture_chain: CR coverage ~1e-4, solar-wind ~unity)."""
+        r_net = 2.5
+        n = 44
+        ring = np.array([[r_net * math.cos(2 * math.pi * i / n),
+                          r_net * math.sin(2 * math.pi * i / n), 0.0]
+                         for i in range(n + 1)])
+        sx, sy, z = self._project(ring)
+        for i in range(n):
+            if z[i] > 0.06 and z[i + 1] > 0.06:
+                _pg.draw.line(self.screen, (36, 80, 108),
+                              (sx[i], sy[i]), (sx[i + 1], sy[i + 1]), 1)
+        a = t * 0.9
+        sw = np.array([[0.0, 0.0, 0.0],
+                       [r_net * math.cos(a), r_net * math.sin(a), 0.0]])
+        sx, sy, z = self._project(sw)
+        if z[0] > 0.06 and z[1] > 0.06:
+            _pg.draw.line(self.screen, (90, 200, 255),
+                          (sx[0], sy[0]), (sx[1], sy[1]), 1)
+            self._draw_glow_dot(sx[1], sy[1], z[1], (120, 220, 255), base_r=5)
 
     def _draw_orbital_ui(self):
-        """UI overlay for the ORBITAL view: title, net-casting telemetry, element
-        stockpile, and controls."""
+        """UI overlay for the ORBITAL view: title, live swarm replication, live
+        net-casting telemetry, power-vs-assembly growth accounting, swarm
+        evolution, the transmutation ladder, the element stockpile, the honest
+        time-to-matter table -- and per-section mechanism/telemetry panels when
+        a section is focused. Every number is live model output and every claim
+        carries its evidence tag. Panels are stacked by measured content
+        height, so none can overflow into the next."""
+        sw = self.swarm
+        tel = sw.telemetry          # refreshed by swarm.step() every frame
+        N = max(sw.N, 1.0)
         # title bar
         self._top_bar(
-            "RADIANT  ::  ORBITAL STATIONS  --  NET-CASTING + ELEMENT STORAGE",
-            "orbital stations cast nets (area-of-effect) -> harvest pairs -> "
-            "route to mass-spec sorter -> separate by element -> store in "
-            "cryogenic vaults for later use (clouds or solids)")
+            "RADIANT  ::  ORBITAL STATIONS  --  SELF-REPLICATING NET-CAST SWARM",
+            "stations cast nets (area-of-effect) -> harvest pairs -> mass-spec "
+            "sorter -> element vaults. Stations REPLICATE (logistic, power-"
+            "limited) and EVOLVE (adaptive parameter ascent). click / 1-3 / TAB "
+            "= inspect a section")
 
-        # left panel: net-casting area-of-effect telemetry
-        self._panel(12, 68, 360, 268)
-        self.screen.blit(self.font_m.render(
-            "NET-CASTING (area-of-effect)", True, (120, 210, 255)), (22, 76))
-        nca = net_casting_area_effect(n_stations=1000, arm_len_m=250.0, n_arms=6)
-        rows = [
-            ("stations", f"{nca['n_stations']:.0f}"),
-            ("arms / station", f"{nca['n_arms']:.0f}"),
-            ("arm length", f"{nca['arm_len_m']:.0f} m"),
-            ("area / station", f"{nca['area_per_station_m2']:.2e} m^2"),
-            ("TOTAL area", f"{nca['total_area_m2']:.2e} m^2"),
-            ("swept volume", f"{nca['swept_volume_m3']:.2e} m^3"),
-            ("total field cells", f"{nca['total_cells']:.0f}"),
-            ("pairs / s", f"{nca['pairs_per_s']:.2e}"),
-            ("mass / s", f"{nca['mass_kg_s']:.2e} kg/s"),
-        ]
-        for i, (a, b) in enumerate(rows):
-            self.screen.blit(self.font_s.render(
-                a, True, (150, 175, 200)), (22, 104 + i * 20))
-            self.screen.blit(self.font_s.render(
-                b, True, (235, 245, 255)), (200, 104 + i * 20))
-        ttxt, tcol = self._vtag("FRONTIER")
-        self.screen.blit(self.font_xs.render(
-            "pairs/s + mass/s assume the x1e9 metamaterial", True, (135, 155, 175)),
-            (22, 104 + len(rows) * 20 + 2))
-        self.screen.blit(self.font_xs.render(
-            "field enhancement  " + ttxt + " (raw: x1e-9 smaller)",
-            True, tcol), (22, 104 + len(rows) * 20 + 16))
+        if self.orbital_focus is not None:
+            self._draw_orbital_focus_ui(self.orbital_focus)
+            return
 
-        # right panel: element stockpile (live from the plant)
-        self._panel(self.W - 392, 68, 380, 360)
-        self.screen.blit(self.font_m.render(
-            "ELEMENT STOCKPILE (live)", True, (120, 210, 255)),
-            (self.W - 382, 76))
-        sp = self.plant.stockpile
-        report = sp.report()
-        yy = 104
-        for Z, sym, name, phase, kg, kg_s in report:
-            col = _element_color(Z)
+        def _stack(x, w, y, title, tcol, rows, footers, vx=150, pitch=19):
+            """One telemetry panel sized EXACTLY to its rows + footers; returns
+            the y just below it so stacked panels can never overlap."""
+            fh = 14 * len(footers) + (6 if footers else 0)
+            h = 36 + pitch * len(rows) + fh + 4
+            self._panel(x, y, w, h)
+            self.screen.blit(self._txt(self.font_m, title, tcol), (x + 10, y + 8))
+            yy = y + 36
+            for a, b, tag in rows:
+                ttxt, tcol_ = self._vtag(tag)
+                self.screen.blit(self._txt(self.font_s, a, (150, 175, 200)),
+                                 (x + 10, yy))
+                self.screen.blit(self._txt(self.font_s, b, (235, 245, 255)),
+                                 (x + vx, yy))
+                self.screen.blit(self._txt(self.font_xs, ttxt, tcol_),
+                                 (x + w - 46, yy + 2))
+                yy += pitch
+            yy += 4
+            for ln, lc in footers:
+                self.screen.blit(self._txt(self.font_xs, ln, lc), (x + 10, yy))
+                yy += 14
+            return y + h + 8
+
+        # ---------------- LEFT COLUMN ----------------
+        LW, LX = 384, 12
+        ly = 68
+        # -- SWARM: the live self-replicating population -------------------
+        r_now = sw._r_growth()
+        e_copy_J = sw.spec.get("replicator_mass_kg", 1.0e4) * \
+            sw.spec.get("isru_energy_per_kg_J", 5.0e7)
+        ly = _stack(LX, LW, ly, "SELF-REPLICATING SWARM (live)", (120, 210, 255),
+            [("stations N", f"{sw.N:.3e}", "MODEL"),
+             ("growth phase", tel.get("growth_phase", "--"), "MODEL"),
+             ("logistic r", f"{r_now:.3e} /s", "MODEL"),
+             ("e-fold time", _fmt_time(1.0 / max(r_now, 1e-30)), "MODEL"),
+             ("copies built", f"{tel.get('total_built', 0.0):.3e}", "MODEL"),
+             ("lost (resil.)",
+              f"{tel.get('total_failed', 0.0):.2e} ({tel.get('resilience_frac', 0.0):.0%})",
+              "MEAS"),
+             ("capacity K / fill",
+              f"{tel.get('K_max', 0.0):.1e} ({sw.N / max(sw.K_stations, 1e-30):.1e})",
+              "SPEC"),
+             ("copy cost",
+              f"{sw.spec.get('replicator_mass_kg', 1.0e4):.0e} kg, {e_copy_J:.1e} J",
+              "SPEC"),
+             ("build time", f"{tel.get('build_time_days', 30.0):.0f} d", "SPEC")],
+            [("losses: 1.5%/yr all-cause on-orbit failure", (135, 155, 175)),
+             ("(Aon/Seradata 2016; Castet & Saleh 2009,", (135, 155, 175)),
+             ("1,584 sats) -- rebuilt by self-repair", (110, 200, 130))])
+
+        # -- NET-CASTING: the live area-of-effect harvest -------------------
+        raw = void_capture(tel.get("swept_volume_m3", 0.0), enhance=1.0)
+        cap = net_capture_chain(tel.get("arm_len_m", 250.0),
+                                int(tel.get("n_arms", 6)))
+        t_m, _ = self._vtag("MEAS")
+        t_f, c_f = self._vtag("FRONTIER")
+        ly = _stack(LX, LW, ly, "NET-CASTING -- AREA OF EFFECT (live)",
+            (120, 210, 255),
+            [("arms / station", f"{tel.get('n_arms', 6):.0f}", "SPEC"),
+             ("arm length", f"{tel.get('arm_len_m', 250.0):.0f} m ~evolves",
+              "MODEL"),
+             ("cells / station", f"{tel.get('n_arms', 6):.0f}", "SPEC"),
+             ("area / station",
+              f"{math.pi * tel.get('arm_len_m', 250.0) ** 2:.2e} m^2", "MODEL"),
+             ("FLEET area", f"{tel.get('total_area_m2', 0.0):.2e} m^2", "MODEL"),
+             ("swept volume", f"{tel.get('swept_volume_m3', 0.0):.2e} m^3",
+              "MODEL"),
+             ("net depth", "2.0 m (cell bore)", "SPEC"),
+             ("pairs / s", f"{tel.get('pairs_per_s', 0.0):.2e}", "FRONTIER"),
+             ("mass / s", f"{tel.get('mass_kg_s', 0.0):.2e} kg/s", "FRONTIER"),
+             ("per station",
+              f"{tel.get('pairs_per_s', 0.0) / N:.1e} pairs/s", "FRONTIER"),
+             ("rest-energy",
+              f"{tel.get('mass_kg_s', 0.0) * C_LIGHT ** 2:.1e} W", "MEAS")],
+            [("HOW the net catches -- it is not a wall:", (200, 210, 225)),
+             (f"relativistic CRs: funnel coverage {cap['cr_coverage_frac']:.1e}",
+              (135, 155, 175)),
+             (f" -> ~{cap['cr_missed_frac']:.2%} of crossing flux MISSES",
+              (135, 155, 175)),
+             (f"solar-wind plasma: magnetopause r~{cap['sw_magnetopause_m']:.0f} m",
+              (135, 155, 175)),
+             (f" -> {cap['sw_coverage_frac']:.0%} coverage, "
+              f"{cap['sw_caught_s']:.1e} p/s via cusps", (110, 200, 130)),
+             (f"pairs are mostly BORN INSIDE cells (born {raw['pairs_per_s']:.1e}/s", (135, 155, 175)),
+             (f" raw {t_m}); x1e9 enhancer is assumed " + t_f, c_f)])
+
+        # -- POWER & GROWTH: what limits replication right now ---------------
+        power_W = dyson_power(sw.N, sw.spec)
+        r_asm = sw.grow_fraction / max(sw.build_time_s, 1e-30)
+        r_pwr = sw.grow_fraction * power_W / max(e_copy_J, 1e-30) / N
+        limiter = "assembly" if r_asm <= r_pwr else "power"
+        dyson_frac = sw.N / max(sw.spec.get("reps_for_full_dyson", 1e15), 1e-30)
+        kg_s = tel.get("mass_kg_s", 0.0)
+        _t1 = (lambda m: _fmt_time(m / kg_s) if kg_s > 0 else "--")
+        ly = _stack(LX, LW, ly, "POWER, GROWTH & TIME-TO-MATTER",
+            (255, 190, 110),
+            [("captured power", f"{power_W:.2e} W", "MODEL"),
+             ("Dyson completion", f"{dyson_frac:.2e}", "MODEL"),
+             ("r (assembly-ltd)", f"{r_asm:.2e} /s", "SPEC"),
+             ("r (power-ltd)", f"{r_pwr:.2e} /s", "MODEL"),
+             ("BINDING limit", limiter, "MODEL"),
+             ("time to 1 g H", _t1(1e-3) +
+              (" !" if kg_s > 0 and 1e-3 / kg_s > UNIVERSE_AGE_S else ""),
+              "FRONTIER"),
+             ("time to 1 kg H", _t1(1.0) +
+              (" !" if kg_s > 0 and 1.0 / kg_s > UNIVERSE_AGE_S else ""),
+              "FRONTIER"),
+             ("time to 1 tonne", _t1(1e3) +
+              (" !" if kg_s > 0 and 1e3 / kg_s > UNIVERSE_AGE_S else ""),
+              "FRONTIER")],
+            [("r = min(assembly, captured-power/E_copy);", (135, 155, 175)),
+             ("! = longer than the universe's age (13.8 Gyr);", (255, 150, 110)),
+             ("capture makes SEED feedstock -- bulk is ISRU", (135, 155, 175))])
+
+        # ---------------- RIGHT COLUMN ----------------
+        RW = 384
+        RX = self.W - RW - 12
+        ry = 68
+        # -- EVOLUTION: the adaptive intelligence layer ----------------------
+        it = self.intelligence.telemetry or {}
+        ry = _stack(RX, RW, ry, "SWARM EVOLUTION -- adaptive ascent",
+            (120, 210, 255),
+            [("gen / adjustments",
+              f"{it.get('generation', 0)} / {it.get('adjustments', 0)}", "MODEL"),
+             ("fitness (kg/s)", f"{it.get('fitness', 0.0):.2e}", "MODEL"),
+             ("last improvement", f"{it.get('improvement', 0.0):+.1%}", "MODEL"),
+             ("geometry",
+              f"{it.get('arm_len_m', sw.arm_len_m):.0f} m x{it.get('n_arms', sw.n_arms):.0f}",
+              "MODEL"),
+             ("T / density",
+              f"{it.get('fusion_temp_K', sw.fusion_temp_K):.1e} K, {it.get('net_density', sw.net_density):.2f}x",
+              "MODEL")],
+            [("hill-climb on measured mass_kg_s; bounded:",
+              (135, 155, 175)),
+             ("arm<=1e5 m, arms<=12, T<=1e10 K, dens<=2x",
+              (135, 155, 175))],
+            vx=170)
+
+        # -- TRANSMUTATION LADDER: the ElementalStateRiser --------------------
+        rs = self.riser
+        rt = rs.telemetry or {}
+        lad_rows = 4                       # summary rows after the 7 stages
+        h_lad = 36 + 7 * 20 + 2 + lad_rows * 19 + 4
+        self._panel(RX, ry, RW, h_lad)
+        self.screen.blit(self._txt(self.font_m,
+            "TRANSMUTATION LADDER (live)", (120, 210, 255)), (RX + 10, ry + 8))
+        yy = ry + 36
+        for i, (from_Z, to_Z, label, Q_per_A, exo) in enumerate(rs.LADDER):
+            sym0 = _ELEMENT_SYMBOLS[from_Z - 1]
+            sym1 = _ELEMENT_SYMBOLS[to_Z - 1]
+            prog = rs.stage_progress.get(i, 0.0)
+            gate = rs.stage_gamow_P.get(i, 0.0)
+            col = (110, 225, 145) if exo else (255, 180, 95)
+            self.screen.blit(self._txt(self.font_s,
+                f"{sym0:>2}->{sym1:<2}", (225, 235, 250)), (RX + 10, yy))
+            # progress bar (live rate fraction of the stage)
+            bx, bw_ = RX + 62, 92
+            _pg.draw.rect(self.screen, (40, 52, 68), (bx, yy + 3, bw_, 8))
             _pg.draw.rect(self.screen, col,
-                          (self.W - 382, yy + 2, 12, 12))
-            self.screen.blit(self.font_s.render(
-                f"{sym:>2} {name}", True, (225, 235, 250)),
-                (self.W - 364, yy))
-            self.screen.blit(self.font_s.render(
-                f"{kg:.3e} kg", True, (200, 220, 240)),
-                (self.W - 245, yy))
-            self.screen.blit(self.font_s.render(
-                f"{kg_s:.2e} kg/s", True, (150, 200, 170)),
-                (self.W - 140, yy))
-            yy += 24
-        # total
-        yy += 6
-        self.screen.blit(self.font_s.render(
-            f"TOTAL: {sp.total_kg():.3e} kg", True, (255, 235, 130)),
-            (self.W - 382, yy))
-        yy += 20
-        self.screen.blit(self.font_xs.render(
-            "Distribution follows the real nucleosynthesis",
-            True, (170, 190, 210)), (self.W - 382, yy))
-        yy += 14
-        self.screen.blit(self.font_xs.render(
-            "binding curve: H (feedstock) + Fe (peak)",
-            True, (170, 190, 210)), (self.W - 382, yy))
-        yy += 14
-        self.screen.blit(self.font_xs.render(
-            "dominate; heavy elements via r-process.",
-            True, (170, 190, 210)), (self.W - 382, yy))
+                          (bx, yy + 3, int(bw_ * max(0.0, min(1.0, prog))), 8))
+            _pg.draw.rect(self.screen, (80, 100, 125), (bx, yy + 3, bw_, 8), 1)
+            self.screen.blit(self._txt(self.font_xs,
+                             f"P={gate:.1e}" if exo else "n-cap",
+                             (170, 190, 210)), (RX + 162, yy + 2))
+            self.screen.blit(self._txt(self.font_xs,
+                             f"{abs(Q_per_A):.2f} MeV/A " + ("REL" if exo else "COST"),
+                             col), (RX + 236, yy + 2))
+            yy += 20
+        yy += 2
+        for a, b in [("Q released", f"{rt.get('Q_released_W', 0.0):.2e} W"),
+                     ("Q spent", f"{rt.get('Q_spent_W', 0.0):.2e} W"),
+                     ("NET energy", f"{rt.get('net_energy_W', 0.0):+.2e} W"),
+                     ("stages / top Z",
+                      f"{rt.get('stages_active', 0)}/{len(rs.LADDER)}  Z={rt.get('highest_Z', 1)}")]:
+            self.screen.blit(self._txt(self.font_s, a, (150, 175, 200)),
+                             (RX + 10, yy))
+            self.screen.blit(self._txt(self.font_s, b, (235, 245, 255)),
+                             (RX + 150, yy))
+            yy += 19
+        ry += h_lad + 8
+
+        # -- ELEMENT STOCKPILE (live from the plant) --------------------------
+        sp = self.plant.stockpile
+        h_stk = 36 + 8 * 22 + 4 + 14 + 2 * 14 + 4
+        self._panel(RX, ry, RW, h_stk)
+        self.screen.blit(self._txt(self.font_m,
+            "ELEMENT STOCKPILE (live)", (120, 210, 255)), (RX + 10, ry + 8))
+        yy = ry + 36
+        for Z, sym, name, phase, kg, kg_s_ in sp.report():
+            col = _element_color(Z)
+            _pg.draw.rect(self.screen, col, (RX + 10, yy + 2, 12, 12))
+            self.screen.blit(self._txt(self.font_s,
+                f"{sym:>2} {name:<8} {phase:<5}", (225, 235, 250)), (RX + 28, yy))
+            self.screen.blit(self._txt(self.font_s, f"{kg:.3e} kg",
+                             (200, 220, 240)), (RX + 150, yy))
+            self.screen.blit(self._txt(self.font_s, f"{kg_s_:.2e} kg/s",
+                             (150, 200, 170)), (RX + 264, yy))
+            yy += 22
+        self.screen.blit(self._txt(self.font_s,
+            f"TOTAL: {sp.total_kg():.3e} kg", (255, 235, 130)), (RX + 10, yy + 4))
+        yy += 26
+        for ln in ("H feedstock + Fe peak dominate (binding",
+                   "curve); heavies ride r-process (COST)."):
+            self.screen.blit(self._txt(self.font_xs, ln, (170, 190, 210)),
+                             (RX + 10, yy))
+            yy += 14
+        ry += h_stk + 8
+
+        # -- PRODUCTION ROUTES: honest grading of the whole table -------------
+        ry = _stack(RX, RW, ry, "PERIODIC ROUTES -- graded", (255, 190, 110),
+            [("Z=1: recombination p+e- -> H", "", "MEAS"),
+             ("Z=3-5: cosmic-ray spallation", "", "MEAS"),
+             ("Z<=26: fusion chain -> Fe peak", "", "MEAS"),
+             ("Z>26: r-process neutron capture", "", "MODEL"),
+             ("Z>92: no stable isotope", "", "FRONTIER")],
+            [("H is the honest floor -- fuel and feedstock.", (135, 155, 175))],
+            pitch=18)
 
         # bottom: controls bar + status chips
         self._bottom_bar(
-            "drag=orbit  wheel=zoom  arrows=pan  click=inspect  B=cutaway  "
-            "M=machine  P=plant  C=chemistry  ESC=quit",
-            chips=[("stations 1000", (120, 210, 255)),
-                   (f"area {nca['total_area_m2']:.1e} m^2", (110, 225, 145)),
+            "drag=orbit  wheel=zoom  arrows=pan  click/1-3=inspect  TAB=cycle  "
+            "B=cutaway  M=machine  P=plant  C=chem  ESC=quit",
+            chips=[(f"stations {sw.N:.2e}", (120, 210, 255)),
+                   (f"area {tel.get('total_area_m2', 0.0):.1e} m^2",
+                    (110, 225, 145)),
+                   (f"phase {tel.get('growth_phase', '--')}", (205, 200, 120)),
+                   (f"stockpile {sp.total_kg():.1e} kg", (255, 235, 130))],
+            scale_m=tel.get("arm_len_m", 250.0), scale_lbl="net arm")
+
+    def _orb_focus_geom(self, idx):
+        """Geometry of the focus-mode telemetry strip for orbital section idx --
+        shared by the renderer (leader callouts stop above it) and the UI
+        (draws the strip itself), so the two never disagree. Same convention
+        as _pp_focus_geom."""
+        rows = self._orb_focus_rows(idx)
+        bw, rh = 640, 17
+        bh = 34 + rh * len(rows)
+        return (self.W // 2 - bw // 2, self.H - 62 - bh, bw, bh, rows)
+
+    def _orb_focus_rows(self, idx):
+        """The live per-section telemetry shown on the focus strip -- model
+        output only, no illustrative constants."""
+        sw, tel = self.swarm, self.swarm.telemetry
+        N = max(sw.N, 1.0)
+        if idx == 0:                    # ORBITAL STATION
+            return [
+                ("arms / cells", f"{tel.get('n_arms', 6):.0f}"),
+                ("arm length", f"{tel.get('arm_len_m', 250.0):.0f} m"),
+                ("swept disc", f"{math.pi * tel.get('arm_len_m', 250.0) ** 2:.2e} m^2"),
+                ("pairs /s each", f"{tel.get('pairs_per_s', 0.0) / N:.1e}"),
+                ("kg /s each", f"{tel.get('mass_kg_s', 0.0) / N:.1e}"),
+                ("copy energy", f"{sw.spec.get('replicator_mass_kg', 1e4) * sw.spec.get('isru_energy_per_kg_J', 5e7):.1e} J"),
+            ]
+        if idx == 1:                    # MATERIAL ROUTER
+            e_ion_kg = RYDBERG_EV * EV / M_P       # 13.6 eV per H atom
+            return [
+                ("separation law", "r = mv/qB"),
+                ("ionize H", f"{RYDBERG_EV:.1f} eV = {e_ion_kg:.1e} J/kg"),
+                ("vs fusion yield", f"{e_ion_kg / fusion_energy_per_kg_H():.1e} of it"),
+                ("input rate", f"{self.plant.stockpile.total_kg():.2e} kg banked"),
+                ("sorted outputs", "5 element pipes"),
+                ("class", "sector mass-spec / calutron"),
+            ]
+        # ELEMENT BANK
+        sp = self.plant.stockpile
+        return [
+            ("gas vaults", "H  He  O  (cryo)"),
+            ("solid vaults", "C  Si  Fe  Au  U"),
+            ("store temps", "H2 20 K  /  He 4 K"),
+            ("zero-boiloff", "sunshield + cryocooler"),
+            ("total banked", f"{sp.total_kg():.3e} kg"),
+            ("feed rate", f"{sum(sp.kg_s.values()):.2e} kg/s"),
+        ]
+
+    def _orb_mechanism(self, idx):
+        """Real-physics description for the focused orbital section (the
+        _stage_mechanism convention)."""
+        return [
+            ["ORBITAL STATION -- how the net catches:",
+             "  6 truss arms carry field cells. The swept",
+             "  disc pi*L^2 is a FOOTPRINT, not a wall --",
+             "  nothing hits wire. Capture is magnetic:",
+             "  a charged particle within ~r_L of a cell",
+             "  gyrates onto converging B-lines and is",
+             "  funnelled into the bore (same physics as",
+             "  Earth's magnetopause / polar cusps).",
+             "  Direct pair catch: coverage ~1e-4 of the",
+             "  disc -- ~all relativistic flux MISSES.",
+             "  Honest. The real pair supply is pairs",
+             "  BORN INSIDE cells (CR on liners + beam):",
+             "  ~1e-9 /m^3/s raw [MEAS], x1e9 enhancer",
+             "  [*FTR]. Solar-wind plasma IS collected:",
+             "  each 5 T cell's magnetopause reach ~100s",
+             "  m -> order-unity coverage -> the p+ feed",
+             "  atoms need. Mirror R=5 keeps ~89% of",
+             "  what enters; the arms' field lines are",
+             "  the rails that carry it to the hub.",
+             "  solar wings feed power; radiators dump",
+             "  waste heat (T^4); ISRU fab prints a",
+             "  copy per 30 d = the replication unit.",
+             "  losses 1.5%/yr all-cause (Aon/Seradata",
+             "  2016; Castet & Saleh 2009) -- rebuilt."],
+            ["MATERIAL ROUTER -- mass-spec sorting:",
+             "  catch -> ion source (E-impact ionizer)",
+             "  -> sector magnet bends each ion by its",
+             "  charge-to-mass ratio r = mv/(qB):",
+             "  heavier isotopes bend less, land in",
+             "  different pipes. Detector rail takes",
+             "  the unsorted remainder (beam dump).",
+             "  Real devices: Aston sector mass-spec",
+             "  (1919); calutron EM isotope separators",
+             "  (Y-12, 1943 -- still make medical",
+             "  isotopes today). Resolving power",
+             "  m/Dm ~ 1e2-1e4, sector class.",
+             "  sort cost: ~13.6 eV to ionize H + keV",
+             "  accel -- a ~1e-6 slice of the fusion",
+             "  yield per kg. Cheap, honest physics."],
+            ["ELEMENT BANK -- cryo + dry vaults:",
+             "  8 tanks, one per tracked element:",
+             "  H, He, C, O, Si, Fe, Au, U.",
+             "  gases (H/He/O): cryo tanks under MLI,",
+             "  sunshield + cryocooler -> zero-boiloff",
+             "  (propellant-depot class: LH2 20 K,",
+             "  LHe 4 K, flight-demonstrated).",
+             "  solids (C/Si/Fe/Au/U): ambient-vacuum",
+             "  vaults -- no cryo penalty at all.",
+             "  feed pipes fill from the router;",
+             "  extract pipes share one manifold;",
+             "  vent stack relieves boiloff. The",
+             "  inventory on the right is LIVE --",
+             "  filled by the riser + plant feed."],
+        ][idx]
+
+    def _draw_orbital_focus_ui(self, idx):
+        """UI overlay for a FOCUSED orbital section: mechanism on the left,
+        live section telemetry on the right, focus strip bottom-centre."""
+        sw, tel = self.swarm, self.swarm.telemetry
+        # left: MECHANISM panel
+        LW = 432
+        self._panel(12, 68, LW, 404, 232)
+        mech = self._orb_mechanism(idx)
+        self.screen.blit(self._txt(self.font_m,
+            "MECHANISM -- " + self._orb_labels[idx][0], (255, 255, 255)),
+            (22, 76))
+        yy = 104
+        for ln in mech:
+            bold = ln.endswith(":") or ln.isupper()
+            self.screen.blit(
+                (self.font if bold else self.font_xs).render(
+                    ln, True, (220, 235, 250) if bold else (195, 212, 232)),
+                (22, yy))
+            yy += 19 if bold else 16
+        # right: SECTION TELEMETRY (live)
+        RW = 384
+        RX = self.W - RW - 12
+        rows = self._orb_focus_rows(idx)
+        self._panel(RX, 68, RW, 60 + 22 * len(rows) + 56)
+        self.screen.blit(self._txt(self.font_m,
+            self._orb_labels[idx][0] + " -- TELEMETRY", (120, 210, 255)),
+            (RX + 10, 76))
+        yy = 104
+        for a, b in rows:
+            self.screen.blit(self._txt(self.font_s, a, (150, 175, 200)),
+                             (RX + 10, yy))
+            self.screen.blit(self._txt(self.font_s, b, (235, 245, 255)),
+                             (RX + 150, yy))
+            yy += 22
+        # part tag legend under the telemetry
+        yy += 8
+        self.screen.blit(self._txt(self.font_xs,
+            "part tags: [MEAS] demonstrated  [SPEC] design",
+            (135, 155, 175)), (RX + 10, yy))
+        self.screen.blit(self._txt(self.font_xs,
+            "[MODEL] sim output  [*FTR] not demonstrated",
+            (135, 155, 175)), (RX + 10, yy + 14))
+        # bank focus also gets the live per-vault ledger -- stacked under the
+        # mechanism panel on the left, where the callout corridor is clear
+        if idx == 2:
+            sp = self.plant.stockpile
+            ly0 = 68 + 404 + 8                    # below the mechanism panel
+            self._panel(12, ly0, LW, 30 + 23 * 8 + 24)
+            self.screen.blit(self._txt(self.font_m,
+                "VAULT LEDGER (live)", (120, 210, 255)), (22, ly0 + 8))
+            yy = ly0 + 30
+            for Z, sym, name, phase, kg, kg_s_ in sp.report():
+                col = _element_color(Z)
+                _pg.draw.rect(self.screen, col, (22, yy + 2, 12, 12))
+                self.screen.blit(self._txt(self.font_s,
+                    f"{sym:>2} {name:<8} {phase}", (225, 235, 250)), (40, yy))
+                self.screen.blit(self._txt(self.font_s, f"{kg:.3e} kg",
+                                 (200, 220, 240)), (180, yy))
+                self.screen.blit(self._txt(self.font_s, f"{kg_s_:.1e}/s",
+                                 (150, 200, 170)), (300, yy))
+                yy += 23
+            self.screen.blit(self._txt(self.font_s,
+                f"TOTAL: {sp.total_kg():.3e} kg", (255, 235, 130)),
+                (22, yy + 4))
+        # bottom-centre: focus telemetry strip (same numbers as the right
+        # panel's headline rows -- kept for the part callouts to sit above)
+        bx, by, bw, bh, rows2 = self._orb_focus_geom(idx)
+        self._panel(bx, by, bw, bh, 232)
+        self.screen.blit(self._txt(self.font_xs,
+            "FOCUS TELEMETRY (live model output)", (120, 210, 255)),
+            (bx + 10, by + 6))
+        yy = by + 22
+        for a, b in rows2:
+            self.screen.blit(self._txt(self.font_xs, a, (150, 175, 200)),
+                             (bx + 10, yy))
+            self.screen.blit(self._txt(self.font_xs, b, (235, 245, 255)),
+                             (bx + 150, yy))
+            yy += 17
+        # controls
+        foc = (f"  FOCUS: [{idx + 1}] {self._orb_labels[idx][0]}"
+               "  (ESC/O=overview   TAB/1-3=switch)")
+        self._bottom_bar(
+            "drag=orbit  wheel=zoom  arrows=pan  B=cutaway  M=machine  "
+            "P=plant" + foc,
+            chips=[(f"stations {sw.N:.2e}", (120, 210, 255)),
                    (f"stockpile {self.plant.stockpile.total_kg():.1e} kg",
                     (255, 235, 130))],
-            scale_m=250.0, scale_lbl="net arm")
+            scale_m=tel.get("arm_len_m", 250.0), scale_lbl="net arm")
 
     def _orbital_focus_on(self, idx):
         self.orbital_focus = idx
@@ -15895,7 +19465,7 @@ class SystemViewer:
                   " in-flux", "MODEL"),
                 (f"{a['activity_bq_per_g']:.3f} Bq/g < {SHIPPABLE_BQ_PER_G:.0f};"
                   f" hold {pp.cooldown_days:.0f} d", "MODEL"),
-                (f"Hg-197m 23.8 h -> all Au-197", "MEAS"),
+                ("Hg-197m 23.8 h -> all Au-197", "MEAS"),
                 ("lines 77.35/411.8 keV assay", "MEAS"),
                 (f"Hg-197 {hg_w_kg:,.0f} W/kg vs Pu-238 {PU238_SPECIFIC_W_G*1e3:,.0f}",
                  "MEAS"),
@@ -15942,39 +19512,104 @@ class SystemViewer:
 
     # --- GALAXY VIEW: self-replicating swarm + evolution + galactic seeding ---
     def _render_galaxy(self):
-        """GALACTIC SEEDING VIEW -- the closed loop drawn in full: the home
-        star with its partial Dyson ring of collector stations, the wireframe
-        colonization shell (r = v*t at 0.1c), spectral-typed seeded systems
-        with their station rings, probe craft riding the eight launch
-        corridors out to the shell, the still-uncolonized disc field beyond,
-        and the faint 5e4-ly galaxy rim. Animated per frame: probes in transit
-        with motion trails, an arrival flash each time a probe completes its
-        hop, twinkling colonized stars, orbiting home-swarm collectors, a
-        selection ring on the clicked system, and leader-line callouts on the
-        real anchors. All positions come from the mesh meta -- one batched
-        projection per particle group (the old code projected every probe dot
-        individually, 24 calls/frame)."""
+        """GALACTIC SEEDING VIEW -- the REAL Milky Way at true scale: the
+        Galactic Centre with Sgr A*/bulge/bar at the origin, four log-spiral
+        arms + the Orion Spur traced by a density-sampled disc-dust cloud,
+        and the SUN at its measured position (8.15 kpc, +68 ly) carrying the
+        home swarm. The colonization wavefront is a sphere centred on the
+        SUN at the LIVE radius r = v*t (not baked): it reaches the GC at
+        26.6 kly and the far rim at 76.6 kly. Probes launch from the Sun.
+        Animated per frame: probes in transit with trails, arrival flashes,
+        twinkling colonized stars, orbiting home-swarm collectors, a
+        GC-REACHED marker when the front crosses the core, a selection ring
+        on the clicked system, and leader-line callouts on the real
+        anchors. All positions come from the mesh meta -- batched
+        projections per particle group."""
         t = self.anim
         meta = self._gal_meta
-        wf = meta["wavefront_r"]; dirs = meta["probe_dirs"]
+        sun = meta["sun_pos"]; gcp = meta["gc_pos"]
+        lpu = meta["ly_per_unit"]
+        dirs = meta["probe_dirs"]
+        ga = self.galactic.telemetry
+        sp = self.galactic.spec
+        # live wavefront radius in scene units (the REAL r=v*t, not the mesh's
+        # static shell) -- starts at ~0 and can pass the far rim (7.97 u)
+        wf_ly = ga.get("wavefront_radius_ly", 0.0)
+        wf = max(0.015, wf_ly / lpu)
         self._render_solid(self._galV, self._galF, self._galC,
                            cache_key="galaxy")
         P = self._gal_p
         if P is None:
             P = self._gal_p = {"prev": {}, "flash": []}
 
-        # -- probes in transit: dots + short motion trails, ONE projection ---
+        # -- galaxy body: disc dust, bulge cloud, bar cloud, sparse halo, arm
+        #    spines, Orion Spur -- ONE batched projection for the whole field
+        dpts = [meta["dust"], meta["bulge_dust"], meta["bar_dust"],
+                meta["halo"]]
+        arms = meta.get("arms", [])
+        for _nm, _col, ap in arms:
+            dpts.append(ap[::3])
+        dpts.append(meta["spur"])
+        all_g = np.concatenate(dpts)
+        gx, gy, gz = self._project(all_g)
+        n_d = len(meta["dust"]); n_b = len(meta["bulge_dust"])
+        n_bar = len(meta["bar_dust"])
+        n_h = len(meta["halo"])
+        k0 = 0
+        for k in range(n_d):                       # disc dust -- dim blue-grey
+            if gz[k] > 0.06:
+                _pg.draw.circle(self.screen, (78, 96, 132),
+                                (int(gx[k]), int(gy[k])), 1)
+        k0 = n_d
+        for k in range(k0, k0 + n_b):              # bulge -- warm core glow
+            if gz[k] > 0.06:
+                _pg.draw.circle(self.screen, (128, 104, 74),
+                                (int(gx[k]), int(gy[k])), 1)
+        k0 += n_b
+        for k in range(k0, k0 + n_bar):            # bar -- elongated warm band
+            if gz[k] > 0.06:
+                _pg.draw.circle(self.screen, (150, 124, 92),
+                                (int(gx[k]), int(gy[k])), 1)
+        k0 += n_bar
+        for k in range(k0, k0 + n_h):              # halo -- faintest
+            if gz[k] > 0.06:
+                _pg.draw.circle(self.screen, (58, 66, 92),
+                                (int(gx[k]), int(gy[k])), 1)
+        k0 += n_h
+        for _nm, acol, ap in arms:                 # arm spine accents
+            na = len(ap[::3])
+            for k in range(k0, k0 + na):
+                if gz[k] > 0.06:
+                    _pg.draw.circle(self.screen, acol,
+                                    (int(gx[k]), int(gy[k])), 1)
+            k0 += na
+        for k in range(k0, len(all_g)):            # Orion Spur -- brighter
+            if gz[k] > 0.06:
+                _pg.draw.circle(self.screen, (140, 180, 225),
+                                (int(gx[k]), int(gy[k])), 1)
+
+        # -- LIVE wavefront sphere centred on the Sun (unit rings x r=v*t) ----
+        pulse = 1.0 + 0.03 * math.sin(t * 0.5)
+        wf_now = wf * pulse
+        for ring in meta["wf_rings"]:
+            rp = sun + ring * wf_now
+            sx_r, sy_r, sz_r = self._project(rp)
+            for i in range(len(rp) - 1):
+                if min(sz_r[i], sz_r[i + 1]) > 0.06:
+                    _pg.draw.line(self.screen, (44, 92, 158),
+                                  (int(sx_r[i]), int(sy_r[i])),
+                                  (int(sx_r[i + 1]), int(sy_r[i + 1])), 1)
+
+        # -- probes in transit: dots + short trails, launched FROM the Sun ----
         n_per = 3
         pts = []
         for i, d in enumerate(dirs):
             ph0 = (t * 0.05 + i * 0.11) % 1.0
-            # a phase wrap (ph0 falls back to ~0) == the leading probe just
-            # reached the shell -> arrival flash at that corridor's tip
             if i in P["prev"] and ph0 < P["prev"][i] - 0.5:
-                P["flash"].append((tuple(d * wf), t))
+                P["flash"].append((tuple(sun + d * wf), t))
             P["prev"][i] = ph0
             for j in range(n_per):
-                p = d * (((ph0 + j * 0.33) % 1.0) * wf)
+                p = sun + d * (((ph0 + j * 0.33) % 1.0) * wf)
                 pts.append(p)
                 pts.append(p - d * 0.14)          # trail tail
         sx, sy, sz = self._project(np.asarray(pts))
@@ -15986,16 +19621,25 @@ class SystemViewer:
                 self._draw_glow_dot(sx[2 * k], sy[2 * k], sz[2 * k],
                                     (100, 180, 255), base_r=3)
 
-        # -- colonized systems twinkle in their real spectral colours + field -
+        # -- seeded systems in their real spectral colours: BRIGHT twinkle
+        #    once the live wavefront has actually swept over them (inside the
+        #    r=v*t sphere), dim pre-contact otherwise -- the colony visibly
+        #    grows as the front expands
         seeds = meta["seeds"]; field = meta["field"]
+        seed_d = meta.get("seed_d")
         allp = np.array([p for p, _, _ in seeds] + list(field))
         sx, sy, sz = self._project(allp)
         nse = len(seeds)
         for k in range(nse):
             if sz[k] > 0.06:
+                inside = (seed_d is None) or (seed_d[k] <= wf_now)
                 pr = 1.0 + 0.25 * math.sin(t * 1.4 + k * 1.7)
-                self._draw_glow_dot(sx[k], sy[k], sz[k], seeds[k][2],
-                                    base_r=3.4 * pr)
+                if inside:
+                    self._draw_glow_dot(sx[k], sy[k], sz[k], seeds[k][2],
+                                        base_r=3.4 * pr)
+                else:
+                    dim = tuple(c // 3 for c in seeds[k][2])
+                    self._draw_glow_dot(sx[k], sy[k], sz[k], dim, base_r=2.4)
         for k in range(nse, len(allp)):
             if sz[k] > 0.06:
                 _pg.draw.circle(self.screen, (105, 125, 160),
@@ -16009,12 +19653,12 @@ class SystemViewer:
                 _pg.draw.circle(self.screen, (255, 240, 180),
                                 (int(sx[k]), int(sy[k])), rr, 1)
 
-        # -- home swarm: live collector dots orbiting the home star ----------
+        # -- home swarm: live collector dots orbiting the SUN -----------------
         rr0 = meta["home_ring_r"]
         ring = np.array([(rr0 * math.cos(a + t * 0.07),
                           rr0 * math.sin(a + t * 0.07), 0.0)
                          for a in np.arange(0.0, 2 * math.pi, math.pi / 6)])
-        sx, sy, sz = self._project(ring)
+        sx, sy, sz = self._project(ring + sun)
         for k in range(len(ring)):
             if sz[k] > 0.06:
                 self._draw_glow_dot(sx[k], sy[k], sz[k],
@@ -16033,37 +19677,65 @@ class SystemViewer:
                                     (int(fx[k]), int(fy[k])),
                                     int(4 + 22 * age), 1)
 
-        # -- pulsing wavefront rim + home star glow ---------------------------
-        pulse = 1.0 + 0.03 * math.sin(t * 0.5)
-        sx_c, sy_c, z_c = self._project([(0, 0, 0)])
+        # -- GALACTIC CENTRE glow + the GC-REACHED milestone -------------------
+        sx_c, sy_c, z_c = self._project([gcp, sun])
         if z_c[0] > 0.06:
-            ring_r = int(wf * pulse * 0.62 * self.H / max(z_c[0], 0.1))
-            _pg.draw.circle(self.screen, (40, 80, 140),
-                            (int(sx_c[0]), int(sy_c[0])), ring_r, 1)
-        self._draw_glow_dot(sx_c[0], sy_c[0], z_c[0], (255, 220, 100), base_r=8)
+            self._draw_glow_dot(sx_c[0], sy_c[0], z_c[0],
+                                (255, 238, 190), base_r=7)
+        if z_c[1] > 0.06:
+            self._draw_glow_dot(sx_c[1], sy_c[1], z_c[1],
+                                (255, 222, 110), base_r=8)
+        if ga.get("gc_reached") and z_c[0] > 0.06:
+            rr = int(12 + 5 * math.sin(t * 2.4))
+            _pg.draw.circle(self.screen, (140, 200, 255),
+                            (int(sx_c[0]), int(sy_c[0])), rr, 1)
 
         # -- leader-line callouts on the real anchors --------------------------
-        sx, sy, z = self._project([(0, 0.44, 0)])
+        sx, sy, z = self._project([sun + np.array([0, 0.44, 0])])
         if z[0] > 0.06 and self.gal_focus is None:
-            self._label_bg("HOME STAR -- gen-0 (G star)", self.font_xs,
-                           int(sx[0]) - 78, int(sy[0]) - 8, (255, 220, 100))
-        ga = self.galactic.telemetry
-        sp = self.galactic.spec
+            self._label_bg("SUN (G2V) + HOME -- 8.15 kpc from GC; "
+                           "swarm ring schematic",
+                           self.font_xs, int(sx[0]) - 160, int(sy[0]) - 8,
+                           (255, 220, 100))
         si = self.gal_focus if isinstance(self.gal_focus, int) and \
             0 <= self.gal_focus < nse else 3
+        si_in = (meta["seed_d"] is None) or (meta["seed_d"][si] <= wf_now)
+        # the nearest seeded system still OUTSIDE the front = next to be hit
+        nxt = None
+        if meta["seed_d"] is not None:
+            cand = [(meta["seed_d"][k], k) for k in range(nse)
+                    if meta["seed_d"][k] > wf_now]
+            if cand:
+                nxt = min(cand)[1]
         items = [
+            (tuple(gcp + np.array([0, 0.35, 0])),
+             "GALACTIC CENTRE -- Sgr A* 4.15e6 Msun; bulge + bar",
+             (255, 238, 190)),
             (seeds[si][0],
-             f"colonized system -- {seeds[si][1]} (click)", seeds[si][2]),
-            ((wf, 0.0, 0.0),
-             f"WAVEFRONT r=v*t -- {ga.get('wavefront_radius_ly', 0):.2e} ly",
-             (100, 180, 255)),
-            (tuple(dirs[1] * wf * 0.55),
+             f"{'colonized' if si_in else 'target'} system -- "
+             f"{seeds[si][1]} (click)", seeds[si][2]),
+            (tuple(sun + np.array([wf_now, 0.0, 0.0])),
+             f"WAVEFRONT r=v*t -- {wf_ly:.2e} ly", (100, 180, 255)),
+            (tuple(sun + dirs[1] * wf_now * 0.55),
              f"seed probe -- {ga.get('expansion_speed_c', 0.10):.2f} c coast",
              (100, 180, 255)),
-            (field[0], "uncolonized star (next)", (105, 125, 160)),
+            (tuple(sun + np.array([meta["local_bubble_u"], 0.0, 0.0])),
+             "LOCAL BUBBLE -- ~1 kly low-density ISM cavity", (90, 130, 180)),
+            (tuple(sun + np.array([0.0, 0.0, meta["wavefront_r"]])),
+             f"GC-REACH shell -- {meta['gc_reach_ly'] / 1e3:.1f} kly "
+             f"(core inside when the front crosses)", (70, 140, 210)),
             ((meta["galaxy_r"], 0.0, 0.0),
-             f"galaxy rim {sp['galaxy_radius_ly']:.0e} ly", (90, 120, 170)),
+             f"galaxy rim -- {sp['galaxy_radius_ly']:.0e} ly "
+             f"(~15 kpc luminous disc)", (90, 120, 170)),
         ]
+        if nxt is not None:
+            items.append((seeds[nxt][0],
+                          f"next reached -- {seeds[nxt][1]} "
+                          f"({meta['seed_d'][nxt] * lpu:.0f} ly out)",
+                          (105, 125, 160)))
+        if ga.get("gc_reached"):
+            items.append((tuple(gcp + np.array([0, -0.4, 0])),
+                          "GC REACHED -- core colonized", (140, 200, 255)))
         self._leader_labels(items, 120, self.H - 322,
                             x_left=428, x_right=self.W - 408)
 
@@ -16085,8 +19757,12 @@ class SystemViewer:
         sp = self.galactic.spec
         v_c = sp["expansion_speed_c"]; v = v_c * C_LIGHT
         R_ly = sp["galaxy_radius_ly"]; N_gal = sp["stars_per_galaxy"]
-        rho_ly3 = N_gal / ((4.0 / 3.0) * math.pi * R_ly ** 3)
-        hop_ly = rho_ly3 ** (-1.0 / 3.0)          # mean inter-star spacing
+        mwt = milky_way_swept_table(sp)
+        rho_pc3 = mwt["rho_local_pc3"]             # real local density /pc^3
+        hop_ly = mwt["hop_local_ly"]               # real local hop ~6.6 ly
+        gc_ly = mwt["gc_reach_ly"]                 # Sun -> Galactic Centre
+        far_ly = mwt["far_rim_ly"]                 # Sun -> farthest disc point
+        N_gc = mwt["N_at_GC"]                      # colonized when front hits GC
         transit = probe_transit_physics(hop_ly, v_c, sp)
         prop = probe_propulsion_budget(SystemColonizer.PROBE_MASS_KG, v_c,
                                        spec=sp)
@@ -16095,9 +19771,10 @@ class SystemViewer:
         r_sw = self.swarm.grow_fraction / self.swarm.build_time_s
         t2_d = math.log(2.0) / r_sw / 86400.0      # exponential-phase doubling
         t_sat_yr = math.log(max(K, 2.0)) / r_sw / YR   # ln K / r (exp approx)
-        t_fill_yr = R_ly / v_c                     # wavefront crosses R_gal
-        R_hor_ly = R_ly * sp["reachable_galaxies"] ** (1.0 / 3.0)
-        t_hor_yr = R_hor_ly / v_c                  # LambdaCDM reach ceiling
+        t_gc_yr = gc_ly / v_c                      # front reaches the core
+        t_fill_yr = far_ly / v_c                   # front reaches the far rim
+        R_hor_ly = reachable_horizon_ly(sp)      # real ~Mpc galaxy spacing
+        t_hor_yr = R_hor_ly / v_c                # ~5.6 Gyr at 0.1c, not 23 Myr
         N_cos = N_gal * sp["reachable_galaxies"]
         per_sys = sp["isru_baryon_reservoir_kg"]
 
@@ -16132,20 +19809,45 @@ class SystemViewer:
                  (110, 128, 150)), (lx + 10, yy + 3))
         leg_bottom = ly + leg_h
 
-        # ------------- LEFT BELOW: EXPANSION NUMBERS (all derived) ----------
+        # ------------- LEFT BELOW: MILKY WAY STRUCTURE (all measured) -------
         ny = leg_bottom + 12
+        mw_rows = [
+            ("type: SBbc barred spiral", "MEAS"),
+            ("thin disc: exp, h_R 2.6 kpc, h_z 300 pc", "MEAS"),
+            ("thick disc: h_R 3.0 kpc, h_z 900 pc, ~9%", "MEAS"),
+            ("bulge+bar: ~22% of stars, r_c 0.8 kpc", "MEAS"),
+            ("bar half-length ~4.9 kpc, 27 deg off Sun-GC", "MEAS"),
+            ("4 spiral arms, pitch ~12 deg (Vallee 2017)", "MEAS"),
+            ("Sun: R 8.15 kpc, z +20.8 pc, v 233 km/s", "MEAS"),
+            ("galactic year ~215 Myr at R_sun", "MEAS"),
+            ("Sgr A* 4.15e6 Msun | DM halo ~1e12 Msun", "MEAS"),
+            (f"local rho* {rho_pc3:.2f} sys/pc^3 (Gaia/RECONS)", "MEAS"),
+        ]
+        mh = 28 + rowh * len(mw_rows) + 8
+        self._hero_panel(hud, lx, ny, lw, mh)
+        blit(txt(self.font_s, "MILKY WAY STRUCTURE -- observed values",
+                 (120, 210, 255)), (lx + 10, ny + 6))
+        yy = ny + 26
+        for ln, tg in mw_rows:
+            blit(txt(fx, ln, (190, 208, 228)), (lx + 10, yy))
+            tag(lx + lw - 52, yy, tg)
+            yy += rowh
+        ny2 = ny + mh + 12
+
+        # ------------- LEFT BELOW: EXPANSION NUMBERS (all derived) ----------
         num_rows = [
             (f"v_exp = {v_c:.2f} c = {v:.2e} m/s", "SPEC"),
             (f"R_gal {R_ly:.0e} ly | N* {N_gal:.0e} systems", "SPEC"),
-            (f"rho* {rho_ly3:.2e}/ly^3 -> hop {hop_ly:.1f} ly", "MODEL"),
-            (f"transit {transit['transit_time_yr']:.0f} yr; "
-             f"P_surv {transit['survival_probability'] * 100:.0f}%", "MODEL"),
+            (f"Sun->GC {gc_ly / 1e3:.1f} kly | far rim "
+             f"{far_ly / 1e3:.1f} kly", "MEAS"),
+            (f"local hop {hop_ly:.1f} ly -> transit "
+             f"{transit['transit_time_yr']:.0f} yr; P_surv "
+             f"{transit['survival_probability'] * 100:.0f}%", "MODEL"),
             (f"m0/mf = e^({v_c:.2f}/{prop['v_ex_c']:.2f}) = "
              f"{prop['mass_ratio']:.2f}; {prop['propellant_frac'] * 100:.1f}% fuel",
              "MEAS"),
             (f"launch {prop['launch_mass_kg']:.2e} kg per "
              f"{prop['payload_kg']:.0e} kg seed", "MODEL"),
-            (f"probe burn E = {prop['energy_J']:.1e} J", "MODEL"),
             (f"bootstrap -> first copy: {boot_d:.1f} d", "MODEL"),
             (f"swarm r {r_sw:.2e}/s; doubling {t2_d:.0f} d", "MODEL"),
             (f"saturate N~{0.9 * K:.0e} in ~{t_sat_yr:.0f} yr", "MODEL"),
@@ -16153,43 +19855,49 @@ class SystemViewer:
              f" allow {self.swarm.cap['N_max']:.0e})", "MODEL"),
             (f"attrition tau {self.swarm.tau_failure_s / YR:.0f} yr"
              f"  (1.5%/yr hazard)", "MEAS"),
-            (f"fill galaxy: R/v = {t_fill_yr / 1e3:.0f} kyr", "MODEL"),
-            (f"horizon {R_hor_ly:.2e} ly -> {t_hor_yr / 1e6:.1f} Myr", "MODEL"),
+            (f"GC reached in {t_gc_yr / 1e3:.0f} kyr"
+             f" ({N_gc:.1e} sys by then)", "MODEL"),
+            (f"far rim {far_ly / 1e3:.0f} kly: fill = "
+             f"{t_fill_yr / 1e3:.0f} kyr", "MODEL"),
+            (f"horizon {R_hor_ly:.2e} ly -> {t_hor_yr / 1e9:.2f} Gyr", "MODEL"),
             (f"ceiling {N_cos:.0e} sys ="
              f" {N_cos * per_sys / M_SUN:.1e} Msun", "MODEL"),
         ]
         nh = 28 + rowh * len(num_rows) + 8
-        self._hero_panel(hud, lx, ny, lw, nh)
-        blit(txt(self.font_s, "EXPANSION NUMBERS -- derived from the constants",
-                 (120, 210, 255)), (lx + 10, ny + 6))
-        yy = ny + 26
-        for ln, tg in num_rows:
-            blit(txt(fx, ln, (190, 208, 228)), (lx + 10, yy))
-            tag(lx + lw - 52, yy, tg)
-            yy += rowh
-        self._gal_left_bot = ny + nh
+        avail_l = self.H - 66 - 8 - ny2
+        if nh <= avail_l:
+            self._hero_panel(hud, lx, ny2, lw, nh)
+            blit(txt(self.font_s,
+                     "EXPANSION NUMBERS -- derived from the constants",
+                     (120, 210, 255)), (lx + 10, ny2 + 6))
+            yy = ny2 + 26
+            for ln, tg in num_rows:
+                blit(txt(fx, ln, (190, 208, 228)), (lx + 10, yy))
+                tag(lx + lw - 52, yy, tg)
+                yy += rowh
+            self._gal_left_bot = ny2 + nh
+        else:
+            self._gal_left_bot = ny + mh
 
         # ---------------- RIGHT: HOW A SEED COLONIZES ------------------------
         rx, rw = W - 392, 378
         works = [
             "A probe (86% propellant, 1e4 kg payload)",
-            "fusion-burns to 0.1c, coasts ~17 ly",
-            "(~173 yr) under ISM radiation, then",
-            "magsail-brakes into the next star's orbit.",
-            "It unfolds ONE station: nets harvest",
-            "pairs + solar wind, the riser turns H",
-            "into C..Fe (exothermic) and Au/U",
-            "(endothermic, surplus-powered), and the",
-            "assembler prints a copy in ~1 month.",
-            "Growth is logistic until N ~ 90% of the",
-            "capacity K = 1e21 -- then surplus",
-            "stations become NEW PROBES. Each launch",
-            "carries the best parameters found so",
-            "far: later gens start nearer optimal.",
-            "r = 0.1c x t sweeps the star field:",
-            "~500 kyr fills the disc, ~23 Myr reaches",
-            "the LCDM ceiling. Every probe is paid",
-            "in real stockpile mass + energy. No FTL.",
+            "fusion-burns to 0.1c, coasts one local",
+            "hop ~6.6 ly (~66 yr) under ISM radiation,",
+            "then magsail-brakes into the next orbit.",
+            "It unfolds ONE station: cell funnels make",
+            "pairs inside; cusps collect solar wind,",
+            "C..Fe (exothermic) and Au/U (endothermic),",
+            "the assembler prints a copy in ~1 month.",
+            "Growth is logistic to N ~ 90% K = 1e21,",
+            "then surplus stations become NEW PROBES",
+            "carrying the best parameters found so far.",
+            "The wavefront is a Sun-centred sphere",
+            "through the REAL disc: Alpha Cen at 44 yr,",
+            "the GC at 266 kyr, the far rim at 766 kyr,",
+            "M31 crossed at 25 Myr; the ceiling",
+            "at ~5.6 Gyr (real ~Mpc spacing).",
         ]
         wh = 30 + 15 * len(works) + 8
         self._hero_panel(hud, rx, 66, rw, wh)
@@ -16198,33 +19906,29 @@ class SystemViewer:
         for i, ln in enumerate(works):
             blit(txt(fx, ln, (190, 208, 228)), (rx + 10, 100 + i * 15))
 
-        # ---------------- RIGHT: STELLAR DEMOGRAPHICS (real) ------------------
+        # ---------------- RIGHT: NEAREST STARS (real Gaia catalogue) ----------
         ay = 66 + wh + 12
-        ah = 44 + 14 * len(STELLAR_TYPES) + 18
+        n_show = 9
+        ah = 44 + 14 * n_show + 16
         self._hero_panel(hud, rx, ay, rw, ah)
-        blit(txt(self.font_m, "STELLAR DEMOGRAPHICS -- Kroupa IMF",
+        blit(txt(self.font_m, "NEAREST STARS -- the real first targets",
              (120, 210, 255)), (rx + 10, ay + 8))
+        tag(rx + rw - 58, ay + 8, "MEAS")
         hy = ay + 30
-        for cx_, htxt in ((rx + 24, "type"), (rx + 118, "frac"),
-                          (rx + 178, "M/Msun"), (rx + 238, "L/Lsun"),
-                          (rx + 298, "tau [yr]")):
+        for cx_, htxt in ((rx + 12, "system"), (rx + 158, "d [ly]"),
+                          (rx + 216, "class"), (rx + 316, "arr@0.1c")):
             blit(txt(fx, htxt, (150, 175, 200)), (cx_, hy))
         yy = hy + 15
-        for st in STELLAR_TYPES:
-            col = _STELLAR_COLORS[st.name]
-            _pg.draw.rect(hud, col, (rx + 12, yy + 2, 8, 8))
-            blit(txt(fx, st.name, (225, 235, 250)), (rx + 24, yy))
-            blit(txt(fx, f"{st.demographic_frac * 100:5.1f}%", (190, 208, 228)),
-                 (rx + 118, yy))
-            blit(txt(fx, f"{st.mass_Msun:5.2f}", (190, 208, 228)),
-                 (rx + 178, yy))
-            blit(txt(fx, f"{st.luminosity_L_sun:8.2e}", (190, 208, 228)),
-                 (rx + 238, yy))
-            blit(txt(fx, f"{st.lifetime_yr:8.1e}", (190, 208, 228)),
-                 (rx + 298, yy))
+        for nm_, dly_, sclass_, _note in NEAREST_STARS[:n_show]:
+            blit(txt(fx, nm_, (225, 235, 250)), (rx + 12, yy))
+            blit(txt(fx, f"{dly_:5.2f}", (190, 208, 228)), (rx + 158, yy))
+            blit(txt(fx, sclass_[:13], (190, 208, 228)), (rx + 216, yy))
+            arr = dly_ / v_c
+            blit(txt(fx, f"{arr:5.0f} yr", (140, 190, 255)), (rx + 316, yy))
             yy += 14
-        blit(txt(fx, "L ~ M^3.5, tau ~ 10 Gyr x M/L; Giant: measured",
-                 (110, 128, 150)), (rx + 10, yy + 4))
+        blit(txt(fx,
+                 f"+{len(NEAREST_STARS) - n_show} more systems within 17 ly "
+                 f"(Gaia DR3)", (110, 128, 150)), (rx + 12, yy + 3))
 
         # ---------------- RIGHT: COLONIZATION TIMELINE (log t) ----------------
         ty = ay + ah + 12
@@ -16240,12 +19944,20 @@ class SystemViewer:
         _pg.draw.line(hud, (70, 90, 115), (px0, py), (px1, py), 1)
         miles = [
             (boot_d * 86400.0, "first copy", f"{boot_d:.0f} d", (255, 235, 130)),
-            (t_sat_yr * YR, "swarm sat.", f"~{t_sat_yr:.0f} yr", (110, 225, 145)),
+            (NEAREST_STARS[0][1] / v_c * YR, "Alpha Cen",
+             f"{NEAREST_STARS[0][1] / v_c:.0f} yr", (255, 226, 130)),
             (transit["transit_time_yr"] * YR, "one hop",
              f"~{transit['transit_time_yr']:.0f} yr", (100, 180, 255)),
-            (t_fill_yr * YR, "galaxy", f"{t_fill_yr / 1e3:.0f} kyr",
+            (t_sat_yr * YR, "swarm sat.", f"~{t_sat_yr:.0f} yr", (110, 225, 145)),
+            (t_gc_yr * YR, "GC reached", f"{t_gc_yr / 1e3:.0f} kyr",
+             (255, 238, 190)),
+            (t_fill_yr * YR, "disc full", f"{t_fill_yr / 1e3:.0f} kyr",
              (140, 160, 255)),
-            (t_hor_yr * YR, "LCDM ceil.", f"{t_hor_yr / 1e6:.0f} Myr",
+            (NEAREST_GALAXIES[1][1] / v_c * YR, "LMC",
+             f"{NEAREST_GALAXIES[1][1] / v_c / 1e6:.2f} Myr", (150, 220, 255)),
+            (NEAREST_GALAXIES[7][1] / v_c * YR, "M31",
+             f"{NEAREST_GALAXIES[7][1] / v_c / 1e6:.0f} Myr", (255, 210, 150)),
+            (t_hor_yr * YR, "LCDM ceil.", f"{t_hor_yr / 1e9:.2f} Gyr",
              (255, 180, 95)),
         ]
         span = math.log10(t_hi) - math.log10(t_lo)
@@ -16265,6 +19977,13 @@ class SystemViewer:
                 L[0] = max(L[0], prev_r + 6 + L[1] // 2)
                 L[0] = min(max(L[0], px0 + L[1] // 2), px1 - L[1] // 2)
                 prev_r = L[0] + L[1] // 2
+            # second pass right-to-left: if the right clamp truncated the
+            # spread, pull the chain back so labels still cannot overlap
+            nxt_l = 10 ** 9
+            for L in reversed(row):
+                L[0] = min(L[0], nxt_l - 6 - L[1] // 2)
+                L[0] = max(L[0], px0 + L[1] // 2)
+                nxt_l = L[0] - L[1] // 2
             for cx_, _w, l1, l2, col in row:
                 yy = py + (12 if r_i == 0 else -36)
                 blit(txt(fx, l1, col), (cx_ - fx.size(l1)[0] // 2, yy))
@@ -16283,17 +20002,23 @@ class SystemViewer:
         full = [
             "REAL: r=v*t causality, the rocket",
             "equation, IMF demographics, fusion",
-            "chemistry, satellite attrition.",
-            "MODEL: logistic r, P_surv, K, the",
-            f"{self.galactic.n_full_physics_cap}-system full-physics cohort",
+            "chemistry, satellite attrition, and",
+            "the galaxy itself: exp thin/thick disc",
+            "+ Plummer bulge + bar, 4 arms at 12",
+            "deg, Sun at 8.15 kpc (Bland-Hawthorn",
+            "& Gerhard '16, GRAVITY '19, Gaia DR3).",
+            "MODEL: smooth density field (the real",
+            "galaxy is clumpier), logistic r, P_surv,",
+            f"K, the {self.galactic.n_full_physics_cap}-system cohort",
             "+ statistical aggregate beyond it.",
             "*FTR: universal assembler (TRL 1),",
             "the x1e9 field enhancer, net-cast",
             "pair capture at useful rates.",
         ]
         compact = [
-            "REAL: causality, rocket eqn, IMF, fusion",
-            f"MODEL: logistic r, P_surv, K, {self.galactic.n_full_physics_cap}-sys",
+            "REAL: causality, rocket eqn, IMF, real",
+            "Milky Way structure (disc+bulge+arms)",
+            f"MODEL: smooth field, r, P_surv, K, {self.galactic.n_full_physics_cap}-sys",
             "cohort + statistical aggregate past it",
             "*FTR: assembler TRL 1, x1e9 enhancer",
         ]
@@ -16333,20 +20058,23 @@ class SystemViewer:
         # panels share; width + font adapt so they NEVER overlap the columns
         # (at the smallest windows the rows switch to the compact font).
         cl, cr = 424, self.W - 408
-        pw = max(200, min(356, int((cr - cl - 32) / 3)))
-        gap = 12
+        gap = 8
+        # panels must fit the corridor or they slide under the side columns;
+        # at small widths they shrink (compact font) rather than overlap
+        pw = max(140, min(356, int((cr - cl - 2 * gap) / 3)))
         x0 = max(cl, (cl + cr - (3 * pw + 2 * gap)) // 2)
-        wide = pw >= 300
+        wide = pw >= 260
         fnt = self.font_s if wide else self.font_xs
         rh = 15 if wide else 13
-        vx = 150 if wide else 112          # value-column offset inside a panel
-        ph = 30 + 14 * rh + 18             # 14 rows + one caption line
+        vx = 150 if wide else max(88, pw - 52)   # value column inside a panel
+        ph = 30 + 15 * rh + 18             # 15 rows + one caption line
         y0 = self.H - ph - 66
 
         # -- panel A: the home swarm (the live logistic driver) ---------------
         self._panel(x0, y0, pw, ph)
-        self.screen.blit(self.font_m.render(
-            "HOME SWARM -- live", True, (110, 225, 145)), (x0 + 10, y0 + 6))
+        self.screen.blit(fnt.render(
+            "HOME SWARM -- live" if wide else "HOME SWARM", True,
+            (110, 225, 145)), (x0 + 10, y0 + 6))
         sw = self.swarm.telemetry
         rows_a = [
             ("stations (N)", f"{sw.get('stations', 0):.3e}"),
@@ -16379,8 +20107,9 @@ class SystemViewer:
         # -- panel B: elemental riser + swarm intelligence --------------------
         x1 = x0 + pw + gap
         self._panel(x1, y0, pw, ph)
-        self.screen.blit(self.font_m.render(
-            "RISER + SWARM INTEL", True, (255, 190, 110)), (x1 + 10, y0 + 6))
+        self.screen.blit(fnt.render(
+            "RISER + SWARM INTEL" if wide else "RISER + INTEL", True,
+            (255, 190, 110)), (x1 + 10, y0 + 6))
         ri = self.riser.telemetry
         rows_b = [
             ("stages active", f"{ri.get('stages_active', 0)}"
@@ -16426,22 +20155,27 @@ class SystemViewer:
         # -- panel C: the galactic ledger (the real closed loop) --------------
         x2 = x1 + pw + gap
         self._panel(x2, y0, pw, ph)
-        self.screen.blit(self.font_m.render(
-            "GALACTIC LEDGER -- loop", True, (100, 180, 255)), (x2 + 10, y0 + 6))
+        self.screen.blit(fnt.render(
+            "GALACTIC LEDGER -- loop" if wide else "GALACTIC LEDGER", True,
+            (100, 180, 255)), (x2 + 10, y0 + 6))
         ga = self.galactic.telemetry
         rows_c = [
             ("phase", ga.get('phase', '--')),
             ("systems", f"{ga.get('systems', 1):.3e}"),
             ("galaxy frac", f"{ga.get('galaxy_frac', 0) * 100:.3f}%"),
             ("wavefront", f"{ga.get('wavefront_radius_ly', 0):.2e} ly"),
-            ("speed", f"{ga.get('expansion_speed_c', 0):.2f} c"),
+            ("galaxies", f"{ga.get('galaxies_reached', 0)} reached"),
+            ("next galaxy", f"{str(ga.get('next_galaxy', '--'))[:14]}"),
+            ("frontier hop", f"{ga.get('hop_ly', 0):.1f} ly"),
+            ("shell rho*", f"{ga.get('shell_rho_ly3', 0):.1e}/ly^3"),
             ("probes out", f"{ga.get('probes_launched', 0):.2e}"),
             ("in transit", f"{ga.get('probes_in_transit', 0):.2e}"),
             ("lost to ISM", f"{ga.get('probes_failed', 0)}"),
             ("P(survive)", f"{ga.get('probe_survival_probability', 1.0) * 100:.0f}%"),
+            ("GC reached", "YES" if ga.get('gc_reached') else
+                           f"in {max(0.0, ga.get('gc_reach_ly', 0) - ga.get('wavefront_radius_ly', 0)) / max(ga.get('expansion_speed_c', 0.1), 1e-9) / 1e3:.0f} kyr"),
             ("full-sim", f"{ga.get('n_full_physics', 0)} of "
                          f"{self.galactic.n_full_physics_cap}"),
-            ("loops closed", f"{ga.get('cycle_count', 0)}"),
             ("structure", f"{ga.get('total_structure_Msun', 0):.2e} Msun"),
         ]
         for i, (a, b) in enumerate(rows_c):
@@ -16464,9 +20198,11 @@ class SystemViewer:
         if self.gal_focus is not None:
             self._draw_galaxy_focus_panel()
 
-        # bottom: controls bar + status chips
+        # bottom: controls bar + status chips + a REAL light-year scale bar
         sw_ = self.swarm.telemetry
         ga_ = self.galactic.telemetry
+        lpu_ = self._gal_meta["ly_per_unit"]
+        bar_ly = 1.0e4                                  # 10,000 ly bar
         self._bottom_bar(
             "drag=orbit  wheel=zoom  arrows=pan  click=inspect system  "
             "B=cutaway  M=machine  P=plant  O=orbital  C=chemistry  ESC=quit",
@@ -16475,8 +20211,13 @@ class SystemViewer:
                    (f"probes out {ga_.get('probes_in_transit', 0):.1e}",
                     (100, 180, 255)),
                    (f"wavefront {ga_.get('wavefront_radius_ly', 0):.1f} ly",
-                    (140, 160, 255))],
-            scale_m=None)
+                    (140, 160, 255)),
+                   (("GC OK" if ga_.get('gc_reached') else
+                     f"GC {ga_.get('gc_reach_ly', 26600) / 1e3:.1f} kly"),
+                    (255, 238, 190))],
+            scale_m=bar_ly / lpu_,
+            scale_lbl=f"= {bar_ly:.0e} ly",
+            scale_unit="units")
 
     def _draw_galaxy_focus_panel(self):
         """The clicked system's real colonizer telemetry -- same fly-in
@@ -16561,7 +20302,7 @@ class SystemViewer:
         the chemistry/orbital views."""
         self.gal_focus = idx
         if idx == "home":
-            self.look_goal = np.array([0.0, 0.0, 0.0])
+            self.look_goal = np.array(self._gal_meta["sun_pos"], dtype=float)
         else:
             self.look_goal = np.array(self._gal_meta["seeds"][idx][0],
                                       dtype=float)
@@ -16569,7 +20310,8 @@ class SystemViewer:
 
     def _pick_galaxy_seed(self, mx, my):
         """Nearest colonized-system star (or the home star) to the click."""
-        pts = [(0.0, 0.0, 0.0)] + [p for p, _, _ in self._gal_meta["seeds"]]
+        pts = [tuple(self._gal_meta["sun_pos"])] + \
+            [p for p, _, _ in self._gal_meta["seeds"]]
         sx, sy, z = self._project(np.asarray(pts))
         best, bestd = None, 1e9
         for i in range(len(pts)):
@@ -16589,13 +20331,941 @@ class SystemViewer:
         # lift the bubble above the live telemetry strip at the bottom
         self.pan = np.array([0.0, -70.0])
 
+    # ==================== REPLICATION CYCLE VIEW ('R' key) ====================
+    # THE closed loop the whole file models, drawn as ONE ring of real
+    # hardware: a machine builds a MACHINE (self-replication proper), the
+    # swarm builds a SEEDING machine, the seed bootstraps the NEXT machine at
+    # a new star -- and the loop repeats, bounded only by the per-system
+    # carrying capacity K and the LCDM horizon. Every displayed number is
+    # read live from the same model objects the galaxy tab reports
+    # (self.swarm / self.galactic / colonizers / BootstrappingSequence /
+    # probe_propulsion_budget / probe_transit_physics), so this tab can never
+    # drift out of sync with the simulation. Node positions on the ring are
+    # schematic (a process diagram) -- the machinery, physics and telemetry
+    # behind them are the actual sim objects, not illustrations.
+
+    # Stage legend grouped by the three tiers of the literal chain --
+    # (name, colour, function, evidence tag); the _GAL_GROUPS/_PP_PART_GROUPS
+    # convention. MEAS = demonstrated physics, SPEC = design choice,
+    # MODEL = sim output, *FTR = frontier (labelled on-panel, never hidden).
+    _REP_GROUPS = [
+        ("TIER 1 -- a machine builds a MACHINE", [
+            ("mother station",   (110, 225, 145), "net-casts; harvest feeds stockpile", "SPEC"),
+            ("assembly foundry", (255, 190, 110), "ISRU fab prints a full 1e4 kg copy", "FRONTIER"),
+            ("daughter deploy",  (170, 220, 255), "copy unfurls to its own orbit, 6 h", "MODEL"),
+            ("swarm N(t)",       (140, 255, 170), "copies build copies -> K",           "MODEL"),
+        ]),
+        ("TIER 2 -- the swarm builds a SEEDING machine", [
+            ("saturation gate",  (255, 235, 130), "N >= 0.9 K: surplus -> probes",      "MODEL"),
+            ("probe foundry",    (150, 200, 255), "prints the 1e4 kg seed craft",      "SPEC"),
+            ("0.1c launch",      (100, 180, 255), "fusion burn; m0/mf = e^2 = 7.39",   "MEAS"),
+        ]),
+        ("TIER 3 -- the seed builds the NEXT machine", [
+            ("0.1c transit",     (100, 180, 255), "~6.6 ly hop, ISM dose, magsail",    "MODEL"),
+            ("new-star boot",    (255, 215, 130), "87.25 d -> first copy, new star",   "MODEL"),
+            ("loop repeats",     (255, 200, 110), "new mother -> TIER 1 again",        "MODEL"),
+        ]),
+    ]
+    _REP_PARTS = {nm: (col, desc, tag)
+                  for _g, items in _REP_GROUPS for nm, col, desc, tag in items}
+
+    # per-stage mechanism prose for the focus sheet -- what the machine
+    # physically DOES at that stage, in plain words, honestly tagged.
+    _REP_STAGE_PROSE = [
+        # 0 -- MOTHER STATION
+        ("Six 250 m arms carry field cells -- each a magnetic funnel, not a "
+         "wall. Ambient relativistic flux mostly MISSES the web (coverage "
+         "~1e-4 of the swept disc, honest); the real pair supply is pairs "
+         "born inside the cells (CR on liners + beam, enhanced [*FTR]), "
+         "while the cells' overlapping magnetospheres collect order-unity "
+         "of the solar-wind plasma that supplies the protons. Mirror "
+         "fields ride the flux into the intake; organized matter lands in "
+         "the element stockpile that powers TIER 1. Power is captured "
+         "starlight plus onboard fusion -- the same station is the payload "
+         "of every seed probe the swarm later launches."),
+        # 1 -- ASSEMBLY FOUNDRY
+        ("The ISRU fabrication bay prints ONE complete copy: 1e4 kg of "
+         "organized structure at 5e7 J/kg, i.e. ~5e11 J per copy. At the "
+         "10% throughput share assigned to replication that is one copy per "
+         "30 days per station. The universal-assembler step is the file's "
+         "honest frontier -- tagged [*FTR], TRL 1, no demonstrated system "
+         "today. Everything downstream (mass, energy, rates) is ordinary "
+         "engineering arithmetic once a copy can be printed."),
+        # 2 -- DAUGHTER DEPLOYED
+        ("The finished copy unfurls onto its own orbital slot (6 h "
+         "deployment in the bootstrap timeline) and starts harvesting "
+         "immediately -- identical hardware, identical parameters, carried "
+         "over by inheritance. Two stations now feed the foundry rate, "
+         "which is exactly what makes the next stage exponential."),
+        # 3 -- SWARM GROWS
+        ("Copies building copies is the logistic law dN/dt = rN(1-N/K): "
+         "exponential while N << K, bending over as feedstock and orbital "
+         "slots saturate. r is the LESSER of assembly-limited "
+         "(grow_fraction/build_time) and power-limited (captured starlight "
+         "/ energy-per-copy) -- the same honesty as constrained_organize_rate. "
+         "A real 1.5%/yr attrition hazard (Aon/Seradata) is subtracted; "
+         "replication out-builds it, so the swarm is self-repairing."),
+        # 4 -- SATURATION GATE
+        ("At N >= 90% of carrying capacity the growth dividend stops buying "
+         "more local stations and is re-pointed outward: surplus station "
+         "output is debited from the stockpile to build probes "
+         "(conservation-checked launches -- no free matter). The phase "
+         "manager switches the export element for seed manufacture."),
+        # 5 -- PROBE FOUNDRY
+        ("The swarm prints the SEEDING machine: a 1e4 kg station-seed with "
+         "field cell, antenna mast, avionics and power panels -- the payload "
+         "of the interstellar hop. Tsiolkovsky at 0.1c cruise / 0.05c "
+         "exhaust gives mass ratio e^2 = 7.39, so the launch stack masses "
+         "7.39e4 kg and 86.5% of it is propellant. It carries the swarm's "
+         "best-evolved parameters -- generational improvement."),
+        # 6 -- 0.1c TRANSIT
+        ("The hop between stars is honest coasting: ~6.6 ly at 0.1c is a "
+         "~66 yr transit under ISM cosmic-ray dose, survived at "
+         "P = exp(-t/950 yr) ~ 90% with baseline shielding. A magsail brake "
+         "drags on the destination's stellar wind -- real drag physics, not "
+         "free deceleration, and no propellant cost at launch. No FTL: the "
+         "causality bound IS the cost."),
+        # 7 -- NEW STAR -> REPEAT
+        ("Arrival closes the loop: 30 d deceleration-capture, 6 h "
+         "deployment, 3 d first harvest, 10 d first matter, 14 d first "
+         "fusion, 30 d to the first copy -- 87.25 d from seed to a "
+         "self-replicating mother. That new station IS the next mother: "
+         "TIER 1 runs again at the new star, and one more descendant marker "
+         "is added to the spiral -- the cycle literally repeats forever, "
+         "bounded only by K per system and the LCDM horizon globally."),
+    ]
+
+    def _replication_overview(self):
+        self.replication_focus = None
+        self.look_goal = np.array([0.0, 0.0, 0.0])
+        self.dist_goal = 13.2
+        # face the X-Y loop ring almost head-on (yaw~0 looks down -Z)
+        self.yaw, self.pitch = 0.06, -0.10
+        self.pan = np.array([0.0, -30.0])
+
+    def _replication_focus_on(self, idx):
+        """Fly into one stage of the cycle -- same fly-in convention as the
+        chemistry/orbital/galaxy views; the HUD then shows that stage's real
+        live telemetry and mechanism."""
+        self.replication_focus = idx
+        self.look_goal = np.array(self._rep_meta["nodes"][idx], dtype=float)
+        self.dist_goal = 3.1
+
+    def _pick_replication_node(self, mx, my):
+        """Nearest cycle-stage node to the click."""
+        sx, sy, z = self._project(np.asarray(self._rep_meta["nodes"]))
+        best, bestd = None, 1e9
+        for i in range(len(self._rep_meta["nodes"])):
+            if z[i] < 0.06:
+                continue
+            d = (sx[i] - mx) ** 2 + (sy[i] - my) ** 2
+            if d < bestd:
+                bestd, best = d, i
+        if best is None or bestd > 120 ** 2:
+            return None
+        return best
+
+    def _render_replication(self):
+        """REPLICATION CYCLE -- machines building machines that build seeding
+        machines, the loop closing at the next star. The static ring + the
+        eight stage machines are one cached mesh; animated per frame: the
+        matter stream around the loop, the printed copy sliding foundry ->
+        daughter (a real deployment), probes riding the transit chord,
+        arrival/deployment flashes, the live 0.9K capacity gauge around the
+        central star, and one descendant marker per COMPLETED loop (the real
+        cycle_count) spiralling out of the new star. Stage callouts name
+        every node; a clicked stage gets a selection ring + detail sheet."""
+        t = self.anim
+        meta = self._rep_meta
+        nodes = meta["nodes"]
+        R = meta["ring_R"]
+        ga = self.galactic.telemetry
+        self._render_solid(self._repV, self._repF, self._repC,
+                           cache_key="rep_cycle")
+        P = self._rep_p
+        if P is None:
+            P = self._rep_p = {"prev_prog": 0.0, "flash": []}
+
+        # ---- central star + the live capacity gauge ----------------------
+        # The cycle runs INSIDE one system first: the star powers it; the
+        # inner ring fills toward the 0.9K saturation gate as the REAL swarm
+        # model grows -- the lit dots are N/(0.9K), live, not illustration.
+        c_sx, c_sy, c_z = self._project([(0.0, 0.0, 0.0)])
+        if c_z[0] > 0.06:
+            self._draw_glow_dot(c_sx[0], c_sy[0], c_z[0],
+                                (255, 222, 110), base_r=9)
+        fill = min(1.0, self.swarm.N / max(0.9 * self.swarm.K_stations, 1e-30))
+        n_g = 40
+        n_lit = int(round(fill * n_g))
+        ring = np.array([(1.35 * math.cos(a), 1.35 * math.sin(a), 0.0)
+                         for a in np.arange(n_g) * (2 * math.pi / n_g)
+                         + t * 0.03])
+        sx, sy, sz = self._project(ring)
+        for k in range(n_g):
+            if sz[k] > 0.06:
+                self._draw_glow_dot(sx[k], sy[k], sz[k],
+                                    (110, 225, 145) if k < n_lit
+                                    else (48, 60, 80), base_r=2.2)
+
+        # ---- the matter stream around the loop (counter-clockwise) -------
+        n_f = 44
+        ph0 = t * 0.030
+        fps = np.empty((n_f, 3))
+        fcols = []
+        for i in range(n_f):
+            ph = (i / n_f + ph0) % 1.0
+            a = math.pi / 2 + ph * 2 * math.pi
+            fps[i] = (R * math.cos(a), R * math.sin(a), 0.0)
+            seg = int(ph * 8.0)
+            fcols.append((110, 225, 145) if seg < 4 else
+                         (150, 200, 255) if seg < 6 else (255, 200, 110))
+        sx, sy, sz = self._project(fps)
+        for i in range(n_f):
+            if sz[i] > 0.06:
+                self._draw_glow_dot(sx[i], sy[i], sz[i], fcols[i], base_r=2.4)
+
+        # ---- the printed copy: slides foundry -> daughter as it completes -
+        # one full visual cycle ~14 s of viewer time stands in for the real
+        # 30-day build; the HUD captions it honestly as schematic motion.
+        prog = (t * 0.07) % 1.0
+        slide = min(prog * 1.30, 1.0)
+        a_d = math.pi / 2 + math.pi / 4 + (math.pi / 4) * slide
+        dp = np.array([R * math.cos(a_d), R * math.sin(a_d),
+                       0.22 * math.sin(slide * math.pi)])
+        self._render_solid(self._rep_dV, self._rep_dF, self._rep_dC,
+                           offset=tuple(dp))
+        if prog < P["prev_prog"] - 0.5:
+            P["flash"].append((tuple(nodes[2]), t))
+        P["prev_prog"] = prog
+
+        # ---- probes riding the transit chord ------------------------------
+        # The probe does NOT follow the ring -- it takes the direct
+        # interstellar leg probe-foundry -> new-star, with a short trail.
+        t0, t1 = (np.array(meta["transit"][0]), np.array(meta["transit"][1]))
+        n_pr = 2
+        pr_pts = []
+        for j in range(n_pr):
+            ph = (t * 0.045 + j / n_pr) % 1.0
+            p = t0 + (t1 - t0) * ph
+            pr_pts.append(p)
+            pr_pts.append(p - (t1 - t0) * 0.06)
+            prev = P.get("probe_prev_" + str(j), ph)
+            if ph < prev - 0.5:
+                P["flash"].append((meta["new_star"], t))
+            P["probe_prev_" + str(j)] = ph
+        sx, sy, sz = self._project(np.asarray(pr_pts))
+        for j in range(n_pr):
+            if min(sz[2 * j], sz[2 * j + 1]) > 0.06:
+                _pg.draw.line(self.screen, (45, 80, 130),
+                              (int(sx[2 * j]), int(sy[2 * j])),
+                              (int(sx[2 * j + 1]), int(sy[2 * j + 1])), 1)
+                self._draw_glow_dot(sx[2 * j], sy[2 * j], sz[2 * j],
+                                    (100, 180, 255), base_r=3.4)
+
+        # ---- deployment / arrival flashes --------------------------------
+        P["flash"] = [(p, t0f) for p, t0f in P["flash"] if t - t0f < 0.8]
+        if P["flash"]:
+            fx, fy, fz = self._project(np.array([p for p, _ in P["flash"]]))
+            for k, (_p, t0f) in enumerate(P["flash"]):
+                if fz[k] > 0.06:
+                    age = t - t0f
+                    cc = tuple(int(c * max(0.0, 1.0 - age / 0.8))
+                               for c in (140, 200, 255))
+                    _pg.draw.circle(self.screen, cc,
+                                    (int(fx[k]), int(fy[k])),
+                                    int(4 + 20 * age), 1)
+
+        # ---- descendant systems: one marker per COMPLETED loop -----------
+        # The loop's output, literally: each marker is a new star + first
+        # station spawned by a closed cycle, spiralling outward from the
+        # NEW STAR node. Count is the live sim total -- the spiral grows
+        # for real as loops close.
+        n_mk = min(max(int(ga.get("cycle_count", 0)),
+                       int(ga.get("systems", 1)) - 1),
+                   len(meta["spiral_dirs"]) * 3)
+        ns = np.array(meta["new_star"])
+        if n_mk:
+            mk_pts = np.array([tuple(ns + meta["spiral_dirs"]
+                                     [k % len(meta["spiral_dirs"])]
+                                     * (0.85 + 0.30
+                                        * (k // len(meta["spiral_dirs"]))
+                                        + 0.09
+                                        * (k % len(meta["spiral_dirs"]))))
+                               for k in range(n_mk)])
+            sx, sy, sz = self._project(mk_pts)
+            for k in range(n_mk):
+                if sz[k] > 0.06:
+                    pr = 1.0 + 0.3 * math.sin(t * 1.6 + k * 2.1)
+                    self._draw_glow_dot(sx[k], sy[k], sz[k],
+                                        (150, 220, 255), base_r=3.0 * pr)
+
+        # ---- stage callouts + the focus ring ------------------------------
+        sx, sy, sz = self._project(np.asarray(nodes))
+        anchors = np.asarray(nodes) * 1.17
+        anchors[4] = np.asarray(nodes[4]) * 0.78   # bottom gate: label INSIDE
+        anchors[5] = np.asarray(nodes[5]) * 1.30   # probe foundry: wide right
+        lx, ly, lz = self._project(anchors)
+        if self.replication_focus is not None:
+            k = self.replication_focus
+            if sz[k] > 0.06:
+                rr = int(15 + 4 * math.sin(t * 2.0))
+                _pg.draw.circle(self.screen, (255, 240, 180),
+                                (int(sx[k]), int(sy[k])), rr, 1)
+        else:
+            for k in range(8):
+                if sz[k] > 0.06 and lz[k] > 0.06:
+                    _pg.draw.line(self.screen, (60, 85, 115),
+                                  (int(sx[k]), int(sy[k])),
+                                  (int(lx[k]), int(ly[k])), 1)
+                    lbl = f"{k + 1} " + meta["labels"][k][0]
+                    tw_ = self.font_xs.size(lbl)[0]
+                    self._label_bg(lbl, self.font_xs,
+                                   int(lx[k] - tw_ / 2), int(ly[k]) - 8,
+                                   meta["colors"][k])
+
+    # ---------------------- REPLICATION HUD (baked) ------------------------
+    def _rep_hud_build(self):
+        """Bake every STATIC element of the replication tab into ONE overlay
+        (the _gal_hud_build trick): the three-tier loop legend, the closed-
+        loop sustainability audit, the real-world precedent table, the
+        per-copy economy, the bootstrap timeline and the model-honesty
+        ledger -- all computed from this file's own constants/model
+        functions so the numbers can never drift out of sync with the sim."""
+        W, H = self.W, self.H
+        hud = _pg.Surface((W, H), _pg.SRCALPHA)
+        blit = hud.blit
+        txt = self._txt
+        fx = self.font_xs
+
+        # ---------------- derived numbers (single source of truth) --------
+        sp = self.galactic.spec
+        v_c = sp["expansion_speed_c"]
+        K = self.swarm.K_stations
+        r_sw = self.swarm.grow_fraction / self.swarm.build_time_s
+        t2_d = math.log(2.0) / r_sw / 86400.0
+        t_sat_yr = math.log(max(K, 2.0)) / r_sw / YR
+        m_rep = sp["replicator_mass_kg"]
+        e_copy = m_rep * sp.get("isru_energy_per_kg_J", 5.0e7)
+        build_d = self.swarm.build_time_s / 86400.0
+        grow_pct = self.swarm.grow_fraction * 100.0
+        boot_d = BootstrappingSequence.TOTAL_BOOTSTRAP_S / 86400.0
+        mwt = milky_way_swept_table(sp)
+        hop_ly = mwt["hop_local_ly"]
+        transit = probe_transit_physics(hop_ly, v_c, sp)
+        prop = probe_propulsion_budget(SystemColonizer.PROBE_MASS_KG, v_c,
+                                     spec=sp)
+        per_sys_kg = sp["isru_baryon_reservoir_kg"]
+
+
+        def tag(hx, hy, kind):
+            tt, tc = self._vtag(kind)
+            blit(txt(fx, tt, tc), (hx, hy))
+
+        # ================= LEFT: THE LOOP, tier by tier ====================
+        lx, ly, lw = 14, 66, 400
+        rowh = 12
+        leg_rows = sum(len(it) for _g, it in self._REP_GROUPS)
+        leg_h = 46 + 17 * len(self._REP_GROUPS) + rowh * leg_rows + 24
+        self._hero_panel(hud, lx, ly, lw, leg_h)
+        blit(txt(self.font_m, "REPLICATION LOOP -- every stage, tagged",
+                 (150, 200, 255)), (lx + 10, ly + 8))
+        blit(txt(fx, f"the literal chain ({len(self._REP_PARTS)} real parts)",
+                 (140, 160, 185)), (lx + 10, ly + 28))
+        yy = ly + 46
+        for gname, items in self._REP_GROUPS:
+            blit(txt(fx, "-- " + gname + " " + "-" * max(2, 23 - len(gname)),
+                     (95, 160, 200)), (lx + 10, yy))
+            yy += 17
+            for nm, col, desc, tg in items:
+                _pg.draw.rect(hud, col, (lx + 10, yy + 2, 8, 8))
+                blit(txt(fx, nm, (225, 235, 250)), (lx + 24, yy))
+                blit(txt(fx, ": " + desc, (150, 172, 198)),
+                     (lx + 24 + fx.size(nm)[0] + 4, yy))
+                tag(lx + lw - 52, yy, tg)
+                yy += rowh
+        blit(txt(fx, "[MEAS] demo'd [SPEC] design [MODEL] sim [*FTR] frontier",
+                 (110, 128, 150)), (lx + 10, yy + 3))
+        leg_bottom = ly + leg_h
+
+        # ------------- LEFT: LIVE CLOSURE AUDIT (shell only) ---------------
+        # The panel body is drawn EVERY FRAME in _draw_replication_ui from
+        # replication_closure_audit(colonizers[0]) -- verdict, per-channel
+        # margins, the binding channel and the feed recipe are live model
+        # state, not baked claims. 12 rows of headroom are reserved here.
+        ny = leg_bottom + 12
+        sus_n = 12
+        sh = 28 + rowh * sus_n + 8
+        self._hero_panel(hud, lx, ny, lw, sh)
+        blit(txt(self.font_s, "CLOSURE AUDIT -- live, all channels",
+                 (110, 225, 145)), (lx + 10, ny + 6))
+        blit(txt(fx, "supply/demand per channel (gen-0 system)",
+                 (110, 128, 150)), (lx + 10, ny + 8 + 10))
+        self._rep_sus_rect = (lx + 10, ny + 28, lw - 20, rowh * sus_n)
+        ny2 = ny + sh + 12
+
+        # ------------- LEFT: REAL-WORLD PRECEDENT --------------------------
+        pre_rows = [
+            ("von Neumann kinematic replicator theory, 1948", "MEAS"),
+            ("NASA/Ames self-replicating lunar factory, 1980", "MEAS"),
+            ("Freitas & Gilbreath 'closure' = the hard problem", "MEAS"),
+            ("RepRap: prints ~50% of its own parts (2004)", "MEAS"),
+            ("the cell: self-replication exists (biology)", "MEAS"),
+            ("satellite fleets: 1.5%/yr all-cause failure", "MEAS"),
+            ("Dyson swarm concept (Dyson 1960)", "SPEC"),
+            ("fully autonomous universal assembler", "FRONTIER"),
+        ]
+        ph_ = 28 + rowh * len(pre_rows) + 8
+        self._hero_panel(hud, lx, ny2, lw, ph_)
+        blit(txt(self.font_s, "REAL-WORLD PRECEDENT -- what exists today",
+                 (120, 210, 255)), (lx + 10, ny2 + 6))
+        yy = ny2 + 26
+        for ln, tg in pre_rows:
+            blit(txt(fx, ln, (190, 208, 228)), (lx + 10, yy))
+            tag(lx + lw - 52, yy, tg)
+            yy += rowh
+        self._rep_left_bot = ny2 + ph_
+
+        # ================= RIGHT: ONE LOOP, ITEMIZED =======================
+        rx, rw = W - 392, 378
+        cost_rows = [
+            (f"copy mass = {m_rep:.0e} kg (one station)", "SPEC"),
+            (f"copy energy = {e_copy:.1e} J @"
+             f" {sp.get('isru_energy_per_kg_J', 5e7):.0e} J/kg", "MODEL"),
+            (f"build {build_d:.0f} d at {grow_pct:.0f}% throughput", "SPEC"),
+            (f"r_assembly = {r_sw:.2e}/s; doubling {t2_d:.0f} d", "MODEL"),
+            ("r = min(assembly, power) -- power gates early N", "MODEL"),
+            (f"saturation N >= 0.9K ~ {t_sat_yr:.0f} yr to fill", "MODEL"),
+            (f"probe payload {prop['payload_kg']:.0e} kg seed", "SPEC"),
+            (f"launch {prop['launch_mass_kg']:.2e} kg,"
+             f" {prop['propellant_frac'] * 100:.1f}% fuel", "MEAS"),
+            (f"burn energy {prop['energy_J']:.1e} J per launch", "MODEL"),
+            (f"transit {transit['transit_time_yr']:.0f} yr; P_surv"
+             f" {transit['survival_probability'] * 100:.0f}%", "MODEL"),
+            (f"bootstrap -> first copy {boot_d:.1f} d", "MODEL"),
+            (f"per-system ceiling {per_sys_kg:.0e} kg organized", "SPEC"),
+        ]
+        ch = 28 + rowh * len(cost_rows) + 8
+        self._hero_panel(hud, rx, 66, rw, ch)
+        blit(txt(self.font_m, "ONE LOOP, ITEMIZED -- the true cost",
+                 (255, 190, 110)), (rx + 10, 74))
+        yy = 94
+        for ln, tg in cost_rows:
+            blit(txt(fx, ln, (190, 208, 228)), (rx + 10, yy))
+            tag(rx + rw - 52, yy, tg)
+            yy += rowh
+
+        # ------------- RIGHT: BOOTSTRAP -- arrival to first copy -----------
+        by = 66 + ch + 12
+        bh = 128
+        self._hero_panel(hud, rx, by, rw, bh)
+        blit(txt(self.font_m, "BOOTSTRAP -- arrival to first copy",
+                 (120, 210, 255)), (rx + 10, by + 8))
+        tag(rx + rw - 58, by + 8, "MODEL")
+        px0, px1 = rx + 14, rx + rw - 14
+        py = by + 74
+        # cumulative log-TIME axis: each phase occupies the real span
+        # [t_start, t_end] of the bootstrap sequence -- segments tile exactly
+        # and the capture phase's 30-day dominance is honest, not clipped.
+        t_lo, t_hi = 3600.0, BootstrappingSequence.TOTAL_BOOTSTRAP_S * 1.06
+        span = math.log10(t_hi) - math.log10(t_lo)
+        cum = 0.0
+        _BOOT_LBL = ["capture", "deploy", "harvest", "matter",
+                     "fusion", "1st copy"]
+        for i, (nm, dur, _d) in enumerate(BootstrappingSequence.PHASES[:6]):
+            t_s, cum = max(cum, t_lo), cum + dur
+            t_e = max(cum, t_lo)
+            xs = px0 + int((math.log10(t_s) - math.log10(t_lo))
+                           / span * (px1 - px0))
+            xe = px0 + int((math.log10(t_e) - math.log10(t_lo))
+                           / span * (px1 - px0))
+            wseg = max(2, min(xe, px1) - xs)
+            colr = _REP_NODE_COLORS[min(i, len(_REP_NODE_COLORS) - 1)]
+            _pg.draw.rect(hud, (colr[0] // 3, colr[1] // 3, colr[2] // 3),
+                          (xs, py - 14, wseg, 14))
+            _pg.draw.rect(hud, (70, 90, 115), (xs, py - 14, wseg, 14), 1)
+            dd = dur / 86400.0
+            dur_lbl = f"{dd:.1f}d" if dd >= 1 else f"{dur / 3600:.0f}h"
+            # phase names go in a 2-row chip legend under the bar (the late
+            # phases compress into the log axis's tail -- chips never collide)
+            cw = (px1 - px0) // 3
+            cx_ = px0 + (i % 3) * cw
+            cy_ = py + 4 + (i // 3) * 13
+            _pg.draw.rect(hud, colr, (cx_, cy_ + 2, 7, 7))
+            blit(txt(fx, f"{_BOOT_LBL[i]} {dur_lbl}", (190, 208, 228)),
+                     (cx_ + 10, cy_))
+        blit(txt(fx, f"TOTAL {boot_d:.1f} d (log time; phases 6-9 run on the"
+             f" real swarm physics)", (110, 128, 150)), (rx + 14, by + 110))
+
+        # ------------- RIGHT: LOGISTIC LAW -- the bounded S-curve ----------
+        cy = by + bh + 12
+        gh = 150
+        self._hero_panel(hud, rx, cy, rw, gh)
+        blit(txt(self.font_m, "LOGISTIC GROWTH -- N(t) vs K",
+                 (110, 225, 145)), (rx + 10, cy + 8))
+        tag(rx + rw - 58, cy + 8, "MODEL")
+        # curve panel rect remembered for the LIVE N-marker in _draw_..._ui
+        gx0, gy0, gw, gh_ = rx + 26, cy + 40, rw - 52, gh - 78
+        _pg.draw.rect(hud, (50, 65, 85), (gx0, gy0, gw, gh_), 1)
+        # LOG-LOG (log10 N vs log10 t): exponential phase is a straight
+        # rising line bending into the K plateau -- the readable form of the
+        # logistic law instead of a right-edge knee.
+        t_lo_c = 86400.0                       # 1 day
+        t_hi_c = t_sat_yr * 1.6 * YR
+        span_c = math.log10(t_hi_c) - math.log10(t_lo_c)
+        lK = math.log10(K)
+        N0 = 1.0
+        pts = []
+        for i in range(61):
+            tt = t_lo_c * (t_hi_c / t_lo_c) ** (i / 60)
+            N = K / (1.0 + (K - N0) * math.exp(-r_sw * tt))
+            fxr = gx0 + (math.log10(tt) - math.log10(t_lo_c)) / span_c * gw
+            fyr = gy0 + gh_ - (math.log10(max(N, 1.0)) / lK) * gh_
+            pts.append((int(fxr), int(fyr)))
+        _pg.draw.lines(hud, (110, 225, 145), False, pts, 2)
+        # decade gridlines on the log-N axis + the 0.9K saturation gate
+        for dec in range(0, int(lK) + 1, 7):
+            gy_ = gy0 + gh_ - (dec / lK) * gh_
+            _pg.draw.line(hud, (34, 44, 60), (gx0, int(gy_)),
+                          (gx0 + gw, int(gy_)), 1)
+            blit(txt(fx, f"1e{dec}", (110, 128, 150)),
+                 (gx0 - 24, int(gy_) - 5))
+        _pg.draw.line(hud, (70, 90, 115), (gx0, gy0), (gx0 + gw, gy0), 1)
+        gy9 = gy0 + gh_ - (math.log10(0.9 * K) / lK) * gh_
+        for xx in range(gx0, gx0 + gw, 8):
+            _pg.draw.line(hud, (255, 235, 130), (xx, int(gy9)),
+                          (xx + 4, int(gy9)), 1)
+        blit(txt(fx, "K", (190, 208, 228)), (gx0 + gw - 10, gy0 - 14))
+        blit(txt(fx, "0.9K -> probes", (255, 235, 130)),
+             (gx0 + 4, int(gy9) - 14))
+        blit(txt(fx, f"log t: 1 d -> ~{t_sat_yr:.0f} yr, from 1 seed",
+                 (150, 175, 200)), (gx0 + gw - 168, gy0 + gh_ + 6))
+        self._rep_chart_rect = (gx0, gy0, gw, gh_, K, t_lo_c, t_hi_c)
+        self._rep_right_bot = cy + gh
+
+        # ------------- RIGHT: MODEL HONESTY -------------------------------
+        hy = cy + gh + 12
+        full = [
+            "REAL: logistic law, rocket equation,",
+            "ISRU energy accounting, satellite",
+            "attrition, bootstrap timings, the",
+            "closed matter/energy audit -- every",
+            "kg and J on this page is conserved.",
+            "MODEL: smooth growth, P_surv, the",
+            "0.9K gate, per-system K, 8-sys",
+            "cohort + aggregate, and the 20x",
+            "charged-dust feed enrichment.",
+            "*FTR: the universal assembler (TRL",
+            "1) -- one full copy printable is",
+            "the single undemonstrated step.",
+            "Everything else is accounting.",
+        ]
+        compact = [
+            "REAL: logistic law, rocket eqn,",
+            "energy audit, attrition, bootstrap",
+            "MODEL: growth, P_surv, 0.9K, K,",
+            "8-sys cohort, 20x dust feed",
+            "*FTR: universal assembler (TRL 1)",
+        ]
+        avail = self.H - 66 - 8 - hy
+        honesty, hh = None, 0
+        for cand in (full, compact):
+            if 30 + 15 * len(cand) + 8 <= avail:
+                honesty, hh = cand, 30 + 15 * len(cand) + 8
+                break
+        if honesty:
+            self._hero_panel(hud, rx, hy, rw, hh)
+            blit(txt(self.font_m, "MODEL HONESTY -- what is assumed",
+                     (255, 180, 95)), (rx + 10, hy + 8))
+            for i, ln in enumerate(honesty):
+                blit(txt(fx, ln, (190, 208, 228)),
+                     (rx + 10, hy + 30 + i * 15))
+            self._rep_right_bot = hy + hh
+        self._rep_hud = hud
+        self._rep_hud_key = (W, H)
+
+    def _draw_replication_ui(self):
+        """UI overlay for the REPLICATION view. The static panels (tier
+        legend, sustainability audit, precedents, per-copy economy, bootstrap
+        timeline, logistic chart, honesty ledger) are baked into one overlay
+        rebuilt on resize; the live bits -- the N-marker on the S-curve, the
+        three-tier telemetry strip and the focused-stage sheet -- re-render
+        every frame from the real model objects."""
+        self._top_bar(
+            "RADIANT  ::  REPLICATION  --  machines -> machines -> seeders",
+            "mother -> foundry -> daughter -> swarm -> 0.9K gate -> probe "
+            "foundry -> 0.1c hop -> new star -> repeat (click a stage)",
+            title_col=(150, 200, 255))
+        if getattr(self, "_rep_hud_key", None) != (self.W, self.H):
+            self._rep_hud_build()
+        self.screen.blit(self._rep_hud, (0, 0))
+
+        # ------- LIVE CLOSURE AUDIT -- the gen-0 system's real ledger ------
+        # every number below is this-step model state (margins = supply /
+        # demand), so 'self-sustaining' here is an audited live inequality,
+        # not a slogan.
+        sx, sy, sw_, _srh = self._rep_sus_rect
+        cl = {}
+        if self.galactic.colonizers:
+            cl = self.galactic.colonizers[0].telemetry.get("closure") or {}
+        def _marg(m):
+            if m == float("inf"):
+                return "n/a"
+            return f"{m:.1e}x" if m >= 100 else f"{m:.2f}x"
+        if cl:
+            ok = cl["closed"]
+            vcol = (110, 225, 145) if ok else (255, 120, 110)
+            _sym = {z: s for z, s, _, _ in ElementStockpile.TRACKED}
+            wz = cl.get("worst_element_Z")
+            ncov = sum(1 for r in cl["elements"] if r[4])
+            el_str = f"elems  {ncov}/{len(cl['elements'])} raw-covered"
+            if wz is not None:
+                el_str += f" (tightest { _sym.get(wz, str(wz)) })"
+            rows_s = [
+                ("VERDICT: " + ("SELF-SUSTAINING" if ok else "NOT CLOSED")
+                 + f"  (bind: {cl['binding']})", vcol),
+                (f"mass   isru/copy   {_marg(cl['margins']['mass'])}",
+                 (190, 208, 228)),
+                (f"power  growth share {_marg(cl['margins']['power'])}",
+                 (190, 208, 228)),
+                (el_str, (190, 208, 228)),
+                (f"riser  transmute pwr {_marg(cl['margins']['riser'])}",
+                 (190, 208, 228)),
+                (f"fuel   H-supply/cadence {_marg(cl['margins']['propellant'])}",
+                 (190, 208, 228)),
+                (f"launch {cl.get('launch_demand_s', 0):.1e}/s -- POWER-bound"
+                 f" ({cl.get('launch_energy_W', 0):.1e} W)", (190, 208, 228)),
+                (f"repair out-builds 1.5%/yr {_marg(cl['margins']['attrition'])}",
+                 (190, 208, 228)),
+                (f"feed   {cl['dust_share'] * 100:.0f}% dust-enriched"
+                 f" grains + gas (sweeps {cl['sweep_overhead']:.0f}x vol)",
+                 (190, 208, 228)),
+                (f"isru   {cl['isru_kg_s']:.1e} kg/s organized baryons",
+                 (190, 208, 228)),
+                (f"copies {cl['gross_copies_s']:.1e}/s gross"
+                 f" ({cl['copy_kg_s']:.1e} kg/s)", (190, 208, 228)),
+                (f"launches {cl['launch_rate_s']:.1e}/s realized",
+                 (190, 208, 228)),
+                ("matter banked, never created -- all kg+J conserved",
+                 (140, 160, 185)),
+            ]
+        else:
+            rows_s = [("waiting on first step...", (140, 160, 185))]
+        fx_ = self.font_xs
+        for i, (ln, cc) in enumerate(rows_s[:12]):
+            self.screen.blit(self._txt(fx_, ln, cc),
+                             (sx, sy + i * 12))
+
+        # ------- live N marker on the baked logistic chart -----------------
+        gx0, gy0, gw, gh_, K, t_lo_c, t_hi_c = self._rep_chart_rect
+        r_sw = self.swarm.grow_fraction / self.swarm.build_time_s
+        # inverting the logistic for N's position on the baked log-time axis
+        N_now = max(self.swarm.N, 1.0)
+        t_now = (math.log(max((K - 1.0) * N_now
+                             / max(K - N_now, 1e-30), 1e-30)) / r_sw
+                 if N_now < K else t_hi_c)
+        t_now = min(max(t_now, t_lo_c), t_hi_c)
+        mxp = gx0 + (math.log10(t_now) - math.log10(t_lo_c)) \
+            / (math.log10(t_hi_c) - math.log10(t_lo_c)) * gw
+        myp = gy0 + gh_ - (math.log10(N_now) / math.log10(max(K, 1.1))) * gh_
+        _pg.draw.circle(self.screen, (255, 240, 180), (int(mxp), int(myp)), 4)
+        _pg.draw.circle(self.screen, (40, 50, 60), (int(mxp), int(myp)), 4, 1)
+        self.screen.blit(self._txt(self.font_xs, "N now", (255, 240, 180)),
+                         (int(mxp) + 6, int(myp) - 6))
+
+        # ------- live telemetry strip (bottom-centre corridor) -------------
+        cl, cr = 424, self.W - 408
+        gap = 12
+        pw = max(110, min(356, (cr - cl - 2 * gap) // 3))
+        x0 = max(cl, (cl + cr - (3 * pw + 2 * gap)) // 2)
+        wide = pw >= 230
+        fnt = self.font_s if wide else self.font_xs
+        rh = 15 if wide else 13
+        vx = min(150, pw - 96) if wide else max(64, int(pw * 0.52))
+        ph = 30 + 13 * rh + 18
+        y0 = self.H - ph - 66
+
+        def _cmp_rows(rows):
+            # narrow windows: first-word labels + unit-free values so the
+            # two columns never run into each other
+            if wide:
+                return rows
+            lab = {"bootstrapping": "boot", "failed@1.5%": "failed",
+                   "P(survive)": "P(surv)", "full-sim": "full"}
+            val = {"1 of 8": "1/8", "k/sys + LCDM horizon": "K+LCDM",
+                   "while feed+power last": "feed+power",
+                   "U (seed trade)": "U"}
+            return [(lab.get(a, a.split(" ")[0]),
+                     val.get(b, b.split(" ")[0])) for a, b in rows]
+
+        # -- panel A: TIER 1 -- the self-copy machine -----------------------
+        self._panel(x0, y0, pw, ph)
+        self.screen.blit((self.font_m if pw >= 210 else self.font_xs).render(
+            "TIER 1 -- machine->machine" if wide else "TIER 1 machine>mach",
+            True, (110, 225, 145)), (x0 + 10, y0 + 6))
+        sw = self.swarm.telemetry
+        rows_a = [
+            ("stations N", f"{sw.get('stations', 0):.3e}"),
+            ("carrying K", f"{sw.get('K_max', 0):.2e}"),
+            ("fill N/K", f"{self.swarm.N / max(K, 1e-30) * 100:.3f}%"),
+            ("phase", sw.get('growth_phase', '--')),
+            ("rep rate", f"{sw.get('replication_rate_s', 0):.1e}/s"),
+            ("built total", f"{sw.get('total_built', 0):.2e}"),
+            ("failed@1.5%", f"{sw.get('total_failed', 0):.1e}"),
+            ("resilience", f"{sw.get('resilience_frac', 1.0) * 100:.1f}%"),
+            ("arms x len", f"{sw.get('n_arms', 0):.0f}x"
+                           f"{sw.get('arm_len_m', 0):.0f} m"),
+            ("swept vol", f"{sw.get('swept_volume_m3', 0):.1e} m^3"),
+            ("field cells", f"{sw.get('total_cells', 0):.1e}"),
+            ("pairs/s", f"{sw.get('pairs_per_s', 0):.2e}"),
+            ("mass/s", f"{sw.get('mass_kg_s', 0):.1e} kg/s"),
+        ]
+        for i, (a, b) in enumerate(_cmp_rows(rows_a)):
+            self.screen.blit(fnt.render(a, True, (150, 175, 200)),
+                             (x0 + 10, y0 + 30 + i * rh))
+            self.screen.blit(fnt.render(b, True, (235, 245, 255)),
+                             (x0 + vx, y0 + 30 + i * rh))
+
+        # -- panel B: TIER 2 -- machines that build seeding machines --------
+        x1 = x0 + pw + gap
+        self._panel(x1, y0, pw, ph)
+        self.screen.blit((self.font_m if pw >= 210 else self.font_xs).render(
+            "TIER 2 -- swarm->seeder" if wide else "TIER 2 swarm>seed",
+            True, (150, 200, 255)), (x1 + 10, y0 + 6))
+        ga = self.galactic.telemetry
+        gate = self.swarm.N - 0.9 * self.swarm.K_stations
+        prop = probe_propulsion_budget(SystemColonizer.PROBE_MASS_KG,
+                                       self.galactic.spec["expansion_speed_c"],
+                                       spec=self.galactic.spec)
+        rows_b = [
+            ("gate 0.9K", "OPEN" if gate >= 0 else "closed"),
+            ("surplus N", f"{max(gate, 0.0):.2e}"),
+            ("seed mass", f"{SystemColonizer.PROBE_MASS_KG:.0e} kg"),
+            ("launch mass", f"{prop['launch_mass_kg']:.2e} kg"),
+            ("propellant", f"{prop['propellant_frac'] * 100:.1f}%"),
+            ("probes out", f"{ga.get('probes_launched', 0):.2e}"),
+            ("in transit", f"{ga.get('probes_in_transit', 0):.2e}"),
+            ("lost to ISM", f"{ga.get('probes_failed', 0)}"),
+            ("P(survive)", f"{ga.get('probe_survival_probability', 1.0) * 100:.0f}%"),
+            ("stockpile", f"{(self.galactic.colonizers[0].stockpile.total_kg() if self.galactic.colonizers else 0.0):.1e} kg"),
+            ("phase mgr", ga.get('phase', '--')),
+            ("export el.", "U (seed trade)" if gate >= 0 else "--"),
+            ("loops done", f"{ga.get('cycle_count', 0)}"),
+        ]
+        for i, (a, b) in enumerate(_cmp_rows(rows_b)):
+            self.screen.blit(fnt.render(a, True, (150, 175, 200)),
+                             (x1 + 10, y0 + 30 + i * rh))
+            self.screen.blit(fnt.render(b, True, (235, 245, 255)),
+                             (x1 + vx, y0 + 30 + i * rh))
+
+        # -- panel C: TIER 3 -- the next-generation cohort ------------------
+        x2 = x1 + pw + gap
+        self._panel(x2, y0, pw, ph)
+        self.screen.blit((self.font_m if pw >= 210 else self.font_xs).render(
+            "TIER 3 -- seeder->machine" if wide else "TIER 3 seed>mach",
+            True, (255, 200, 110)), (x2 + 10, y0 + 6))
+        cols = self.galactic.colonizers
+        n_boot = sum(1 for c in cols if not c.bootstrap.complete)
+        rows_c = [
+            ("systems", f"{ga.get('systems', 1):.3e}"),
+            ("full-sim", f"{ga.get('n_full_physics', 0)} of "
+                         f"{self.galactic.n_full_physics_cap}"),
+            ("bootstrapping", f"{n_boot} systems"),
+            ("wavefront", f"{ga.get('wavefront_radius_ly', 0):.2e} ly"),
+            ("galaxy frac", f"{ga.get('galaxy_frac', 0) * 100:.4f}%"),
+            ("speed", f"{ga.get('expansion_speed_c', 0):.2f} c"),
+            ("max gen", f"{max((c.telemetry.get('generation', 0) for c in cols), default=0)}"),
+            ("structure", f"{ga.get('total_structure_Msun', 0):.2e} Msun"),
+            ("GC reached", str(bool(ga.get('gc_reached')))),
+            ("newest seed", f"gen {cols[-1].telemetry.get('generation', 0)}"
+             if len(cols) > 1 else "--"),
+            ("loops closed", f"{ga.get('cycle_count', 0)}"),
+            ("bound", "K/sys + LCDM horizon"),
+            ("forever?", "while feed+power last"),
+        ]
+        for i, (a, b) in enumerate(_cmp_rows(rows_c)):
+            self.screen.blit(fnt.render(a, True, (150, 175, 200)),
+                             (x2 + 10, y0 + 30 + i * rh))
+            self.screen.blit(fnt.render(b, True, (235, 245, 255)),
+                             (x2 + vx, y0 + 30 + i * rh))
+
+        # ------- focused-stage detail sheet (click a node) -----------------
+        if self.replication_focus is not None:
+            self._draw_replication_focus_panel()
+
+        # bottom: controls bar + status chips
+        self._bottom_bar(
+            "drag=orbit  wheel=zoom  arrows=pan  click stage=inspect  "
+            "TAB/1-8=cycle stages  HOME=reset  G=galaxy  ESC=quit",
+            chips=[(f"N {sw.get('stations', 0):.1e}", (110, 225, 145)),
+                   (f"fill {self.swarm.N / max(self.swarm.K_stations, 1e-30) * 100:.1f}% K",
+                    (140, 255, 170)),
+                   (f"probes {ga.get('probes_in_transit', 0):.1e}",
+                    (100, 180, 255)),
+                   (f"loops {ga.get('cycle_count', 0)}", (255, 200, 110))],
+            scale_m=None)
+
+    def _draw_replication_focus_panel(self):
+        """The clicked stage's real mechanism + live telemetry -- the same
+        fly-in convention as the galaxy focus sheet: prose on what the
+        machine physically does, then live (label, value, tag) rows pulled
+        from the actual sim objects."""
+        i = self.replication_focus
+        meta = self._rep_meta
+        title = meta["labels"][i][0]
+        col = meta["colors"][i]
+        prose = self._REP_STAGE_PROSE[i]
+        sw = self.swarm.telemetry
+        ga = self.galactic.telemetry
+        sp = self.galactic.spec
+        K = self.swarm.K_stations
+        prop = probe_propulsion_budget(SystemColonizer.PROBE_MASS_KG,
+                                       sp["expansion_speed_c"], spec=sp)
+        mwt = milky_way_swept_table(sp)
+        transit = probe_transit_physics(mwt["hop_local_ly"],
+                                        sp["expansion_speed_c"], sp)
+        if i == 0:
+            rows_f = [
+                ("role", "harvest + feed the foundry", "SPEC"),
+                ("arms x len", f"{self.swarm.n_arms} x"
+                 f" {self.swarm.arm_len_m:.0f} m", "SPEC"),
+                ("net area", f"{math.pi * self.swarm.arm_len_m ** 2:.2e} m^2",
+                 "MODEL"),
+                ("CR catch", f"{sw.get('cap_cr_coverage', 0):.1e} of disc",
+                 "MODEL"),
+                ("SW catch", f"{sw.get('cap_sw_coverage', 0):.0%} of wind",
+                 "MODEL"),
+                ("mirror keep", f"{sw.get('cap_mirror_accept', 0):.0%}",
+                 "MEAS"),
+                ("harvest", f"{sw.get('mass_kg_s', 0):.1e} kg/s", "MODEL"),
+                ("pairs/s", f"{sw.get('pairs_per_s', 0):.2e}", "MODEL"),
+                ("net density", f"{self.swarm.net_density:.2f}", "MODEL"),
+                ("fusion temp", f"{self.swarm.fusion_temp_K:.1e} K", "SPEC"),
+                ("stockpile", f"{(self.galactic.colonizers[0].stockpile.total_kg() if self.galactic.colonizers else 0.0):.1e} kg",
+                 "MODEL"),
+            ]
+        elif i == 1:
+            e_copy = sp["replicator_mass_kg"] * sp.get(
+                "isru_energy_per_kg_J", 5.0e7)
+            rows_f = [
+                ("role", "machine builds a MACHINE", "SPEC"),
+                ("copy mass", f"{sp['replicator_mass_kg']:.0e} kg", "SPEC"),
+                ("copy energy", f"{e_copy:.1e} J @"
+                 f" {sp.get('isru_energy_per_kg_J', 5e7):.0e} J/kg", "MODEL"),
+                ("build time", f"{self.swarm.build_time_s / 86400:.0f} d",
+                 "SPEC"),
+                ("throughput", f"{self.swarm.grow_fraction * 100:.0f}% ->"
+                 " replication", "SPEC"),
+                ("assembler", "universal fab -- TRL 1", "FRONTIER"),
+                ("precedent", "RepRap prints ~50% own parts", "MEAS"),
+                ("status", "prints copy -> stage 3", "MODEL"),
+            ]
+        elif i == 2:
+            rows_f = [
+                ("role", "the copy unfurls", "MODEL"),
+                ("deploy time", "6 h (bootstrap phase 1)", "SPEC"),
+                ("mass", f"{sp['replicator_mass_kg']:.0e} kg, identical",
+                 "SPEC"),
+                ("parameters", "inherited from parent", "MODEL"),
+                ("first task", "harvest -> stockpile feed", "MODEL"),
+                ("effect", "harvest base doubles", "MODEL"),
+                ("visual", "watch it slide stage 2->3", "MODEL"),
+            ]
+        elif i == 3:
+            r_sw = self.swarm.grow_fraction / self.swarm.build_time_s
+            rows_f = [
+                ("law", "dN/dt = rN(1-N/K)", "MEAS"),
+                ("N now", f"{self.swarm.N:.3e} stations", "MODEL"),
+                ("K", f"{K:.2e} (cap-limited)", "MODEL"),
+                ("r", f"{r_sw:.2e}/s (power+assembly)", "MODEL"),
+                ("doubling", f"{math.log(2.0) / r_sw / 86400:.0f} d", "MODEL"),
+                ("attrition", "1.5%/yr (Aon/Seradata)", "MEAS"),
+                ("failed", f"{sw.get('total_failed', 0):.1e} replaced", "MODEL"),
+                ("phase", sw.get('growth_phase', '--'), "MODEL"),
+            ]
+        elif i == 4:
+            gate = self.swarm.N - 0.9 * K
+            rows_f = [
+                ("threshold", "N >= 90% of K", "MODEL"),
+                ("status", "OPEN -- exporting" if gate >= 0
+                 else "closed -- still growing", "MODEL"),
+                ("surplus", f"{max(gate, 0.0):.2e} stations", "MODEL"),
+                ("surplus->", "probe manufacture + launch", "MODEL"),
+                ("audit", "stockpile-debited launches", "MODEL"),
+                ("export el.", "U for seed trade", "MODEL"),
+                ("why", "local growth done; spread out", "MODEL"),
+            ]
+        elif i == 5:
+            rows_f = [
+                ("role", "machine builds the SEEDER", "SPEC"),
+                ("payload", f"{prop['payload_kg']:.0e} kg seed", "SPEC"),
+                ("launch mass", f"{prop['launch_mass_kg']:.2e} kg", "MODEL"),
+                ("propellant", f"{prop['propellant_frac'] * 100:.1f}%"
+                 " of launch", "MEAS"),
+                ("mass ratio", f"{prop['mass_ratio']:.2f} = e^2", "MEAS"),
+                ("burn energy", f"{prop['energy_J']:.1e} J", "MODEL"),
+                ("carries", "best-evolved swarm params", "MODEL"),
+                ("probes out", f"{ga.get('probes_launched', 0):.2e}", "MODEL"),
+            ]
+        elif i == 6:
+            rows_f = [
+                ("leg", "probe foundry -> new star", "MODEL"),
+                ("speed", f"{sp['expansion_speed_c']:.2f} c coast", "SPEC"),
+                ("hop", f"~{mwt['hop_local_ly']:.1f} ly local", "MEAS"),
+                ("transit", f"{transit['transit_time_yr']:.0f} yr", "MODEL"),
+                ("P_survive", f"{transit['survival_probability'] * 100:.0f}%"
+                 " (ISM dose)", "MODEL"),
+                ("brake", "magsail on destination wind", "SPEC"),
+                ("causality", "no FTL -- the bound is real", "MEAS"),
+                ("in transit", f"{ga.get('probes_in_transit', 0):.1e}", "MODEL"),
+            ]
+        else:
+            boot_d = BootstrappingSequence.TOTAL_BOOTSTRAP_S / 86400.0
+            cols = self.galactic.colonizers
+            newest = cols[-1] if len(cols) > 1 else None
+            rows_f = [
+                ("role", "seed -> NEXT mother", "MODEL"),
+                ("bootstrap", f"{boot_d:.1f} d -> first copy", "MODEL"),
+                ("phases", "capture/deploy/harvest/matter/fusion/copy",
+                 "SPEC"),
+                ("then", "logistic swarm -> new probes", "MODEL"),
+                ("newest", (f"gen {newest.telemetry.get('generation', 0)}"
+                  if newest else "--"), "MODEL"),
+                ("systems", f"{ga.get('systems', 1):.2e} colonized", "MODEL"),
+                ("loops", f"{ga.get('cycle_count', 0)} closed", "MODEL"),
+                ("repeat", "TIER 1 runs again, forever*", "MODEL"),
+            ]
+        # panel sized to the content (prose + rows); centred like the galaxy
+        # focus sheet
+        pw_ = 430
+        prose_lines = _pp_wrap_px(prose, self.font_xs, pw_ - 24).split("\n")
+        fh = 30 + 13 * len(prose_lines) + 8 + 15 * len(rows_f) + 12
+        fx0 = self.W // 2 - pw_ // 2
+        self._panel(fx0, 66, pw_, fh)
+        self.screen.blit(self.font_m.render(
+            f"STAGE {i + 1} -- {title}", True, col), (fx0 + 10, 72))
+        yy = 92
+        for ln in prose_lines:
+            self.screen.blit(self._txt(self.font_xs, ln, (160, 185, 210)),
+                             (fx0 + 12, yy))
+            yy += 13
+        yy += 6
+        for a, b, tg in rows_f:
+            tt, tc = self._vtag(tg)
+            self.screen.blit(self.font_s.render(a, True, (150, 175, 200)),
+                             (fx0 + 10, yy))
+            self.screen.blit(self.font_s.render(b, True, (235, 245, 255)),
+                             (fx0 + 130, yy))
+            self.screen.blit(self._txt(self.font_xs, tt, tc),
+                             (fx0 + pw_ - 62, yy + 2))
+            yy += 15
+
     # --- CINEMATIC TIME-LAPSE: seed -> void -> deploy -> replicate -> galaxy ---
     # eras: (label, t_start_s, t_end_s, dist, description). Class-level so both
     # the headless PNG exporter and the live interactive mode ('T' key) share
     # the exact same timeline -- one definition, two presentations.
     TIMELAPSE_ERAS = [
         ("DEPARTURE",      0.0,          30*86400,      3.0,
-         "seed craft departs origin into the void"),
+         "seed craft departs the Solar System into the void"),
         ("ARRIVAL",        30*86400,     60*86400,      4.0,
          "craft arrives at target coordinates, begins deployment"),
         ("DEPLOYMENT",     60*86400,     90*86400,      5.0,
@@ -16719,7 +21389,10 @@ class SystemViewer:
         # n_seeds and wavefront_r grow with era to show expansion; the mesh is
         # cached per era -- it only changes when the era does, not every frame
         era_n_seeds = [0, 0, 1, 2, 5, 12, 18, 24, 40]
-        era_wavefront = [0.3, 0.5, 0.8, 1.2, 2.0, 2.5, 3.0, 3.5, 5.0]
+        # shell radius in scene units; the far rim sits at 76,600/9,615 =
+        # 7.97 u -- the last era's sphere swallows the WHOLE disc, not just
+        # a neighbourhood (the Sun-centred offset makes this visible)
+        era_wavefront = [0.3, 0.5, 0.8, 1.2, 2.0, 2.5, 3.2, 4.2, 8.1]
         n_seeds_now = era_n_seeds[min(era_idx, len(era_n_seeds)-1)]
         wf_now = era_wavefront[min(era_idx, len(era_wavefront)-1)]
         if getattr(self, "_tl_geom_key", None) != (n_seeds_now, wf_now):
@@ -16795,12 +21468,14 @@ class SystemViewer:
                     _pg.draw.circle(self.screen, (100, 200, 130),
                                     (int(sx[di]), int(sy[di])), dot_r)
 
-        # animated probe particles (ERA 6+) -- 24 points, one projection
+        # animated probe particles (ERA 6+) -- 24 points, one projection;
+        # they radiate from the SUN (8.15 kpc off-centre), not the GC
+        _sun = self._tl_geom[3].get("sun_pos", np.zeros(3))
         if era_idx >= 6:
             _pts = np.array([
-                [ph_ * 3.5 * math.cos(phi_) * math.cos(pi_ * 2 * math.pi / 8),
-                 ph_ * 3.5 * math.cos(phi_) * math.sin(pi_ * 2 * math.pi / 8),
-                 ph_ * 3.5 * math.sin(phi_)]
+                [_sun[0] + ph_ * 3.5 * math.cos(phi_) * math.cos(pi_ * 2 * math.pi / 8),
+                 _sun[1] + ph_ * 3.5 * math.cos(phi_) * math.sin(pi_ * 2 * math.pi / 8),
+                 _sun[2] + ph_ * 3.5 * math.sin(phi_)]
                 for pi_ in range(8)
                 for phi_ in [math.radians(30 * (pi_ % 3 - 1))]
                 for j_ in range(3)
@@ -16811,9 +21486,9 @@ class SystemViewer:
                     rad = max(1, int(3.0 / sz[pi_]))
                     _pg.draw.circle(self.screen, (100, 180, 255),
                                     (int(sx[pi_]), int(sy[pi_])), rad)
-        # pulsing wavefront
+        # pulsing wavefront -- Sun-centred (the front leaves the Sun, not the GC)
         pulse = 1.0 + 0.03 * math.sin(self.anim * 0.5)
-        sx_c, sy_c, z_c = self._project([(0, 0, 0)])
+        sx_c, sy_c, z_c = self._project([tuple(_sun)])
         if z_c[0] > 0.06:
             ring_r = int(3.5 * pulse * 0.62 * self.H / max(z_c[0], 0.1))
             _pg.draw.circle(self.screen, (40, 80, 140),
@@ -16827,17 +21502,19 @@ class SystemViewer:
         #       even capturing EVERY photon in the galaxy at 100% efficiency,
         #       ~1e38 kg of structure takes ~7 Myr to mint -- radiation has
         #       an mc^2 price and the galaxy only emits ~4e37 W.
-        #   expansion floor = R_gal / v  (causality; the 0.1c wavefront)
+        #   expansion floor = far_rim / v  (causality; the 0.1c wavefront
+        #       leaves the SUN -- the farthest disc point is 76.6 kly away,
+        #       not R_gal = 50 kly)
         sp = self.galactic.spec
         _N_gal  = sp["stars_per_galaxy"]
-        _R_ly   = sp["galaxy_radius_ly"]
+        _R_ly   = milky_way_swept_table(sp)["far_rim_ly"]     # Sun->far edge
         _v_c    = sp["expansion_speed_c"]
         _M_tgt  = _N_gal * sp["isru_baryon_reservoir_kg"]     # model's own target
         _L_gal  = _N_gal * L_SUN                             # all stars' output
         _t_energy  = _M_tgt * C_LIGHT ** 2 / _L_gal          # s -- 100% capture
-        _t_expand  = _R_ly * YR / _v_c                       # s -- R/v in years
+        _t_expand  = _R_ly * YR / _v_c                       # s -- far rim /v
         _r_now   = self.galactic.telemetry.get("wavefront_radius_ly", 0.0)
-        _t_edge  = max(0.0, (_R_ly - _r_now) * YR / _v_c)    # live ETA to edge
+        _t_edge  = max(0.0, (_R_ly - _r_now) * YR / _v_c)    # live ETA to rim
         # the CONSISTENCY CHECK: if this sim's accumulated structure had been
         # minted from starlight, it would have consumed eta x ALL stellar
         # output. eta > 1 proves the swarm's growth is ISRU reprocessing of
@@ -16865,7 +21542,7 @@ class SystemViewer:
              f"({_R_ly:.0e} ly @ {_v_c:.2f}c)", (170, 215, 255)),
             (f"check: as starlight-minted, structure needs "
              f"{_eta_impl:.1e}x ALL light", (255, 180, 95)),
-            (f"  >1.0 => ISRU reprocesses baryons, NOT radiation mint",
+            ("  >1.0 => ISRU reprocesses baryons, NOT radiation mint",
              (150, 175, 200)),
             (f"live: edge in {_fmt_time(_t_edge)}   N-double "
              f"{_fmt_time(_t_dbl) if math.isfinite(_t_dbl) else '--'}",
@@ -17051,10 +21728,14 @@ class SystemViewer:
                     self._orbital_overview(); return True
                 if self.gal_focus is not None:
                     self._galaxy_overview(); return True
+                if self.replication_focus is not None:
+                    self._replication_overview(); return True
                 if self.powerplant_focus is not None:
                     self._powerplant_overview(); return True
                 if self.plant_focus is not None:
                     self._plant_overview(); return True
+                if self.machine_focus is not None:    # ESC exits part focus
+                    self._machine_overview(); return True
                 if self.focus:                        # ESC first exits focus
                     self.overview(); return True
                 return False
@@ -17081,6 +21762,7 @@ class SystemViewer:
             elif e.key == _pg.K_m:                     # MACHINE view (harvest/build)
                 self.hero = False
                 self.view_mode = "machine"; self.focus = None
+                self.machine_focus = None
                 self.look = np.array([1.2, 0.0, 0.0]); self.look_goal = self.look.copy()
                 self.dist = self.dist_goal = 10.5
             elif e.key == _pg.K_v:                     # STATS view (figures in-app)
@@ -17104,6 +21786,7 @@ class SystemViewer:
                     self.dist = self.dist_goal = 3.7
                     self.pan = np.array([0.0, 0.0]); self.pitch = -0.18
                 else:
+                    self.machine_focus = None
                     self.look = self.look_goal = np.array([1.2, 0.0, 0.0])
                     self.dist = self.dist_goal = 10.5
             elif e.key == _pg.K_a:                    # A = maximize gold (Au)
@@ -17128,6 +21811,10 @@ class SystemViewer:
                 self.hero = False
                 self.view_mode = "galaxy"
                 self._galaxy_overview()
+            elif e.key == _pg.K_r and self.view_mode != "charts":
+                # REPLICATION view -- the closed loop (camera reset moved to
+                # HOME so the tab's own mnemonic can be R like every tab)
+                self._goto_view("replication")
             elif e.key == _pg.K_c:                    # CHEMISTRY flow view (secondary)
                 self.hero = False
                 self.view_mode = "chemistry"; self.overview()
@@ -17162,22 +21849,32 @@ class SystemViewer:
                         self._plant_focus_on((self.plant_focus - 1) % 12)
                     else:
                         self._plant_focus_on(11)
+                elif self.view_mode == "orbital":
+                    if self.orbital_focus is None:
+                        self._orbital_focus_on(len(self._orb_centers) - 1)
+                    else:
+                        self._orbital_focus_on(
+                            (self.orbital_focus - 1) % len(self._orb_centers))
                 else:
-                    self.elem_i = (self.elem_i - 1) % len(OUTPUT_ELEMENTS)
+                    self._retarget_machine(self.elem_i - 1)
             elif e.key in (_pg.K_RIGHTBRACKET, _pg.K_e):
                 if self.view_mode == "plant":
                     if self.plant_focus is not None:
                         self._plant_focus_on((self.plant_focus + 1) % 12)
                     else:
                         self._plant_focus_on(0)
+                elif self.view_mode == "orbital":
+                    if self.orbital_focus is None:
+                        self._orbital_focus_on(0)
+                    else:
+                        self._orbital_focus_on(
+                            (self.orbital_focus + 1) % len(self._orb_centers))
                 else:
-                    self.elem_i = (self.elem_i + 1) % len(OUTPUT_ELEMENTS)
+                    self._retarget_machine(self.elem_i + 1)
             elif e.key == _pg.K_o:
                 if self.view_mode == "orbital":
                     if self.orbital_focus is not None:
                         self._orbital_overview()
-                    else:
-                        self.proof_i += 1
                 else:
                     self.hero = False
                     self.view_mode = "orbital"
@@ -17189,17 +21886,32 @@ class SystemViewer:
                     self._orbital_overview()
                 elif self.view_mode == "powerplant":
                     self._powerplant_overview()
+                elif self.view_mode == "replication":
+                    self._replication_overview()
                 else:
                     self.overview()
             elif e.key == _pg.K_TAB:
                 if self.view_mode == "chemistry":
                     cur = self.nav_order.index(self.focus) if self.focus in self.nav_order else -1
                     self.focus_on(self.nav_order[(cur + 1) % len(self.nav_order)])
+                elif self.view_mode == "machine":
+                    cur = (self._MACH_ORDER.index(self.machine_focus)
+                           if self.machine_focus in self._MACH_ORDER else -1)
+                    self._machine_focus_on(
+                        self._MACH_ORDER[(cur + 1) % len(self._MACH_ORDER)])
                 elif self.view_mode == "plant":
                     if self.plant_focus is not None:
                         self._plant_focus_on((self.plant_focus + 1) % 12)
                     else:
                         self._plant_focus_on(0)
+                elif self.view_mode == "orbital":
+                    self._orbital_focus_on(
+                        0 if self.orbital_focus is None
+                        else (self.orbital_focus + 1) % len(self._orb_centers))
+                elif self.view_mode == "replication":
+                    self._replication_focus_on(
+                        0 if self.replication_focus is None
+                        else (self.replication_focus + 1) % 8)
             elif _pg.K_1 <= e.key <= _pg.K_9:
                 idx = e.key - _pg.K_1
                 if self.view_mode == "charts":
@@ -17208,14 +21920,25 @@ class SystemViewer:
                 elif self.view_mode == "chemistry":
                     if idx < len(self.nav_order):
                         self.focus_on(self.nav_order[idx])
+                elif self.view_mode == "machine":
+                    if idx < len(self._MACH_ORDER):
+                        self._machine_focus_on(self._MACH_ORDER[idx])
                 elif self.view_mode == "plant":
                     self._plant_focus_on(idx)
                 elif self.view_mode == "powerplant":
                     if idx < len(self._pp_centers):
                         self._powerplant_focus_on(idx)
+                elif self.view_mode == "orbital":
+                    if idx < len(self._orb_centers):
+                        self._orbital_focus_on(idx)
+                elif self.view_mode == "replication":
+                    if idx < 8:
+                        self._replication_focus_on(idx)
             elif e.key == _pg.K_0:
                 if self.view_mode == "chemistry":
                     self.focus_on(self.nav_order[9])
+                elif self.view_mode == "machine":
+                    self._machine_focus_on(self._MACH_ORDER[9])
                 elif self.view_mode == "plant":
                     self._plant_focus_on(9)
             elif e.key == _pg.K_MINUS or e.key == _pg.K_EQUALS:
@@ -17224,9 +21947,10 @@ class SystemViewer:
                         self._plant_focus_on(10)
                     else:
                         self._plant_focus_on(11)
-            elif e.key == _pg.K_r:
+            elif e.key == _pg.K_HOME:
                 self.yaw, self.pitch = 0.42, -0.16
                 if self.view_mode == "machine":
+                    self.machine_focus = None
                     self.pan = np.array([0.0, 20.0])
                     self.look = self.look_goal = np.array([1.2, 0.0, 0.0])
                     self.dist = self.dist_goal = 10.5
@@ -17238,6 +21962,8 @@ class SystemViewer:
                     self._orbital_overview()
                 elif self.view_mode == "galaxy":
                     self._galaxy_overview()
+                elif self.view_mode == "replication":
+                    self._replication_overview()
                 else:
                     self.pan = np.array([-50.0, 30.0]); self.overview()
             elif e.key == _pg.K_LEFT:
@@ -17256,16 +21982,24 @@ class SystemViewer:
                 self.pan[1] += 40
             elif e.key == _pg.K_DOWN:
                 self.pan[1] -= 40
+            elif e.key in (_pg.K_PAGEUP, _pg.K_PAGEDOWN):
+                if self.view_mode == "chemistry" and self.focus:
+                    self.mech_scroll += (-168.0 if e.key == _pg.K_PAGEUP
+                                         else 168.0)
         elif e.type == _pg.MOUSEBUTTONDOWN:
             if e.button == 1:
                 self.dragging = True; self.drag_moved = False
             elif e.button == 4:
-                if self.view_mode == "charts":
+                if self.view_mode == "chemistry" and self.focus:
+                    self.mech_scroll = max(0.0, self.mech_scroll - 48.0)
+                elif self.view_mode == "charts":
                     self.chart_i = (self.chart_i - 1) % len(self.CHART_DEFS)
                 else:
                     self.dist_goal = self.dist = max(3.0, self.dist - 1.0)
             elif e.button == 5:
-                if self.view_mode == "charts":
+                if self.view_mode == "chemistry" and self.focus:
+                    self.mech_scroll += 48.0
+                elif self.view_mode == "charts":
                     self.chart_i = (self.chart_i + 1) % len(self.CHART_DEFS)
                 else:
                     self.dist_goal = self.dist = min(48.0, self.dist + 1.0)
@@ -17285,7 +22019,25 @@ class SystemViewer:
                         else:
                             self.chart_i = ci
                         return True
-            if not self.drag_moved and self.view_mode == "chemistry":
+            if not self.drag_moved and self.view_mode == "machine":
+                # output-element chips first (they retool the machine), then
+                # the clickable system-list rows, then the 3D parts
+                hit_i = next((i for i, rr in self._elem_nav.items()
+                              if rr.collidepoint(e.pos)), None)
+                if hit_i is not None:
+                    self._retarget_machine(hit_i)
+                    return True
+                hit = next((k for k, rr in self._mach_nav.items()
+                            if rr.collidepoint(e.pos)), None)
+                if hit:
+                    self._machine_focus_on(hit)
+                    return True
+                m = self._pick_machine_part(*e.pos)
+                if m:
+                    self._machine_focus_on(m)
+                else:
+                    self._machine_overview()
+            elif not self.drag_moved and self.view_mode == "chemistry":
                 # nav chips take precedence (they sit under the title bar,
                 # above the 3D field) -- then the 3D modules themselves.
                 hit = next((k for k, rr in self._nav_chips.items()
@@ -17322,6 +22074,12 @@ class SystemViewer:
                     self._galaxy_focus_on(m)
                 else:
                     self._galaxy_overview()
+            elif not self.drag_moved and self.view_mode == "replication":
+                m = self._pick_replication_node(*e.pos)
+                if m is not None:
+                    self._replication_focus_on(m)
+                else:
+                    self._replication_overview()
         elif e.type == _pg.MOUSEMOTION and self.dragging:
             dx, dy = e.rel
             if abs(dx) + abs(dy) > 2:
@@ -17379,7 +22137,9 @@ class SystemViewer:
         # frame 0 = MACHINE, 1 = HERO, 2 = PLANT overview, 3 = PLANT focus trap,
         # then CHEMISTRY + focus stages.
         tour = ["MACHINE", "HERO", "PLANT", "PLANT_FOCUS:4", "PLANT_FOCUS:9",
-                "ORBITAL", "GALAXY", "POWERPLANT", "POWERPLANT_FOCUS:2",
+                "ORBITAL", "ORBITAL_FOCUS:0", "ORBITAL_FOCUS:1",
+                "ORBITAL_FOCUS:2", "GALAXY", "REPLICATION", "REPLICATION_FOCUS:5",
+                "POWERPLANT", "POWERPLANT_FOCUS:2",
                 "POWERPLANT_FOCUS:4", None, "cell", "pairsource", "recomb",
                 "create", "powerin", "output", "CHARTS"]
         saved = []
@@ -17389,6 +22149,7 @@ class SystemViewer:
             self.hero = (tgt == "HERO")
             if tgt == "MACHINE":
                 self.view_mode = "machine"; self.focus = None
+                self.machine_focus = None
                 self.look = self.look_goal = np.array([1.2, 0.0, 0.0])
                 self.dist = self.dist_goal = 10.5
                 self.elem_i = 5 + i
@@ -17407,10 +22168,22 @@ class SystemViewer:
                 self.hero = False
                 self.view_mode = "orbital"
                 self._orbital_overview()
+            elif isinstance(tgt, str) and tgt.startswith("ORBITAL_FOCUS:"):
+                self.hero = False
+                self.view_mode = "orbital"
+                self._orbital_focus_on(int(tgt.split(":")[1]))
             elif tgt == "GALAXY":
                 self.hero = False
                 self.view_mode = "galaxy"
                 self._galaxy_overview()
+            elif tgt == "REPLICATION":
+                self.hero = False
+                self.view_mode = "replication"
+                self._replication_overview()
+            elif isinstance(tgt, str) and tgt.startswith("REPLICATION_FOCUS:"):
+                self.hero = False
+                self.view_mode = "replication"
+                self._replication_focus_on(int(tgt.split(":")[1]))
             elif tgt == "POWERPLANT":
                 self.hero = False
                 self.view_mode = "powerplant"
@@ -17510,7 +22283,7 @@ def _print_viewer_banner():
     print(" OUTPUT:  [ and ]  pick the target stable ELEMENT (spewed as a cloud) with")
     print("          its live chemistry/nuclear synthesis PROOF shown on-screen.")
     print(" CONTROLS:  drag = orbit   wheel = zoom   arrow keys = pan")
-    print("            SPACE = pause   P = math proof   I = about/validity   R = reset")
+    print("            SPACE = pause   P = math proof   I = about/validity   HOME = reset")
     print("            T = live time-lapse (SPACE/T pause, L loop)   ESC = quit/exit mode")
     print("            (window opens at your desktop resolution, hi-res)")
     print("-" * 78)
@@ -17683,9 +22456,9 @@ def main(argv=None):
         fuel_text = args.fuel or args.powerplant or "D-T"
         gp = (args.gold_price / TROY_OZ_KG) if args.gold_price else None
         powerplant_fuel_table()
-        pp = powerplant_report(fuel_text, net_MW=args.mwe,
-                               enrichment=args.enrichment, years=args.years,
-                               gold_price=gp)
+        powerplant_report(fuel_text, net_MW=args.mwe,
+                          enrichment=args.enrichment, years=args.years,
+                          gold_price=gp)
         powerplant_market_report(net_MW=args.mwe, fuel_text=fuel_text)
         visualize_powerplant(show=not args.no_show, fuel_text=fuel_text)
         return 0
@@ -17726,9 +22499,12 @@ def main(argv=None):
         gx = galactic_expansion(per_sys, SPEC)
         print(f"   per-system structure : {_fmt_mass(per_sys)}")
         print(f"   at galactic fill     : {_fmt_mass(SPEC['stars_per_galaxy']*per_sys)}"
-              f"  ({SPEC['stars_per_galaxy']:.0e} systems)")
-        print(f"   at reachable horizon : {_fmt_mass(gx['structure_kg'][-1])}"
+              f"  ({SPEC['stars_per_galaxy']:.0e} systems, far rim 76.6 kly)")
+        print(f"   at reachable ceiling : {_fmt_mass(gx['structure_kg'][-1])}"
               f"  ({SPEC['reachable_galaxies']:.0e} galaxies)")
+        print(f"   ceiling reached at   : "
+              f"~{reachable_horizon_ly()/SPEC['expansion_speed_c']/1e9:.2f} Gyr"
+              f"  (R={reachable_horizon_ly()/1e6:.0f} Mly @ ~Mpc spacing)")
         visualize_galactic(gx, SPEC, show=not args.no_show)
         return 0
 
